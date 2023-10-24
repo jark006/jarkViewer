@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{b0d84475-f869-46b6-bb98-40e788cb86d9}</ProjectGuid>
+    <RootNamespace>jarkViewer</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LibraryPath>$(ProjectDir)\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NDEBUG;_WINDOWS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalDependencies>IlmImf.lib;ippicvmt.lib;ippiw.lib;ittnotify.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_img_hash481.lib;opencv_world481.lib;quirc.lib;zlib.lib;ade.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
+    </Link>
+    <ResourceCompile>
+      <Culture>0x0804</Culture>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="opencv2\calib3d.hpp" />
+    <ClInclude Include="opencv2\core.hpp" />
+    <ClInclude Include="opencv2\cvconfig.h" />
+    <ClInclude Include="opencv2\dnn.hpp" />
+    <ClInclude Include="opencv2\features2d.hpp" />
+    <ClInclude Include="opencv2\flann.hpp" />
+    <ClInclude Include="opencv2\freetype.hpp" />
+    <ClInclude Include="opencv2\gapi.hpp" />
+    <ClInclude Include="opencv2\highgui.hpp" />
+    <ClInclude Include="opencv2\imgcodecs.hpp" />
+    <ClInclude Include="opencv2\imgproc.hpp" />
+    <ClInclude Include="opencv2\ml.hpp" />
+    <ClInclude Include="opencv2\objdetect.hpp" />
+    <ClInclude Include="opencv2\opencv.hpp" />
+    <ClInclude Include="opencv2\opencv_modules.hpp" />
+    <ClInclude Include="opencv2\photo.hpp" />
+    <ClInclude Include="opencv2\stitching.hpp" />
+    <ClInclude Include="opencv2\video.hpp" />
+    <ClInclude Include="opencv2\videoio.hpp" />
+    <ClInclude Include="opencv2\world.hpp" />
+    <ClInclude Include="Resource.h" />
+    <ClInclude Include="stbText.h" />
+    <ClInclude Include="stb_image_write.h" />
+    <ClInclude Include="stb_truetype.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="jarkViewer.cpp" />
+    <ClCompile Include="LRU.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="jarkViewer.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="file\home.png" />
+    <Image Include="file\tips.png" />
+    <Image Include="jarkViewer.ico" />
+    <Image Include="png1.png" />
+    <Image Include="small.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="file\LXGWNeoXiHei.ttf" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
