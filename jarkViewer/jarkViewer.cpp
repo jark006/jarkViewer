@@ -3,6 +3,7 @@
 
 #include "stbText.h"
 #include "LRU.h"
+#include "exif.h"
 
 
 const int BG_GRID_WIDTH = 8;
@@ -23,10 +24,11 @@ cv::Mat mainImg;
 bool isBusy = false;
 bool needFresh = false;
 
-Cood mouse{}, hasDrop{};
+Cood mouse{}, hasDropCur{}, hasDropTarget{};
 int zoomOperate = 0;     // 缩放
 int switchOperate = 0;   // 切图
-int64_t zoomValue = 0;   // 缩放比例
+int64_t zoomTarget = 0;  // 缩放比例
+int64_t zoomCur = 0;     // 缩放比例
 
 int curFileIdx = -1; //文件在路径列表的索引
 vector<string> imgFileList;
@@ -46,7 +48,8 @@ int getWidth(cv::Mat& mat) { return mat.cols; }
 int getHeight(cv::Mat& mat) { return mat.rows; }
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
-void mainCycle(std::filesystem::path& fullPath);
+int myMain(std::filesystem::path& fullPath);
+std::string getExif(const char* path);
 
 template<typename... Args>
 void log(const string_view fmt, Args&&... args) {
@@ -59,7 +62,7 @@ void log(const string_view fmt, Args&&... args) {
 }
 
 
-cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
+cv::Vec4b getSrcPxBK(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
         auto& px = srcImg.at<cv::Vec3b>(srcY, srcX);
@@ -73,8 +76,8 @@ cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
         auto& px = srcImg.at<cv::Vec4b>(srcY, srcX);
         cv::Vec4b bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
 
-        if (px[3] == 255) return px;
-        else if (px[3] == 0) return bgPx;
+        if (px[3] == 0) return bgPx;
+        else if (px[3] == 255) return px;
 
         const int alpha = px[3];
         bgPx[3] = alpha;
@@ -87,98 +90,148 @@ cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
 }
 
+cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
+    switch (srcImg.channels()) {
+    case 3: {
+        auto& srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
+        
+        if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+            auto& px0 = srcImg.at<cv::Vec3b>(srcY-1, srcX-1);
+            auto& px1 = srcImg.at<cv::Vec3b>(srcY-1, srcX);
+            auto& px2 = srcImg.at<cv::Vec3b>(srcY, srcX-1);
+            cv::Vec4b ret;
+            ret[3] = 255;
+            for (int i = 0; i < 3; i++)
+                ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
+
+            return ret;
+        }
+
+        return cv::Vec4b{ srcPx[0], srcPx[1], srcPx[2], 255 };
+    }
+    case 4: {
+        auto& srcPx = srcImg.at<cv::Vec4b>(srcY, srcX);
+        const cv::Vec4b& bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
+
+        cv::Vec4b px;
+        if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) {
+            auto& px0 = srcImg.at<cv::Vec4b>(srcY - 1, srcX - 1);
+            auto& px1 = srcImg.at<cv::Vec4b>(srcY - 1, srcX);
+            auto& px2 = srcImg.at<cv::Vec4b>(srcY, srcX - 1);
+            for (int i = 0; i < 4; i++)
+                px[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
+        }
+        else {
+            px = srcPx;
+        }
+
+        if (px[3] == 0) return bgPx;
+        else if (px[3] == 255) return px;
+
+        const int alpha = px[3];
+        cv::Vec4b ret;
+        ret[3] = alpha;
+        for (int i = 0; i < 3; i++)
+            ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / (255);
+        return ret;
+    }
+    case 1: {
+        auto srcPx = srcImg.at<uchar>(srcY, srcX);
+
+        if (zoomCur < ZOOM_BASE) {
+            if (srcY > 0 && srcX > 0) { // 简单临近像素平均
+                auto& px0 = srcImg.at<uchar>(srcY - 1, srcX - 1);
+                auto& px1 = srcImg.at<uchar>(srcY - 1, srcX);
+                auto& px2 = srcImg.at<uchar>(srcY, srcX - 1);
+                srcPx = (px0 + px1 + px2 + srcPx) / 4;
+            }
+            else if(srcY==0){
+                auto& px2 = srcImg.at<uchar>(srcY+1, srcX);
+                srcPx = (px2 + srcPx) / 2;
+            }
+            else {
+                auto& px2 = srcImg.at<uchar>(srcY, srcX+1);
+                srcPx = (px2 + srcPx) / 2;
+            }
+        }
+        return cv::Vec4b{ srcPx, srcPx, srcPx, 255 };
+    }
+    }
+
+    return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
+}
+
+int64 keep_msb_1_clear_others(int64 n) {
+    if (n == 0)
+        return 0;
+    int msb = 63;
+    while (((n >> msb) & 1) == 0)
+        msb--;
+    return 1LL << msb;
+}
+
 void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
     static int64_t curImgZoomBase = 0;
 
-    int srcH = getHeight(srcImg);
-    int srcW = getWidth(srcImg);
-    int mainH = getHeight(mainImg);
-    int mainW = getWidth(mainImg);
+    const int srcH = getHeight(srcImg);
+    const int srcW = getWidth(srcImg);
+    const int mainH = getHeight(mainImg);
+    const int mainW = getWidth(mainImg);
 
-    if (zoomValue == 0) {
-        if (srcH > mainH || srcW > mainW) {
+    if (zoomTarget == 0) {
+        if (srcH > mainH || srcW > mainW) { //适合显示窗口宽高的缩放比例
             curImgZoomBase = std::min(mainH * ZOOM_BASE / srcH, mainW * ZOOM_BASE / srcW);
-            zoomValue = curImgZoomBase;
         }
         else {
-            zoomValue = ZOOM_BASE;
+            curImgZoomBase = ZOOM_BASE;
         }
+        zoomTarget = curImgZoomBase;
+        zoomCur = curImgZoomBase;
     }
 
     if (zoomOperate > 0) {
         zoomOperate = 0;
-        if (zoomValue < ZOOM_MAX) {
-            int64 lastZoom = zoomValue;
+        if (zoomTarget < ZOOM_MAX) {
+            int64 zoomNext = zoomTarget * 2;
+            if (zoomTarget == curImgZoomBase)
+                zoomNext = keep_msb_1_clear_others(zoomTarget * 2);
+            else if (zoomTarget < curImgZoomBase && curImgZoomBase < zoomNext)
+                zoomNext = curImgZoomBase;
 
-            if (zoomValue == curImgZoomBase) {
-                int i = 0;
-                while (zoomValue)
-                {
-                    zoomValue >>= 1;
-                    i++;
-                }
-                zoomValue = 1;
-                while (i--)
-                {
-                    zoomValue <<= 1;
-                }
+            if (zoomTarget) {
+                hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
+                hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
             }
-            else {
-                int64 nextZoom = zoomValue * 2;
-                if (zoomValue < curImgZoomBase && nextZoom >= curImgZoomBase)
-                    zoomValue = curImgZoomBase;
-                else
-                    zoomValue = nextZoom;
-            }
-
-            if (lastZoom) {
-                hasDrop.x = (int)(zoomValue * hasDrop.x / lastZoom);
-                hasDrop.y = (int)(zoomValue * hasDrop.y / lastZoom);
-            }
+            zoomTarget = zoomNext;
         }
     }
     else if (zoomOperate < 0) {
         zoomOperate = 0;
-        if (zoomValue > ZOOM_MIN) {
-            int64 lastZoom = zoomValue;
+        if (zoomTarget > ZOOM_MIN) {
+            int64 zoomNext = zoomTarget / 2;
+            if (zoomTarget == curImgZoomBase) {
+                if (curImgZoomBase != keep_msb_1_clear_others(curImgZoomBase))
+                    zoomNext = keep_msb_1_clear_others(curImgZoomBase);
+            }
+            else if (zoomTarget > curImgZoomBase && curImgZoomBase > zoomNext)
+                zoomNext = curImgZoomBase;
 
-            if (zoomValue == curImgZoomBase) {
-                int i = 0;
-                while (zoomValue)
-                {
-                    zoomValue >>= 1;
-                    i++;
-                }
-                zoomValue = 1;
-                while (i--)
-                {
-                    zoomValue <<= 1;
-                }
-                zoomValue >>= 1;
+            if (zoomTarget) {
+                hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
+                hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
             }
-            else {
-                int64_t nextZoom = zoomValue / 2;
-                if (zoomValue > curImgZoomBase && nextZoom <= curImgZoomBase)
-                    zoomValue = curImgZoomBase;
-                else
-                    zoomValue = nextZoom;
-            }
-
-            if (lastZoom) {
-                hasDrop.x = (int)(zoomValue * hasDrop.x / lastZoom);
-                hasDrop.y = (int)(zoomValue * hasDrop.y / lastZoom);
-            }
+            zoomTarget = zoomNext;
         }
     }
 
-    const int64_t deltaW = hasDrop.x + (mainW - srcW * zoomValue / ZOOM_BASE) / 2;
-    const int64_t deltaH = hasDrop.y + (mainH - srcH * zoomValue / ZOOM_BASE) / 2;
+    const int64_t deltaW = hasDropCur.x + (mainW - srcW * zoomCur / ZOOM_BASE) / 2;
+    const int64_t deltaH = hasDropCur.y + (mainH - srcH * zoomCur / ZOOM_BASE) / 2;
 
     for (int y = 0; y < mainH; y++)
         for (int x = 0; x < mainW; x++) {
 
-            int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomValue);
-            int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomValue);
+            int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
+            int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
 
             if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH)
                 mainImg.at<cv::Vec4b>(y, x) = getSrcPx(srcImg, srcX, srcY, x, y);
@@ -204,11 +257,11 @@ void processMainImg(int curFileIdx, cv::Mat& mainImg) {
         if (duration >= 1000)
             SetWindowTextW(mainHWND, std::format(L"[{}/{}] [ {} {} ] {}% {}",
                 curFileIdx + 1, imgFileList.size(),
-                duration / 1000, millStr.c_str(), zoomValue * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
+                duration / 1000, millStr.c_str(), zoomCur * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
         else
             SetWindowTextW(mainHWND, std::format(L"[{}/{}] [ {:.2f} {} ] {}% {}",
                 curFileIdx + 1, imgFileList.size(),
-                duration / 1000.0, millStr.c_str(), zoomValue * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
+                duration / 1000.0, millStr.c_str(), zoomCur * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
     }
     else {
         SetWindowTextW(mainHWND, L"jarkViewer");
@@ -281,12 +334,33 @@ int myMain(std::filesystem::path& fullPath) {
 
                 switchOperate = 0;
                 zoomOperate = 0;
-                hasDrop = { 0, 0 };
-                zoomValue = 0;
+                hasDropCur = { 0, 0 };
+                hasDropTarget = { 0, 0 };
+                zoomTarget = 0;
+                zoomCur = 0;
+
+                //std::cout << getExif(imgFileList[curFileIdx].c_str()) << std::endl;  // TODO
             }
 
             processMainImg(curFileIdx, mainImg);
             cv::imshow(windowName, mainImg);
+
+            if (zoomCur != zoomTarget) { // 简单过渡动画
+                needFresh = true;
+                const int64 delta = (zoomTarget - zoomCur) / 2;
+                if (abs(delta) > 4)zoomCur += delta;
+                else zoomCur = zoomTarget;
+            }
+            if (hasDropTarget.x != hasDropCur.x || hasDropTarget.y != hasDropCur.y) {
+                needFresh = true;
+                const auto delta = (hasDropTarget - hasDropCur) / 2;
+
+                if (abs(delta.x) > 4) hasDropCur.x += delta.x;
+                else hasDropCur.x = hasDropTarget.x;
+
+                if (abs(delta.y) > 4) hasDropCur.y += delta.y;
+                else hasDropCur.y = hasDropTarget.y;
+            }
         }
 
         if (cv::waitKey(5) == 27) //ESC
@@ -388,14 +462,15 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         mouse.y = y;
         cursorIsView = x < (winSize.width >= 1000 ? (winSize.width - 100) : (winSize.width * 4 / 5));
         if (isPresing) {
-            hasDrop = mouse - mousePress;
+            hasDropTarget = mouse - mousePress;
+            hasDropCur = hasDropTarget;
             needFresh = true;
         }
     }break;
 
         //左键按下
     case cv::EVENT_LBUTTONDOWN: {
-        mousePress = mouse - hasDrop;
+        mousePress = mouse - hasDropTarget;
         isPresing = true;
         //Utils::log("press {} {}", mousePress.x, mousePress.y);
     }break;
@@ -429,4 +504,35 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         needFresh = true;
     }
     }
+}
+
+std::string getExif(const char* path) {
+    easyexif::EXIFInfo result(path);
+    if (!result.hasInfo)
+        return "";
+
+    using std::to_string;
+
+    return "相机型号 " + result.Make + " " + result.Model +
+        (result.Software.length() ? ("\n版权 " + result.Copyright) : "") +
+        (result.DateTime.length() ? ("\n时间 " + result.DateTime) : "") +
+        (result.Software.length() ? ("\n软件 " + result.Software) : "") +
+        (result.DateTimeOriginal.length() ? ("\n原始时间 " + result.DateTimeOriginal) : "") +
+        (result.DateTimeDigitized.length() ? ("\n数字时间 " + result.DateTimeDigitized) : "") +
+        "\n分辨率 " + to_string(result.ImageWidth) + " x "+ to_string(result.ImageWidth) +
+        "\n曝光时长 1/" + to_string((unsigned)(1.0 / result.ExposureTime)) + " s" +
+        "\nF光圈 f/" + to_string(result.FNumber) +
+        "\nISO " + to_string(result.ISOSpeedRatings) +
+        "\n目标距离 " + to_string(result.SubjectDistance) + " m" +
+        "\n焦距 " + to_string(result.FocalLength) + " mm" +
+        "\n焦距35mm " + to_string(result.FocalLengthIn35mm) + " mm" +
+        "\n曝光误差 " + to_string(result.ExposureBiasValue) + " Ev" +
+        "\nISO " + to_string(result.ISOSpeedRatings) +
+        "\nGPS经度 " + to_string((int)result.GeoLocation.LonComponents.degrees) + "° " +
+        to_string((int)result.GeoLocation.LonComponents.minutes) + "' " +
+        to_string((int)result.GeoLocation.LonComponents.seconds) + "''" +
+        "\nGPS纬度 " + to_string((int)result.GeoLocation.LatComponents.degrees) + "° " +
+        to_string((int)result.GeoLocation.LatComponents.minutes) + "' " +
+        to_string((int)result.GeoLocation.LatComponents.seconds) + "''" +
+        "\n海拔高度 " + to_string(result.GeoLocation.Altitude) + " m";
 }

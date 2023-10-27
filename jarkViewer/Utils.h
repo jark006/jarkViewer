@@ -62,6 +62,20 @@ struct Cood {
 		temp.y = this->y - t.y;
 		return temp;
 	}
+
+	Cood operator*(int i) const {
+		Cood temp;
+		temp.x = this->x * i;
+		temp.y = this->y * i;
+		return temp;
+	}
+
+	Cood operator/(int i) const {
+		Cood temp;
+		temp.x = this->x / i;
+		temp.y = this->y / i;
+		return temp;
+	}
 };
 
 namespace Utils {
@@ -102,10 +116,9 @@ namespace Utils {
 	static void log(const string_view fmt, Args&&... args)
 	{
 		static SOCKET sockSer = 0;
-		static SOCKADDR_IN addr_in{
+		static SOCKADDR_IN addr_in{ // 127.0.0.1:60000 UDP
 			.sin_family = AF_INET,
-			.sin_port = htons(80),
-			//.sin_addr = {.S_un = {.S_addr = inet_addr("127.0.0.1")}}
+			.sin_port = htons(60000),
 			.sin_addr = {.S_un = {.S_un_b = {127,0,0,1}}}
 		};
 
@@ -114,8 +127,7 @@ namespace Utils {
 			WSADATA wsaData;
 			wVersionRequested = MAKEWORD(1, 1);
 			int err = WSAStartup(wVersionRequested, &wsaData);
-			if (err != 0)
-			{
+			if (err != 0){
 				return;
 			}
 			if (LOBYTE(wsaData.wVersion) != 1 ||
@@ -126,9 +138,6 @@ namespace Utils {
 			}
 
 			sockSer = socket(AF_INET, SOCK_DGRAM, 0);
-			//addr_in.sin_family = AF_INET;
-			//addr_in.sin_port = htons(60011);
-			//addr_in.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 		}
 
 		const string str = std::vformat(fmt, std::make_format_args(args...));

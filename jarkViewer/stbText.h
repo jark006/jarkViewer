@@ -105,7 +105,7 @@ public:
     // str : UTF-8
     void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Scalar& color) {
         int codePoint = '?';
-        int xOffset = x;
+        int xOffset = x, yOffset = y;
         const auto len = strlen(str);
         size_t i = 0;
         while (i < len)
@@ -130,7 +130,14 @@ public:
                 codePoint = '?';
                 i++;
             }
-            xOffset += putWord(img, xOffset, y, codePoint, color);
+
+            if (codePoint == '\n') {
+                yOffset += wordHigh;
+                xOffset = x;
+            }
+            else {
+                xOffset += putWord(img, xOffset, yOffset, codePoint, color);
+            }
         }
     }
 
@@ -148,6 +155,7 @@ private:
     uint8_t* fontBuffer = nullptr;
 
     rcFileInfo rc;
+    int wordHigh=12;
 
     void Init(unsigned int idi, const wchar_t* type) {
         rc = Utils::GetResource(idi, type);
@@ -160,7 +168,7 @@ private:
     }
 
     int putWord(cv::Mat& img, const int x, int y, const int codePoint, const cv::Scalar& color) {
-        int c_x1, c_y1, wordWidth, wordHigh;
+        int c_x1, c_y1, wordWidth;
         stbtt_GetCodepointBitmapBox(&info, codePoint, scale, scale, &c_x1, &c_y1, &wordWidth, &wordHigh);
         wordHigh -= c_y1;
         wordWidth -= c_x1;

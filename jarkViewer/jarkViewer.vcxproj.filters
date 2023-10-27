@@ -102,6 +102,9 @@
     <ClInclude Include="opencv2\freetype.hpp">
       <Filter>opencv2</Filter>
     </ClInclude>
+    <ClInclude Include="exif.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="jarkViewer.cpp">
@@ -109,6 +112,9 @@
     </ClCompile>
     <ClCompile Include="LRU.h">
       <Filter>头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="exif.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

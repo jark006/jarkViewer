@@ -64,6 +64,7 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="exif.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="opencv2\calib3d.hpp" />
     <ClInclude Include="opencv2\core.hpp" />
@@ -93,6 +94,7 @@
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="exif.cpp" />
     <ClCompile Include="jarkViewer.cpp" />
     <ClCompile Include="LRU.h" />
   </ItemGroup>
