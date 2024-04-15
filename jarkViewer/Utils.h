@@ -10,8 +10,6 @@
 
 #include<string>
 #include<vector>
-#include<set>
-#include<map>
 #include<unordered_set>
 #include<unordered_map>
 
@@ -22,8 +20,7 @@ using std::vector;
 using std::string;
 using std::wstring;
 using std::string_view;
-using std::set;
-using std::map;
+using std::unordered_set;
 using std::unordered_map;
 using std::cout;
 using std::endl;
@@ -196,15 +193,15 @@ namespace Utils {
 
 	std::wstring ansiToWstring(const std::string& str) {
 		int len = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, nullptr, 0);
-		std::wstring wstr(len, 0);
-		MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, wstr.data(), len);
+		std::wstring wstr(len+10, 0);
+		MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, wstr.data(), len+10);
 		return wstr;
 	}
 
 	std::string wstringToAnsi(const std::wstring& wstr) {
 		int len = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-		std::string strRet(len, 0);
-		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, strRet.data(), len, nullptr, nullptr);
+		std::string strRet(len+10, 0);
+		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, strRet.data(), len+10, nullptr, nullptr);
 		return strRet;
 	}
 

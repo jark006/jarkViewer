@@ -2,7 +2,7 @@
 
 //————————————————
 //版权声明：本文为CSDN博主「天上下橙雨」的原创文章，遵循CC 4.0 BY - SA版权协议，转载请附上原文出处链接及本声明。
-//原文链接：https ://blog.csdn.net/weixin_40026797/article/details/112755090
+//原文链接：https://blog.csdn.net/weixin_40026797/article/details/112755090
 
 #include "Utils.h"
 
@@ -132,7 +132,7 @@ public:
             }
 
             if (codePoint == '\n') {
-                yOffset += wordHigh;
+                yOffset += int(fontSizeDefault * (1 + lineGapPercent));
                 xOffset = x;
             }
             else {
@@ -155,7 +155,6 @@ private:
     uint8_t* fontBuffer = nullptr;
 
     rcFileInfo rc;
-    int wordHigh=12;
 
     void Init(unsigned int idi, const wchar_t* type) {
         rc = Utils::GetResource(idi, type);
@@ -168,14 +167,15 @@ private:
     }
 
     int putWord(cv::Mat& img, const int x, int y, const int codePoint, const cv::Scalar& color) {
-        int c_x1, c_y1, wordWidth;
-        stbtt_GetCodepointBitmapBox(&info, codePoint, scale, scale, &c_x1, &c_y1, &wordWidth, &wordHigh);
-        wordHigh -= c_y1;
-        wordWidth -= c_x1;
+        int c_x0, c_y0, c_x1, c_y1;
+        stbtt_GetCodepointBitmapBox(&info, codePoint, scale, scale, &c_x0, &c_y0, &c_x1, &c_y1);
 
-        y += fontSize <= wordHigh ? 0 : fontSize - wordHigh;
-
+        int wordWidth = c_x1 - c_x0;
+        int wordHigh = c_y1 - c_y0;
         stbtt_MakeCodepointBitmap(&info, wordBuff, wordWidth, wordHigh, fontSize, scale, scale, codePoint);
+
+        y += fontSize + c_y0;
+
         for (int yy = 0; yy < wordHigh; yy++) {
             if (y + yy >= img.rows)break;
             for (int xx = 0; xx < wordWidth; xx++) {
@@ -183,15 +183,14 @@ private:
                 auto& orgColor = img.at<cv::Vec4b>(y + yy, x + xx);
                 auto alpha = wordBuff[yy * fontSize + xx] * orgColor[3] * color[3] / (256 * 256 * 256.0);
 
-                cv::Vec4b newColor{
+                orgColor = {
                     (uint8_t)(orgColor[0] * (1 - alpha) + color[0] * alpha),
                     (uint8_t)(orgColor[1] * (1 - alpha) + color[1] * alpha),
                     (uint8_t)(orgColor[2] * (1 - alpha) + color[2] * alpha),
                     255
                 };
-                img.at<cv::Vec4b>(y + yy, x + xx) = newColor;
             }
         }
-        return int(wordWidth + wordWidth * lineGapPercent);
+        return wordWidth<=fontSizeDefault/5? fontSizeDefault/5: int(wordWidth * (1 + lineGapPercent));
     }
 };

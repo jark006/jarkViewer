@@ -5,6 +5,25 @@
 #include "LRU.h"
 #include "exif.h"
 
+/*
+opencv编译选项 编译静态库
+https://github.com/opencv/opencv/releases
+https://github.com/opencv/opencv_contrib/releases
+
+编译选项 type Release
+去掉  test ts js python pdb objc share_libs
+勾选  opencv_world  with_freetype  enable_nonfree
+
+windows_w32.cpp 在 (1951行) case WM_SETCURSOR: 下面替换成
+
+static HCURSOR hCursor = LoadCursor(NULL, IDC_ARROW);
+SetCursor(hCursor);
+
+*/
+
+// TODO GIF 等动图
+// avif heic  https://github.com/strukturag/libheif
+
 
 const int BG_GRID_WIDTH = 8;
 const cv::Vec4b BG_COLOR_DARK{ 40, 40, 40, 255 };
@@ -23,33 +42,34 @@ cv::Mat mainImg;
 
 bool isBusy = false;
 bool needFresh = false;
+bool showExif = false;
 
 Cood mouse{}, hasDropCur{}, hasDropTarget{};
-int zoomOperate = 0;     // 缩放
-int switchOperate = 0;   // 切图
-int64_t zoomTarget = 0;  // 缩放比例
-int64_t zoomCur = 0;     // 缩放比例
+int zoomOperate = 0;     // 缩放操作
+int switchOperate = 0;   // 切换图片操作
+int64_t zoomTarget = 0;  // 设定的缩放比例
+int64_t zoomCur = 0;     // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
 
-int curFileIdx = -1; //文件在路径列表的索引
-vector<string> imgFileList;
+int curFileIdx = -1;        //文件在路径列表的索引
+vector<string> imgFileList; //工作目录下所有图像文件路径
 
-stbText stb;
+stbText stb; //给Mat绘制文字
 cv::Mat defaultMat, homeMat;
 cv::Rect winSize;
 
 LRU<string, cv::Mat, 10> myLRU;
 
-const set<string> supportExt = {
+const unordered_set<string> supportExt = {
     ".jpg", ".jp2", ".jpeg", ".jpe", ".bmp", ".dib", ".png",
     ".pbm", ".pgm", ".ppm",".pxm",".pnm",".sr", ".ras",
-    ".exr", ".tiff", ".tif", ".webp", ".hdr", ".pic", };
+    ".exr", ".tiff", ".tif", ".webp", ".hdr", ".pic", ".heic", };
 
-int getWidth(cv::Mat& mat) { return mat.cols; }
-int getHeight(cv::Mat& mat) { return mat.rows; }
+static int getWidth(cv::Mat& mat) { return mat.cols; }
+static int getHeight(cv::Mat& mat) { return mat.rows; }
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
 int myMain(std::filesystem::path& fullPath);
-std::string getExif(const char* path);
+std::string getExif(const string& path);
 
 template<typename... Args>
 void log(const string_view fmt, Args&&... args) {
@@ -62,7 +82,7 @@ void log(const string_view fmt, Args&&... args) {
 }
 
 
-cv::Vec4b getSrcPxBK(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
+static cv::Vec4b getSrcPxBK(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
         auto& px = srcImg.at<cv::Vec3b>(srcY, srcX);
@@ -90,7 +110,7 @@ cv::Vec4b getSrcPxBK(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) 
     return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
 }
 
-cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
+static cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
         auto& srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
@@ -161,7 +181,7 @@ cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
 }
 
-int64 keep_msb_1_clear_others(int64 n) {
+static int64 keep_msb_1_clear_others(int64 n) {
     if (n == 0)
         return 0;
     int msb = 63;
@@ -170,8 +190,8 @@ int64 keep_msb_1_clear_others(int64 n) {
     return 1LL << msb;
 }
 
-void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
-    static int64_t curImgZoomBase = 0;
+static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
+    static int64_t zoomFitWindow = 0;  //适应显示窗口宽高的缩放比例
 
     const int srcH = getHeight(srcImg);
     const int srcW = getWidth(srcImg);
@@ -179,24 +199,19 @@ void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
     const int mainW = getWidth(mainImg);
 
     if (zoomTarget == 0) {
-        if (srcH > mainH || srcW > mainW) { //适合显示窗口宽高的缩放比例
-            curImgZoomBase = std::min(mainH * ZOOM_BASE / srcH, mainW * ZOOM_BASE / srcW);
-        }
-        else {
-            curImgZoomBase = ZOOM_BASE;
-        }
-        zoomTarget = curImgZoomBase;
-        zoomCur = curImgZoomBase;
+        zoomFitWindow = (srcH > 0 && srcW > 0) ? std::min(mainH * ZOOM_BASE / srcH, mainW * ZOOM_BASE / srcW) : ZOOM_BASE;
+        zoomTarget = (srcH > mainH || srcW > mainW) ? zoomFitWindow : ZOOM_BASE;
+        zoomCur = zoomTarget;
     }
 
     if (zoomOperate > 0) {
         zoomOperate = 0;
         if (zoomTarget < ZOOM_MAX) {
             int64 zoomNext = zoomTarget * 2;
-            if (zoomTarget == curImgZoomBase)
+            if (zoomTarget == zoomFitWindow)
                 zoomNext = keep_msb_1_clear_others(zoomTarget * 2);
-            else if (zoomTarget < curImgZoomBase && curImgZoomBase < zoomNext)
-                zoomNext = curImgZoomBase;
+            else if (zoomTarget < zoomFitWindow && zoomFitWindow < zoomNext)
+                zoomNext = zoomFitWindow;
 
             if (zoomTarget) {
                 hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
@@ -209,12 +224,12 @@ void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
         zoomOperate = 0;
         if (zoomTarget > ZOOM_MIN) {
             int64 zoomNext = zoomTarget / 2;
-            if (zoomTarget == curImgZoomBase) {
-                if (curImgZoomBase != keep_msb_1_clear_others(curImgZoomBase))
-                    zoomNext = keep_msb_1_clear_others(curImgZoomBase);
+            if (zoomTarget == zoomFitWindow) {
+                if (zoomFitWindow != keep_msb_1_clear_others(zoomFitWindow))
+                    zoomNext = keep_msb_1_clear_others(zoomFitWindow);
             }
-            else if (zoomTarget > curImgZoomBase && curImgZoomBase > zoomNext)
-                zoomNext = curImgZoomBase;
+            else if (zoomTarget > zoomFitWindow && zoomFitWindow > zoomNext)
+                zoomNext = zoomFitWindow;
 
             if (zoomTarget) {
                 hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
@@ -241,7 +256,7 @@ void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
 }
 
 
-void processMainImg(int curFileIdx, cv::Mat& mainImg) {
+static void processMainImg(int curFileIdx, cv::Mat& mainImg) {
     static wstring millStr = Utils::utf8ToWstring("毫秒");
     isBusy = true;
 
@@ -252,16 +267,17 @@ void processMainImg(int curFileIdx, cv::Mat& mainImg) {
 
     processSrc(srcImg, mainImg);
 
+    if(showExif && curFileIdx >= 0)
+        stb.putText(mainImg, 10, 10, getExif(imgFileList[curFileIdx].c_str()).c_str(), {255, 255, 255, 255});
+
     auto duration = duration_cast<microseconds>(system_clock::now() - st).count();
     if (curFileIdx >= 0) {
-        if (duration >= 1000)
-            SetWindowTextW(mainHWND, std::format(L"[{}/{}] [ {} {} ] {}% {}",
-                curFileIdx + 1, imgFileList.size(),
-                duration / 1000, millStr.c_str(), zoomCur * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
-        else
-            SetWindowTextW(mainHWND, std::format(L"[{}/{}] [ {:.2f} {} ] {}% {}",
-                curFileIdx + 1, imgFileList.size(),
-                duration / 1000.0, millStr.c_str(), zoomCur * 100ULL / ZOOM_BASE, Utils::ansiToWstring(imgFileList[curFileIdx]).c_str()).c_str());
+        wstring str = std::format(L" [{}/{}] {:3d}ms {:3d}% ",
+            curFileIdx + 1, imgFileList.size(),
+            duration / 1000, zoomCur * 100ULL / ZOOM_BASE)
+            + Utils::ansiToWstring(imgFileList[curFileIdx]);
+        SetWindowTextW(mainHWND, str.c_str());
+        //std::wcout << str << std::endl;
     }
     else {
         SetWindowTextW(mainHWND, L"jarkViewer");
@@ -338,29 +354,73 @@ int myMain(std::filesystem::path& fullPath) {
                 hasDropTarget = { 0, 0 };
                 zoomTarget = 0;
                 zoomCur = 0;
-
-                //std::cout << getExif(imgFileList[curFileIdx].c_str()) << std::endl;  // TODO
             }
 
             processMainImg(curFileIdx, mainImg);
             cv::imshow(windowName, mainImg);
 
+            //if (zoomCur != zoomTarget) { // 简单过渡动画
+            //    needFresh = true;
+            //    const int64 delta = (zoomTarget - zoomCur) / 2;
+            //    if (abs(delta) > 4)zoomCur += delta;
+            //    else zoomCur = zoomTarget;
+            //}
+            //if (hasDropTarget.x != hasDropCur.x || hasDropTarget.y != hasDropCur.y) {
+            //    needFresh = true;
+            //    const auto delta = (hasDropTarget - hasDropCur) / 2;
+
+            //    if (abs(delta.x) > 4) hasDropCur.x += delta.x;
+            //    else hasDropCur.x = hasDropTarget.x;
+
+            //    if (abs(delta.y) > 4) hasDropCur.y += delta.y;
+            //    else hasDropCur.y = hasDropTarget.y;
+            //}
+
+
+
+            //if (zoomCur != zoomTarget) { // 简单过渡动画
+            //    needFresh = true;
+            //    const int64 delta = (zoomTarget - zoomCur) / 2;
+            //    if (abs(delta)>=4)zoomCur += delta;
+            //    else zoomCur = zoomTarget;
+            //}
+
+            //const auto delta = (hasDropTarget - hasDropCur) / 2;
+            //if (delta.x + delta.y)
+            //    needFresh = true;
+
+            //if (abs(delta.x) >= 2) hasDropCur.x += delta.x;
+            //else hasDropCur.x = hasDropTarget.x;
+
+            //if (abs(delta.y) >= 2) hasDropCur.y += delta.y;
+            //else hasDropCur.y = hasDropTarget.y;
+
+
+            const int fpsMax = 5;
+            static int fpsCnt = fpsMax;
+            static int zoomInit = 0;
+            static Cood hasDropInit{};
             if (zoomCur != zoomTarget) { // 简单过渡动画
                 needFresh = true;
-                const int64 delta = (zoomTarget - zoomCur) / 2;
-                if (abs(delta) > 4)zoomCur += delta;
-                else zoomCur = zoomTarget;
-            }
-            if (hasDropTarget.x != hasDropCur.x || hasDropTarget.y != hasDropCur.y) {
-                needFresh = true;
-                const auto delta = (hasDropTarget - hasDropCur) / 2;
 
-                if (abs(delta.x) > 4) hasDropCur.x += delta.x;
-                else hasDropCur.x = hasDropTarget.x;
-
-                if (abs(delta.y) > 4) hasDropCur.y += delta.y;
-                else hasDropCur.y = hasDropTarget.y;
+                if (fpsCnt >= fpsMax) {
+                    fpsCnt = 0;
+                    zoomInit = zoomCur;
+                    hasDropInit = hasDropCur;
+                }
+                else {
+                    fpsCnt++;
+                    if (fpsCnt >= fpsMax) {
+                        zoomCur = zoomTarget;
+                        hasDropCur = hasDropTarget;
+                    }
+                    else {
+                        zoomCur = zoomInit + (zoomTarget - zoomInit) * fpsCnt / fpsMax;
+                        hasDropCur = hasDropInit + (hasDropTarget - hasDropInit) * fpsCnt / fpsMax;
+                    }
+                }
             }
+
         }
 
         if (cv::waitKey(5) == 27) //ESC
@@ -405,7 +465,7 @@ static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {
 
 
 // 在 属性-链接器-系统-子系统 更改模式
-int wmain(int argc, wchar_t* argv[]) {
+static int wmain(int argc, wchar_t* argv[]) {
 
     wstring str(*argv[1] == L'\"' ? argv[1] + 1 : argv[1]);
     if (str.length() > 2 && str[str.length() - 1] == '\"')
@@ -416,8 +476,8 @@ int wmain(int argc, wchar_t* argv[]) {
     cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
     mainHWND = getCvWindow(windowName.c_str());
 
-    system("CHCP 65001");
-    log("启动控制台");
+    //system("CHCP 65001");
+    //log("启动控制台");
 
     return myMain(fullPath);
 }
@@ -448,11 +508,11 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
 
     static Cood mousePress;
     static bool isPresing = false;
-    static bool cursorIsView = false;
+    static bool cursorIsView = false; // 鼠标位置，若在看图区域，滚轮就缩放，其他区域滚轮就切换图片
     static bool fullScreen = false;
     static auto lastTimestamp = system_clock::now();
 
-    //static HCURSOR hCursor = LoadCursor(NULL, IDC_ARROW);
+    //static HCURSOR hCursor = LoadCursor(NULL, IDC_ARROW);  // 已放到opencv源码编译成静态库了
     //SetCursor(hCursor);// 设置窗口光标
 
     switch (event)
@@ -460,7 +520,11 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     case cv::EVENT_MOUSEMOVE: {
         mouse.x = x; //这里获取的是当前像素在源图像的坐标， 不是绘图窗口坐标
         mouse.y = y;
-        cursorIsView = x < (winSize.width >= 1000 ? (winSize.width - 100) : (winSize.width * 4 / 5));
+        if (winSize.width >= 500)
+            cursorIsView = (50 < x) && (x < (winSize.width - 50)); // 在窗口中间
+        else
+            cursorIsView = ((winSize.width / 5) < x) && (x < (winSize.width * 4 / 5));
+
         if (isPresing) {
             hasDropTarget = mouse - mousePress;
             hasDropCur = hasDropTarget;
@@ -487,6 +551,11 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         lastTimestamp = now;
     }break;
 
+    case cv::EVENT_MBUTTONUP: {
+        showExif = !showExif;
+        needFresh = true;
+    }break;
+
     case cv::EVENT_RBUTTONUP: {
         exit(0);
     }break;
@@ -506,21 +575,28 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     }
 }
 
-std::string getExif(const char* path) {
-    easyexif::EXIFInfo result(path);
-    if (!result.hasInfo)
-        return "";
-
+std::string getExif(const string& path) {
     using std::to_string;
+    static unordered_map<string, string> exifMap;
 
-    return "相机型号 " + result.Make + " " + result.Model +
-        (result.Software.length() ? ("\n版权 " + result.Copyright) : "") +
-        (result.DateTime.length() ? ("\n时间 " + result.DateTime) : "") +
+    auto it = exifMap.find(path);
+    if (it != exifMap.end())
+        return it->second;
+
+    if (exifMap.size() > 1000) // 不考虑LRU缓存, 多了直接清理
+        exifMap.clear();
+
+    easyexif::EXIFInfo result(path.c_str());
+
+    string res = (!result.hasInfo) ? "无Exif信息" :
+        "相机型号 " + result.Make + " " + result.Model +
+        (result.Copyright.length() ? ("\n版权 " + result.Copyright) : "") +
         (result.Software.length() ? ("\n软件 " + result.Software) : "") +
+        (result.DateTime.length() ? ("\n创建时间 " + result.DateTime) : "") +
         (result.DateTimeOriginal.length() ? ("\n原始时间 " + result.DateTimeOriginal) : "") +
         (result.DateTimeDigitized.length() ? ("\n数字时间 " + result.DateTimeDigitized) : "") +
-        "\n分辨率 " + to_string(result.ImageWidth) + " x "+ to_string(result.ImageWidth) +
-        "\n曝光时长 1/" + to_string((unsigned)(1.0 / result.ExposureTime)) + " s" +
+        "\n分辨率 " + to_string(result.ImageWidth) + " x " + to_string(result.ImageWidth) +
+        "\n曝光时长 " + to_string(result.ExposureTime) + " s" +
         "\nF光圈 f/" + to_string(result.FNumber) +
         "\nISO " + to_string(result.ISOSpeedRatings) +
         "\n目标距离 " + to_string(result.SubjectDistance) + " m" +
@@ -528,11 +604,17 @@ std::string getExif(const char* path) {
         "\n焦距35mm " + to_string(result.FocalLengthIn35mm) + " mm" +
         "\n曝光误差 " + to_string(result.ExposureBiasValue) + " Ev" +
         "\nISO " + to_string(result.ISOSpeedRatings) +
-        "\nGPS经度 " + to_string((int)result.GeoLocation.LonComponents.degrees) + "° " +
+        "\nGPS经度 " +
+        to_string((int)result.GeoLocation.LonComponents.degrees) + "° " +
         to_string((int)result.GeoLocation.LonComponents.minutes) + "' " +
-        to_string((int)result.GeoLocation.LonComponents.seconds) + "''" +
-        "\nGPS纬度 " + to_string((int)result.GeoLocation.LatComponents.degrees) + "° " +
+        to_string(result.GeoLocation.LonComponents.seconds) + "''" +
+        "\nGPS纬度 " +
+        to_string((int)result.GeoLocation.LatComponents.degrees) + "° " +
         to_string((int)result.GeoLocation.LatComponents.minutes) + "' " +
-        to_string((int)result.GeoLocation.LatComponents.seconds) + "''" +
-        "\n海拔高度 " + to_string(result.GeoLocation.Altitude) + " m";
+        to_string(result.GeoLocation.LatComponents.seconds) + "''" +
+        "\n海拔高度 " + to_string((int)result.GeoLocation.Altitude) + " m";
+
+    exifMap[path] = res;
+
+    return res;
 }

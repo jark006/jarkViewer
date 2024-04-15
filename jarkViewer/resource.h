@@ -1,7 +1,3 @@
-//{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ 生成的包含文件。
-// 供 jarkViewer.rc 使用
-//
 #define IDC_MYICON                      2
 #define IDD_JARKVIEWER_DIALOG           102
 #define IDS_APP_TITLE                   103
