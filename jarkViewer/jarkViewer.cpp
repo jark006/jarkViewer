@@ -376,26 +376,6 @@ int myMain(std::filesystem::path& fullPath) {
             //    else hasDropCur.y = hasDropTarget.y;
             //}
 
-
-
-            //if (zoomCur != zoomTarget) { // 简单过渡动画
-            //    needFresh = true;
-            //    const int64 delta = (zoomTarget - zoomCur) / 2;
-            //    if (abs(delta)>=4)zoomCur += delta;
-            //    else zoomCur = zoomTarget;
-            //}
-
-            //const auto delta = (hasDropTarget - hasDropCur) / 2;
-            //if (delta.x + delta.y)
-            //    needFresh = true;
-
-            //if (abs(delta.x) >= 2) hasDropCur.x += delta.x;
-            //else hasDropCur.x = hasDropTarget.x;
-
-            //if (abs(delta.y) >= 2) hasDropCur.y += delta.y;
-            //else hasDropCur.y = hasDropTarget.y;
-
-
             const int fpsMax = 5;
             static int fpsCnt = fpsMax;
             static int zoomInit = 0;
@@ -589,30 +569,29 @@ std::string getExif(const string& path) {
     easyexif::EXIFInfo result(path.c_str());
 
     string res = (!result.hasInfo) ? "无Exif信息" :
-        "相机型号 " + result.Make + " " + result.Model +
-        (result.Copyright.length() ? ("\n版权 " + result.Copyright) : "") +
-        (result.Software.length() ? ("\n软件 " + result.Software) : "") +
-        (result.DateTime.length() ? ("\n创建时间 " + result.DateTime) : "") +
-        (result.DateTimeOriginal.length() ? ("\n原始时间 " + result.DateTimeOriginal) : "") +
-        (result.DateTimeDigitized.length() ? ("\n数字时间 " + result.DateTimeDigitized) : "") +
-        "\n分辨率 " + to_string(result.ImageWidth) + " x " + to_string(result.ImageWidth) +
-        "\n曝光时长 " + to_string(result.ExposureTime) + " s" +
-        "\nF光圈 f/" + to_string(result.FNumber) +
-        "\nISO " + to_string(result.ISOSpeedRatings) +
-        "\n目标距离 " + to_string(result.SubjectDistance) + " m" +
-        "\n焦距 " + to_string(result.FocalLength) + " mm" +
-        "\n焦距35mm " + to_string(result.FocalLengthIn35mm) + " mm" +
-        "\n曝光误差 " + to_string(result.ExposureBiasValue) + " Ev" +
-        "\nISO " + to_string(result.ISOSpeedRatings) +
-        "\nGPS经度 " +
-        to_string((int)result.GeoLocation.LonComponents.degrees) + "° " +
-        to_string((int)result.GeoLocation.LonComponents.minutes) + "' " +
-        to_string(result.GeoLocation.LonComponents.seconds) + "''" +
-        "\nGPS纬度 " +
-        to_string((int)result.GeoLocation.LatComponents.degrees) + "° " +
-        to_string((int)result.GeoLocation.LatComponents.minutes) + "' " +
-        to_string(result.GeoLocation.LatComponents.seconds) + "''" +
-        "\n海拔高度 " + to_string((int)result.GeoLocation.Altitude) + " m";
+        "     ISO: " + to_string(result.ISOSpeedRatings) +
+        (result.Copyright.length() ? ("\n    版权: " + result.Copyright) : "") +
+        (result.Software.length() ? ("\n    软件: " + result.Software) : "") +
+        "\n   F光圈: f/" + to_string(result.FNumber) +
+        "\n  分辨率: " + to_string(result.ImageWidth) + " x " + to_string(result.ImageWidth) +
+        "\n    焦距: " + to_string(result.FocalLength) + " mm" +
+        "\n焦距35mm: " + to_string(result.FocalLengthIn35mm) + " mm" +
+        "\n相机型号: " + result.Make + " " + result.Model +
+        "\n目标距离: " + to_string(result.SubjectDistance) + " m" +
+        "\n曝光误差: " + to_string(result.ExposureBiasValue) + " Ev" +
+        (result.DateTime.length() ? ("\n创建时间: " + result.DateTime) : "") +
+        (result.DateTimeOriginal.length() ? ("\n原始时间: " + result.DateTimeOriginal) : "") +
+        (result.DateTimeDigitized.length() ? ("\n数字时间: " + result.DateTimeDigitized) : "") +
+        "\n曝光时长: " + to_string(result.ExposureTime) + " s" +
+        "\nGPS 经度: " +
+        to_string((int)result.GeoLocation.LonComponents.degrees) + "°" +
+        to_string((int)result.GeoLocation.LonComponents.minutes) + "′" +
+        to_string(result.GeoLocation.LonComponents.seconds) + "″" +
+        "\nGPS 纬度: " +
+        to_string((int)result.GeoLocation.LatComponents.degrees) + "°" +
+        to_string((int)result.GeoLocation.LatComponents.minutes) + "′" +
+        to_string(result.GeoLocation.LatComponents.seconds) + "″" +
+        "\n海拔高度: " + to_string((int)result.GeoLocation.Altitude) + " m";
 
     exifMap[path] = res;
 

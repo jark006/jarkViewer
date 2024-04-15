@@ -141,5 +141,6 @@
   </ItemGroup>
   <ItemGroup>
     <Font Include="file\LXGWNeoXiHei.ttf" />
+    <Font Include="file\MSYHMONO.ttf" />
   </ItemGroup>
 </Project>
