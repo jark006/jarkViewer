@@ -143,6 +143,98 @@ public:
         }
     }
 
+
+    void putCenter(cv::Mat& img, RECT r, const char* str, const cv::Scalar& color) {
+        int codePoint = '?';
+        int H = 1, W = 0, W_cnt = 0;
+        const auto len = strlen(str);
+        size_t i = 0;
+        while (i < len) {
+            if ((str[i] & 0x80) == 0) {
+                codePoint = str[i];
+                i++;
+            }
+            else if ((str[i] & 0xe0) == 0xc0) { // 110x'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x1f) << 6) | (str[i + 1] & 0x3f);
+                i += 2;
+            }
+            else if ((str[i] & 0xf0) == 0xe0) { // 1110'xxxx 10xx'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x0f) << 12) | ((str[i + 1] & 0x3f) << 6) | (str[i + 2] & 0x3f);
+                i += 3;
+            }
+            else if ((str[i] & 0xf8) == 0xf0) { // 1111'0xxx 10xx'xxxx 10xx'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x07) << 18) | ((str[i + 1] & 0x3f) << 12) | ((str[i + 2] & 0x3f) << 6) | (str[i + 3] & 0x3f);
+                i += 4;
+            }
+            else {
+                codePoint = '?';
+                i++;
+            }
+
+            if (codePoint == '\n') {
+                H++;
+                if (W_cnt > W) {
+                    W = W_cnt;
+                    W_cnt = 0;
+                }
+            }
+            else {
+                W_cnt += (codePoint < 256 ? 1 : 2);
+            }
+        }
+
+        if (W_cnt > W)
+            W = W_cnt;
+
+        const int sizeAndGap = int(fontSize * (1 + lineGapPercent));//等宽字体
+        H *= fontSize;
+        W = sizeAndGap * W / 2;
+
+        const int x = r.left + (r.right - r.left - W) / 2;
+        const int y = r.top + (r.bottom - r.top - H) / 2;
+
+        putText(img, x, y, str, color);
+    }
+
+    void putLeft(cv::Mat& img, RECT r, const char* str, const cv::Scalar& color) {
+        int codePoint = '?';
+        int xOffset = r.left, yOffset = r.top;
+        const auto len = strlen(str);
+        size_t i = 0;
+        while (i < len) {
+            if ((str[i] & 0x80) == 0) {
+                codePoint = str[i];
+                i++;
+            }
+            else if ((str[i] & 0xe0) == 0xc0) { // 110x'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x1f) << 6) | (str[i + 1] & 0x3f);
+                i += 2;
+            }
+            else if ((str[i] & 0xf0) == 0xe0) { // 1110'xxxx 10xx'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x0f) << 12) | ((str[i + 1] & 0x3f) << 6) | (str[i + 2] & 0x3f);
+                i += 3;
+            }
+            else if ((str[i] & 0xf8) == 0xf0) { // 1111'0xxx 10xx'xxxx 10xx'xxxx 10xx'xxxx
+                codePoint = ((str[i] & 0x07) << 18) | ((str[i + 1] & 0x3f) << 12) | ((str[i + 2] & 0x3f) << 6) | (str[i + 3] & 0x3f);
+                i += 4;
+            }
+            else {
+                codePoint = '?';
+                i++;
+            }
+
+            if (codePoint == '\n' || (xOffset + fontSize) > r.right) {
+                yOffset += int(fontSize * (1 + lineGapPercent));
+                xOffset = r.left;
+                if (yOffset > r.bottom)
+                    return;
+            }
+            else {
+                xOffset += putWord(img, xOffset, yOffset, codePoint, color);
+            }
+        }
+    }
+
 private:
 
     const static int fontSizeDefault = 24;

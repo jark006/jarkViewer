@@ -31,13 +31,12 @@ const cv::Vec4b BG_COLOR_LIGHT{ 60, 60, 60, 255 };
 const cv::Vec4b BG_COLOR{ 70, 70, 70, 255 };
 
 HWND mainHWND;
-const string appName = "JarkViewer";
+const wchar_t* appName = L"JarkViewer V1.2";
 const string windowName = "mainWindows";
-const string milliSecStr = Utils::utf8ToAnsi("毫秒");
 const int64_t ZOOM_BASE = 1 << 16; // 基础缩放
 const int64_t ZOOM_MIN = 1 << 10;
 const int64_t ZOOM_MAX = 1 << 22;
-
+int64_t zoomFitWindow = 0;  //适应显示窗口宽高的缩放比例
 cv::Mat mainImg;
 
 bool isBusy = false;
@@ -51,74 +50,33 @@ int64_t zoomTarget = 0;  // 设定的缩放比例
 int64_t zoomCur = 0;     // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
 
 int curFileIdx = -1;        //文件在路径列表的索引
-vector<string> imgFileList; //工作目录下所有图像文件路径
+vector<wstring> imgFileList; //工作目录下所有图像文件路径
 
 stbText stb; //给Mat绘制文字
-cv::Mat defaultMat, homeMat;
 cv::Rect winSize;
 
-LRU<string, cv::Mat, 10> myLRU;
+LRU<wstring, cv::Mat, 10> myLRU;
 
-const unordered_set<string> supportExt = {
-    ".jpg", ".jp2", ".jpeg", ".jpe", ".bmp", ".dib", ".png",
-    ".pbm", ".pgm", ".ppm",".pxm",".pnm",".sr", ".ras",
-    ".exr", ".tiff", ".tif", ".webp", ".hdr", ".pic", ".heic", };
+const unordered_set<wstring> supportExt = {
+    L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
+    L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
+    L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic" };
 
 static int getWidth(cv::Mat& mat) { return mat.cols; }
 static int getHeight(cv::Mat& mat) { return mat.rows; }
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
-int myMain(std::filesystem::path& fullPath);
-std::string getExif(const string& path);
-
-template<typename... Args>
-void log(const string_view fmt, Args&&... args) {
-
-    auto ts = time(nullptr) + 8 * 3600ULL;// UTC+8
-    int HH = (ts / 3600) % 24;
-    int MM = (ts / 60) % 60;
-    int SS = ts % 60;
-    cout << std::format("[{:02d}:{:02d}:{:02d}] ", HH, MM, SS) << std::vformat(fmt, std::make_format_args(args...)) << endl;
-}
-
-
-static cv::Vec4b getSrcPxBK(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
-    switch (srcImg.channels()) {
-    case 3: {
-        auto& px = srcImg.at<cv::Vec3b>(srcY, srcX);
-        return { px[0], px[1], px[2], 255 };
-    }
-    case 1: {
-        auto& px = srcImg.at<uchar>(srcY, srcX);
-        return cv::Vec4b{ px, px, px, 255 };
-    }
-    case 4: {
-        auto& px = srcImg.at<cv::Vec4b>(srcY, srcX);
-        cv::Vec4b bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
-
-        if (px[3] == 0) return bgPx;
-        else if (px[3] == 255) return px;
-
-        const int alpha = px[3];
-        bgPx[3] = alpha;
-        for (int i = 0; i < 3; i++)
-            bgPx[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / (255);
-        return bgPx;
-    }
-    }
-
-    return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BG_COLOR_DARK : BG_COLOR_LIGHT;
-}
+std::wstring getExif(const wstring& path, cv::Mat& img);
 
 static cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
         auto& srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
-        
+
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
-            auto& px0 = srcImg.at<cv::Vec3b>(srcY-1, srcX-1);
-            auto& px1 = srcImg.at<cv::Vec3b>(srcY-1, srcX);
-            auto& px2 = srcImg.at<cv::Vec3b>(srcY, srcX-1);
+            auto& px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
+            auto& px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
+            auto& px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
             cv::Vec4b ret;
             ret[3] = 255;
             for (int i = 0; i < 3; i++)
@@ -152,7 +110,7 @@ static cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int ma
         cv::Vec4b ret;
         ret[3] = alpha;
         for (int i = 0; i < 3; i++)
-            ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / (255);
+            ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
         return ret;
     }
     case 1: {
@@ -165,12 +123,12 @@ static cv::Vec4b getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int ma
                 auto& px2 = srcImg.at<uchar>(srcY, srcX - 1);
                 srcPx = (px0 + px1 + px2 + srcPx) / 4;
             }
-            else if(srcY==0){
-                auto& px2 = srcImg.at<uchar>(srcY+1, srcX);
+            else if (srcY == 0) {
+                auto& px2 = srcImg.at<uchar>(srcY + 1, srcX);
                 srcPx = (px2 + srcPx) / 2;
             }
             else {
-                auto& px2 = srcImg.at<uchar>(srcY, srcX+1);
+                auto& px2 = srcImg.at<uchar>(srcY, srcX + 1);
                 srcPx = (px2 + srcPx) / 2;
             }
         }
@@ -195,12 +153,10 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
 
     const int srcH = getHeight(srcImg);
     const int srcW = getWidth(srcImg);
-    const int mainH = getHeight(mainImg);
-    const int mainW = getWidth(mainImg);
 
     if (zoomTarget == 0) {
-        zoomFitWindow = (srcH > 0 && srcW > 0) ? std::min(mainH * ZOOM_BASE / srcH, mainW * ZOOM_BASE / srcW) : ZOOM_BASE;
-        zoomTarget = (srcH > mainH || srcW > mainW) ? zoomFitWindow : ZOOM_BASE;
+        zoomFitWindow = (srcH > 0 && srcW > 0) ? std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW) : ZOOM_BASE;
+        zoomTarget = (srcH > winSize.height || srcW > winSize.width) ? zoomFitWindow : ZOOM_BASE;
         zoomCur = zoomTarget;
     }
 
@@ -239,11 +195,11 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
         }
     }
 
-    const int64_t deltaW = hasDropCur.x + (mainW - srcW * zoomCur / ZOOM_BASE) / 2;
-    const int64_t deltaH = hasDropCur.y + (mainH - srcH * zoomCur / ZOOM_BASE) / 2;
+    const int64_t deltaW = hasDropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
+    const int64_t deltaH = hasDropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
 
-    for (int y = 0; y < mainH; y++)
-        for (int x = 0; x < mainW; x++) {
+    for (int y = 0; y < winSize.height; y++)
+        for (int x = 0; x < winSize.width; x++) {
 
             int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
             int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
@@ -256,66 +212,110 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
 }
 
 
+static cv::Mat& getDefaultMat() {
+    static cv::Mat defaultMat;
+    static bool isInit = false;
+
+    if (!isInit) {
+        isInit = true;
+        auto rc = Utils::GetResource(IDB_PNG, L"PNG");
+        std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+        defaultMat = cv::imdecode(cv::Mat(imgData), cv::IMREAD_UNCHANGED);
+    }
+    return defaultMat;
+}
+
+static cv::Mat& getHomeMat() {
+    static cv::Mat homeMat;
+    static bool isInit = false;
+
+    if (!isInit) {
+        isInit = true;
+        auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
+        std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+        homeMat = cv::imdecode(cv::Mat(imgData), cv::IMREAD_UNCHANGED);
+    }
+    return homeMat;
+}
+
 static void processMainImg(int curFileIdx, cv::Mat& mainImg) {
-    static wstring millStr = Utils::utf8ToWstring("毫秒");
     isBusy = true;
 
-    using namespace std::chrono;
-    auto st = system_clock::now();
-
-    cv::Mat& srcImg = curFileIdx < 0 ? homeMat : myLRU.get(imgFileList[curFileIdx], Utils::loadMat, defaultMat);
+    cv::Mat& srcImg = curFileIdx < 0 ? getHomeMat() : myLRU.get(imgFileList[curFileIdx], Utils::loadMat, getDefaultMat());
 
     processSrc(srcImg, mainImg);
 
-    if(showExif && curFileIdx >= 0)
-        stb.putText(mainImg, 10, 10, getExif(imgFileList[curFileIdx].c_str()).c_str(), {255, 255, 255, 255});
+    if (showExif && curFileIdx >= 0)
+        stb.putText(mainImg, 10, 10, Utils::wstringToUtf8(getExif(imgFileList[curFileIdx], mainImg)).c_str(),
+            { 255, 255, 255, 255 });
 
-    auto duration = duration_cast<microseconds>(system_clock::now() - st).count();
     if (curFileIdx >= 0) {
-        wstring str = std::format(L" [{}/{}] {:3d}ms {:3d}% ",
+        wstring str = std::format(L" [{}/{}] {}% ",
             curFileIdx + 1, imgFileList.size(),
-            duration / 1000, zoomCur * 100ULL / ZOOM_BASE)
-            + Utils::ansiToWstring(imgFileList[curFileIdx]);
+            zoomCur * 100ULL / ZOOM_BASE)
+            + imgFileList[curFileIdx];
         SetWindowTextW(mainHWND, str.c_str());
-        //std::wcout << str << std::endl;
     }
     else {
-        SetWindowTextW(mainHWND, L"jarkViewer");
+        SetWindowTextW(mainHWND, appName);
     }
 
     isBusy = false;
 }
 
-int myMain(std::filesystem::path& fullPath) {
+static HWND getCvWindow(LPCSTR lpWndName) {
+    HWND hWnd = (HWND)cvGetWindowHandle(lpWndName);
+    if (IsWindow(hWnd)) {
+        HWND hParent = GetParent(hWnd);
+        DWORD dwPid = 0;
+        GetWindowThreadProcessId(hWnd, &dwPid);
+        if (dwPid == GetCurrentProcessId()) {
+            return hParent;
+        }
+    }
+
+    return hWnd;
+}
+
+static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {
+    if (IsWindow(hWnd)) {
+        HICON hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(wIconId));
+        SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+        SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+    }
+}
+
+static int myMain(std::wstring& _fullPath, HINSTANCE hInstance) {
     using std::filesystem::path;
     using std::filesystem::directory_iterator;
     using std::filesystem::directory_entry;
     using std::filesystem::exists;
 
+    cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
+    mainHWND = getCvWindow(windowName.c_str());
+    ShowWindow(mainHWND, SW_MAXIMIZE); //最大化窗口
+    if (hInstance) setCvWindowIcon(hInstance, mainHWND, IDI_JARKVIEWER);
+
     cv::setMouseCallback(windowName, onMouseHandle);
 
-    auto rc = Utils::GetResource(IDB_PNG, L"PNG");
-    std::vector<char> imgData(rc.addr, rc.addr + rc.size);
-    defaultMat = cv::imdecode(cv::Mat(imgData), cv::IMREAD_UNCHANGED);
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
 
-    rc = Utils::GetResource(IDB_PNG1, L"PNG");
-    std::vector<char> imgData2(rc.addr, rc.addr + rc.size);
-    homeMat = cv::imdecode(cv::Mat(imgData2), cv::IMREAD_UNCHANGED);
-
+    std::filesystem::path fullPath(_fullPath);
     if (exists(directory_entry(fullPath))) {
         auto workDir = fullPath.parent_path();
 
         for (auto const& dir_entry : directory_iterator{ workDir }) {
             if (!dir_entry.is_regular_file())continue;
 
-            string extName = path(dir_entry).extension().string();
+            wstring extName = path(dir_entry).extension().wstring();
             for (auto& c : extName) c = std::tolower(c);
 
             if (supportExt.count(extName))
-                imgFileList.emplace_back(workDir.string() + "\\" + path(dir_entry).filename().string());
+                imgFileList.emplace_back(workDir.wstring() + L"\\" + path(dir_entry).filename().wstring());
         }
         for (int i = 0; i < imgFileList.size(); i++) {
-            if (imgFileList[i] == fullPath) {
+            if (imgFileList[i] == _fullPath) {
                 curFileIdx = i;
                 break;
             }
@@ -326,15 +326,18 @@ int myMain(std::filesystem::path& fullPath) {
     }
 
     while (true) {
-
         auto ws = cv::getWindowImageRect(windowName);
         if ((ws.width != winSize.width || ws.height != winSize.height) && ws.width != 0 && ws.height != 0) {
             needFresh = true;
+            zoomTarget = 0;
+            if (winSize.width)
+                hasDropTarget.x = hasDropTarget.x * ws.width / winSize.width;
+            if (winSize.height)
+                hasDropTarget.y = hasDropTarget.y * ws.height / winSize.height;
+
             winSize = ws;
 
             mainImg = cv::Mat(ws.height, ws.width, CV_8UC4);
-
-            needFresh = true;
         }
 
         if (needFresh) {
@@ -359,107 +362,50 @@ int myMain(std::filesystem::path& fullPath) {
             processMainImg(curFileIdx, mainImg);
             cv::imshow(windowName, mainImg);
 
-            //if (zoomCur != zoomTarget) { // 简单过渡动画
-            //    needFresh = true;
-            //    const int64 delta = (zoomTarget - zoomCur) / 2;
-            //    if (abs(delta) > 4)zoomCur += delta;
-            //    else zoomCur = zoomTarget;
-            //}
-            //if (hasDropTarget.x != hasDropCur.x || hasDropTarget.y != hasDropCur.y) {
-            //    needFresh = true;
-            //    const auto delta = (hasDropTarget - hasDropCur) / 2;
-
-            //    if (abs(delta.x) > 4) hasDropCur.x += delta.x;
-            //    else hasDropCur.x = hasDropTarget.x;
-
-            //    if (abs(delta.y) > 4) hasDropCur.y += delta.y;
-            //    else hasDropCur.y = hasDropTarget.y;
-            //}
-
-            const int fpsMax = 5;
-            static int fpsCnt = fpsMax;
-            static int zoomInit = 0;
+            const int progressMax = 8;
+            static int progressCnt = progressMax;
+            static int64_t zoomInit = 0;
             static Cood hasDropInit{};
-            if (zoomCur != zoomTarget) { // 简单过渡动画
+            if (zoomCur != zoomTarget) { // 简单缩放动画
                 needFresh = true;
 
-                if (fpsCnt >= fpsMax) {
-                    fpsCnt = 0;
+                if (progressCnt >= (progressMax - 1)) {
+                    progressCnt = 0;
                     zoomInit = zoomCur;
                     hasDropInit = hasDropCur;
                 }
                 else {
-                    fpsCnt++;
-                    if (fpsCnt >= fpsMax) {
+                    progressCnt += ((progressMax - progressCnt) / 2);
+                    if (progressCnt >= (progressMax - 1)) {
                         zoomCur = zoomTarget;
                         hasDropCur = hasDropTarget;
                     }
                     else {
-                        zoomCur = zoomInit + (zoomTarget - zoomInit) * fpsCnt / fpsMax;
-                        hasDropCur = hasDropInit + (hasDropTarget - hasDropInit) * fpsCnt / fpsMax;
+                        zoomCur = zoomInit + (zoomTarget - zoomInit) * progressCnt / progressMax;
+                        hasDropCur = hasDropInit + (hasDropTarget - hasDropInit) * progressCnt / progressMax;
                     }
                 }
             }
-
         }
 
         if (cv::waitKey(5) == 27) //ESC
             break;
 
-
         if (!IsWindowVisible(mainHWND))
             break;
-        //if (cv::getWindowProperty(windowName, cv::WND_PROP_VISIBLE) == 0) {
-        //    break;
-        //}
-        //bool bVisible = (::GetWindowLong(mainHWND, GWL_STYLE) & WS_VISIBLE) != 0;
-        //if (!bVisible)
-        //    break;
     }
     cv::destroyAllWindows();
     return 0;
 }
 
-
-static HWND getCvWindow(LPCSTR lpWndName) {
-    HWND hWnd = (HWND)cvGetWindowHandle(lpWndName);
-    if (IsWindow(hWnd)) {
-        HWND hParent = GetParent(hWnd);
-        DWORD dwPid = 0;
-        GetWindowThreadProcessId(hWnd, &dwPid);
-        if (dwPid == GetCurrentProcessId()) {
-            return hParent;
-        }
-    }
-
-    return hWnd;
-}
-
-static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {
-    if (IsWindow(hWnd)) {
-        HICON hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(wIconId));
-        SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-    }
-}
-
-
 // 在 属性-链接器-系统-子系统 更改模式
 static int wmain(int argc, wchar_t* argv[]) {
 
-    wstring str(*argv[1] == L'\"' ? argv[1] + 1 : argv[1]);
-    if (str.length() > 2 && str[str.length() - 1] == '\"')
-        str.pop_back();
+    wstring fullPath(*argv[1] == L'\"' ? argv[1] + 1 : argv[1]);
+    if (fullPath.length() && fullPath[fullPath.length() - 1] == L'\"')
+        fullPath.pop_back();
 
-    std::filesystem::path fullPath(str);
-
-    cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
-    mainHWND = getCvWindow(windowName.c_str());
-
-    //system("CHCP 65001");
-    //log("启动控制台");
-
-    return myMain(fullPath);
+    return myMain(fullPath, nullptr);
 }
 
 
@@ -468,18 +414,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_ LPWSTR    lpCmdLine,
     _In_ int       nCmdShow) {
 
-    wstring str(*lpCmdLine == '\"' ? lpCmdLine + 1 : lpCmdLine);
-    if (str.length() > 2 && str[str.length() - 1] == '\"')
-        str.pop_back();
+    wstring fullPath(*lpCmdLine == '\"' ? lpCmdLine + 1 : lpCmdLine);
+    if (fullPath.length() && fullPath[fullPath.length() - 1] == L'\"')
+        fullPath.pop_back();
 
-    std::filesystem::path fullPath(str);
-
-    cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
-    mainHWND = getCvWindow(windowName.c_str());
-    ShowWindow(mainHWND, SW_MAXIMIZE); //最大化窗口
-    setCvWindowIcon(hInstance, mainHWND, IDI_JARKVIEWER);
-
-    return myMain(fullPath);
+    return myMain(fullPath, hInstance);
 }
 
 
@@ -491,9 +430,6 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     static bool cursorIsView = false; // 鼠标位置，若在看图区域，滚轮就缩放，其他区域滚轮就切换图片
     static bool fullScreen = false;
     static auto lastTimestamp = system_clock::now();
-
-    //static HCURSOR hCursor = LoadCursor(NULL, IDC_ARROW);  // 已放到opencv源码编译成静态库了
-    //SetCursor(hCursor);// 设置窗口光标
 
     switch (event)
     {
@@ -555,9 +491,9 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     }
 }
 
-std::string getExif(const string& path) {
+static std::wstring getExif(const wstring& path, cv::Mat& img) {
     using std::to_string;
-    static unordered_map<string, string> exifMap;
+    static unordered_map<wstring, wstring> exifMap;
 
     auto it = exifMap.find(path);
     if (it != exifMap.end())
@@ -566,34 +502,60 @@ std::string getExif(const string& path) {
     if (exifMap.size() > 1000) // 不考虑LRU缓存, 多了直接清理
         exifMap.clear();
 
-    easyexif::EXIFInfo result(path.c_str());
+    easyexif::EXIFInfo exifInfo(Utils::wstringToAnsi(path).c_str());
 
-    string res = (!result.hasInfo) ? "无Exif信息" :
-        "     ISO: " + to_string(result.ISOSpeedRatings) +
-        (result.Copyright.length() ? ("\n    版权: " + result.Copyright) : "") +
-        (result.Software.length() ? ("\n    软件: " + result.Software) : "") +
-        "\n   F光圈: f/" + to_string(result.FNumber) +
-        "\n  分辨率: " + to_string(result.ImageWidth) + " x " + to_string(result.ImageWidth) +
-        "\n    焦距: " + to_string(result.FocalLength) + " mm" +
-        "\n焦距35mm: " + to_string(result.FocalLengthIn35mm) + " mm" +
-        "\n相机型号: " + result.Make + " " + result.Model +
-        "\n目标距离: " + to_string(result.SubjectDistance) + " m" +
-        "\n曝光误差: " + to_string(result.ExposureBiasValue) + " Ev" +
-        (result.DateTime.length() ? ("\n创建时间: " + result.DateTime) : "") +
-        (result.DateTimeOriginal.length() ? ("\n原始时间: " + result.DateTimeOriginal) : "") +
-        (result.DateTimeDigitized.length() ? ("\n数字时间: " + result.DateTimeDigitized) : "") +
-        "\n曝光时长: " + to_string(result.ExposureTime) + " s" +
-        "\nGPS 经度: " +
-        to_string((int)result.GeoLocation.LonComponents.degrees) + "°" +
-        to_string((int)result.GeoLocation.LonComponents.minutes) + "′" +
-        to_string(result.GeoLocation.LonComponents.seconds) + "″" +
-        "\nGPS 纬度: " +
-        to_string((int)result.GeoLocation.LatComponents.degrees) + "°" +
-        to_string((int)result.GeoLocation.LatComponents.minutes) + "′" +
-        to_string(result.GeoLocation.LatComponents.seconds) + "″" +
-        "\n海拔高度: " + to_string((int)result.GeoLocation.Altitude) + " m";
+    if (!exifInfo.hasInfo) {
+        auto res = std::format(L"分辨率: {}x{}", getWidth(img), getHeight(img));
+        exifMap[path] = res;
+        return res;
+    }
+
+    wstring res = std::format(
+        L"     ISO: {}"
+        "\n   F光圈: f/{:.2f}"
+        "\n  分辨率: {}x{}"
+        "\n    焦距: {:.2f} mm"
+        "\n焦距35mm: {} mm"
+        "\n目标距离: {:.2f} m"
+        "\n曝光误差: {:.2f} Ev"
+        "\n曝光时长: {:.2f} s"
+        "\nGPS 经度: {}°{}'{}\""
+        "\nGPS 纬度: {}°{}'{}\""
+        "\n海拔高度: {} m",
+        exifInfo.ISOSpeedRatings,
+        exifInfo.FNumber,
+        getWidth(img), getHeight(img),
+        exifInfo.FocalLength,
+        exifInfo.FocalLengthIn35mm,
+        exifInfo.SubjectDistance,
+        exifInfo.ExposureBiasValue,
+        exifInfo.ExposureTime,
+        (int)exifInfo.GeoLocation.LonComponents.degrees,
+        (int)exifInfo.GeoLocation.LonComponents.minutes,
+        (int)exifInfo.GeoLocation.LonComponents.seconds,
+        (int)exifInfo.GeoLocation.LatComponents.degrees,
+        (int)exifInfo.GeoLocation.LatComponents.minutes,
+        (int)exifInfo.GeoLocation.LatComponents.seconds,
+        (int)exifInfo.GeoLocation.Altitude);
+
+    if (exifInfo.Copyright.length())
+        res += std::format(L"\n    软件: {}", Utils::utf8ToWstring(exifInfo.Copyright));
+
+    if (exifInfo.Software.length())
+        res += std::format(L"\n    版权: {}", Utils::utf8ToWstring(exifInfo.Software));
+
+    if (exifInfo.DateTime.length())
+        res += std::format(L"\n创建时间: {}", Utils::utf8ToWstring(exifInfo.DateTime));
+
+    if (exifInfo.DateTimeOriginal.length())
+        res += std::format(L"\n原始时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeOriginal));
+
+    if (exifInfo.DateTimeDigitized.length())
+        res += std::format(L"\n数字时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeDigitized));
+
+    if (exifInfo.Make.length() + exifInfo.Model.length())
+        res += std::format(L"\n相机型号: {}", Utils::utf8ToWstring(exifInfo.Make + exifInfo.Model));
 
     exifMap[path] = res;
-
     return res;
 }
