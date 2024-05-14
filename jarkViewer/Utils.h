@@ -2,6 +2,7 @@
 
 #include<iostream>
 #include<format>
+#include<algorithm>
 
 #include<filesystem>
 #include<chrono>

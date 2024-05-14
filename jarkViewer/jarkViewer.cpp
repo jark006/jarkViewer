@@ -502,59 +502,79 @@ static std::wstring getExif(const wstring& path, cv::Mat& img) {
     if (exifMap.size() > 1000) // 不考虑LRU缓存, 多了直接清理
         exifMap.clear();
 
-    easyexif::EXIFInfo exifInfo(Utils::wstringToAnsi(path).c_str());
+    auto res = std::format(L"  分辨率: {}x{}", getWidth(img), getHeight(img));
 
-    if (!exifInfo.hasInfo) {
-        auto res = std::format(L"分辨率: {}x{}", getWidth(img), getHeight(img));
+    auto ext = path.substr(path.length() - 4, 4);
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+        [](wchar_t c) { return std::tolower(c); }
+    );
+    if (ext != L".jpg" && ext != L"jpeg" && ext != L".jpe") {
         exifMap[path] = res;
         return res;
     }
 
-    wstring res = std::format(
-        L"     ISO: {}"
-        "\n   F光圈: f/{:.2f}"
-        "\n  分辨率: {}x{}"
-        "\n    焦距: {:.2f} mm"
-        "\n焦距35mm: {} mm"
-        "\n目标距离: {:.2f} m"
-        "\n曝光误差: {:.2f} Ev"
-        "\n曝光时长: {:.2f} s"
-        "\nGPS 经度: {}°{}'{}\""
-        "\nGPS 纬度: {}°{}'{}\""
-        "\n海拔高度: {} m",
-        exifInfo.ISOSpeedRatings,
-        exifInfo.FNumber,
-        getWidth(img), getHeight(img),
-        exifInfo.FocalLength,
-        exifInfo.FocalLengthIn35mm,
-        exifInfo.SubjectDistance,
-        exifInfo.ExposureBiasValue,
-        exifInfo.ExposureTime,
-        (int)exifInfo.GeoLocation.LonComponents.degrees,
-        (int)exifInfo.GeoLocation.LonComponents.minutes,
-        (int)exifInfo.GeoLocation.LonComponents.seconds,
-        (int)exifInfo.GeoLocation.LatComponents.degrees,
-        (int)exifInfo.GeoLocation.LatComponents.minutes,
-        (int)exifInfo.GeoLocation.LatComponents.seconds,
-        (int)exifInfo.GeoLocation.Altitude);
+    easyexif::EXIFInfo exifInfo(Utils::wstringToAnsi(path).c_str());
+    if (!exifInfo.hasInfo) {
+        exifMap[path] = res;
+        return res;
+    }
+
+    if (exifInfo.ISOSpeedRatings)
+        res += std::format(L"\n     ISO: {}", exifInfo.ISOSpeedRatings);
+
+    if (exifInfo.FNumber)
+        res += std::format(L"\n   F光圈: f/{}", exifInfo.FNumber);
+
+    if (exifInfo.FocalLength)
+        res += std::format(L"\n    焦距: {} mm", exifInfo.FocalLength);
+
+    if (exifInfo.FocalLengthIn35mm)
+        res += std::format(L"\n35mm焦距: {} mm", exifInfo.FocalLengthIn35mm);
+
+    if (exifInfo.ExposureBiasValue)
+        res += std::format(L"\n曝光误差: {} Ev", exifInfo.ExposureBiasValue);
+
+    if (exifInfo.ExposureTime)
+        res += std::format(L"\n曝光时长: {:.2f} s", exifInfo.ExposureTime);
+
+    if (exifInfo.SubjectDistance)
+        res += std::format(L"\n目标距离: {:.2f} m", exifInfo.SubjectDistance);
+
+    if (exifInfo.GeoLocation.Longitude)
+        res += std::format(L"\nGPS 经度: {:.6f}°", exifInfo.GeoLocation.Longitude);
+
+    if (exifInfo.GeoLocation.Latitude)
+        res += std::format(L"\nGPS 纬度: {:.6f}°", exifInfo.GeoLocation.Latitude);
+
+    if (exifInfo.GeoLocation.Altitude)
+        res += std::format(L"\n海拔高度: {:.2f} m", exifInfo.GeoLocation.Altitude);
 
     if (exifInfo.Copyright.length())
-        res += std::format(L"\n    软件: {}", Utils::utf8ToWstring(exifInfo.Copyright));
+        res += std::format(L"\n    版权: {}", Utils::utf8ToWstring(exifInfo.Copyright).c_str());
 
     if (exifInfo.Software.length())
-        res += std::format(L"\n    版权: {}", Utils::utf8ToWstring(exifInfo.Software));
+        res += std::format(L"\n    软件: {}", Utils::utf8ToWstring(exifInfo.Software).c_str());
+
+    if (exifInfo.ImageDescription.length())
+        res += std::format(L"\n    描述: {}", Utils::utf8ToWstring(exifInfo.ImageDescription).c_str());
+
+    if (exifInfo.Flash)
+        res += L"\n    闪光: 是";
 
     if (exifInfo.DateTime.length())
-        res += std::format(L"\n创建时间: {}", Utils::utf8ToWstring(exifInfo.DateTime));
+        res += std::format(L"\n创建时间: {}", Utils::utf8ToWstring(exifInfo.DateTime).c_str());
 
     if (exifInfo.DateTimeOriginal.length())
-        res += std::format(L"\n原始时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeOriginal));
+        res += std::format(L"\n原始时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeOriginal).c_str());
 
     if (exifInfo.DateTimeDigitized.length())
-        res += std::format(L"\n数字时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeDigitized));
+        res += std::format(L"\n数字时间: {}", Utils::utf8ToWstring(exifInfo.DateTimeDigitized).c_str());
 
     if (exifInfo.Make.length() + exifInfo.Model.length())
-        res += std::format(L"\n相机型号: {}", Utils::utf8ToWstring(exifInfo.Make + exifInfo.Model));
+        res += std::format(L"\n相机型号: {}", Utils::utf8ToWstring(exifInfo.Make + " " + exifInfo.Model).c_str());
+
+    if (exifInfo.LensInfo.Make.length() + exifInfo.LensInfo.Model.length())
+        res += std::format(L"\n镜头型号: {}", Utils::utf8ToWstring(exifInfo.LensInfo.Make + " " + exifInfo.LensInfo.Model).c_str());
 
     exifMap[path] = res;
     return res;
