@@ -245,9 +245,12 @@ static void processMainImg(int curFileIdx, cv::Mat& mainImg) {
 
     processSrc(srcImg, mainImg);
 
-    if (showExif && curFileIdx >= 0)
-        stb.putText(mainImg, 10, 10, Utils::wstringToUtf8(getExif(imgFileList[curFileIdx], mainImg)).c_str(),
+    if (showExif && curFileIdx >= 0) {
+        const int padding = 10;
+        RECT r{ padding, padding, winSize.width-padding, winSize.height-padding};
+        stb.putLeft(mainImg, r, Utils::wstringToUtf8(getExif(imgFileList[curFileIdx], srcImg)).c_str(),
             { 255, 255, 255, 255 });
+    }
 
     if (curFileIdx >= 0) {
         wstring str = std::format(L" [{}/{}] {}% ",
@@ -448,14 +451,14 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         }
     }break;
 
-        //左键按下
+                            //左键按下
     case cv::EVENT_LBUTTONDOWN: {
         mousePress = mouse - hasDropTarget;
         isPresing = true;
         //Utils::log("press {} {}", mousePress.x, mousePress.y);
     }break;
 
-        //左键抬起
+                              //左键抬起
     case cv::EVENT_LBUTTONUP: {
         isPresing = false;
         auto now = system_clock::now();
@@ -476,7 +479,7 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         exit(0);
     }break;
 
-        // 滚轮
+                            // 滚轮
     case cv::EVENT_MOUSEWHEEL: {
         if (isBusy) break;
         int mouseWheel = cv::getMouseWheelDelta(flags);

@@ -14,9 +14,6 @@
 #include<unordered_set>
 #include<unordered_map>
 
-#include <winsock2.h>
-#pragma comment(lib,"ws2_32.lib")
-
 using std::vector;
 using std::string;
 using std::wstring;
@@ -25,9 +22,6 @@ using std::unordered_set;
 using std::unordered_map;
 using std::cout;
 using std::endl;
-
-//#include "windows.h"
-//#pragma comment(lib,"winmm.lib")
 
 #include "framework.h"
 #include "resource.h"
@@ -215,8 +209,6 @@ namespace Utils {
 		fclose(f);
 
 		auto img = cv::imdecode(tmp, cv::IMREAD_UNCHANGED);
-
-		//log("loading: {}", wstringToUtf8(path));
 
 		if (img.empty())
 			log("Cannot load: {}", wstringToUtf8(path));

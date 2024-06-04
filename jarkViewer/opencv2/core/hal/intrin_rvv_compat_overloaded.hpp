@@ -45,6 +45,7 @@ OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vuint8m2_t, u8m2, vuint8m2_t, i8)
 OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vuint8m4_t, u8m4, vuint8m4_t, i8)
 OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vuint8m8_t, u8m8, vuint8m8_t, i8)
 OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vfloat32m1_t, f32m1, vuint32m1_t, i32)
+OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vuint32m1_t, u32m1, vuint32m1_t, i32)
 #if CV_SIMD_SCALABLE_64F
 OPENCV_HAL_IMPL_RVV_FUN_LOXEI(vfloat64m1_t, f64m1, vuint32mf2_t, i32)
 #endif
@@ -199,9 +200,14 @@ inline static vuint32mf2_t vmul(const vuint32mf2_t & op1, uint32_t op2, size_t v
     return vmul_vx_u32mf2(op1, op2, vl);
 }
 
-inline static vuint32mf2_t vreinterpret_u32mf2(vint32mf2_t val)
+inline static vuint32mf2_t vreinterpret_u32mf2(const vint32mf2_t& val)
 {
     return vreinterpret_v_i32mf2_u32mf2(val);
+}
+
+inline static vuint32mf2_t vreinterpret_u32mf2(const vuint16mf2_t& val)
+{
+    return vreinterpret_v_u16mf2_u32mf2(val);
 }
 
 #endif //OPENCV_HAL_INTRIN_RVV_COMPAT_OVERLOAD_HPP
