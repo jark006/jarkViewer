@@ -52,8 +52,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>$(ProjectDir)\lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>true</VcpkgEnabled>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgConfiguration>Release</VcpkgConfiguration>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -114,7 +121,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;libx265.lib;de265.lib;heif.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
@@ -123,39 +130,19 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="exif.h" />
-    <ClInclude Include="framework.h" />
-    <ClInclude Include="opencv2\calib3d.hpp" />
-    <ClInclude Include="opencv2\core.hpp" />
-    <ClInclude Include="opencv2\cvconfig.h" />
-    <ClInclude Include="opencv2\dnn.hpp" />
-    <ClInclude Include="opencv2\features2d.hpp" />
-    <ClInclude Include="opencv2\flann.hpp" />
-    <ClInclude Include="opencv2\freetype.hpp" />
-    <ClInclude Include="opencv2\gapi.hpp" />
-    <ClInclude Include="opencv2\highgui.hpp" />
-    <ClInclude Include="opencv2\imgcodecs.hpp" />
-    <ClInclude Include="opencv2\imgproc.hpp" />
-    <ClInclude Include="opencv2\ml.hpp" />
-    <ClInclude Include="opencv2\objdetect.hpp" />
-    <ClInclude Include="opencv2\opencv.hpp" />
-    <ClInclude Include="opencv2\opencv_modules.hpp" />
-    <ClInclude Include="opencv2\photo.hpp" />
-    <ClInclude Include="opencv2\stitching.hpp" />
-    <ClInclude Include="opencv2\video.hpp" />
-    <ClInclude Include="opencv2\videoio.hpp" />
-    <ClInclude Include="opencv2\world.hpp" />
+    <ClInclude Include="include\exif.h" />
+    <ClInclude Include="include\LRU.h" />
+    <ClInclude Include="include\stbText.h" />
+    <ClInclude Include="include\stb_image_write.h" />
+    <ClInclude Include="include\stb_truetype.h" />
+    <ClInclude Include="include\Utils.h" />
+    <ClInclude Include="include\x265.h" />
+    <ClInclude Include="include\x265_config.h" />
     <ClInclude Include="Resource.h" />
-    <ClInclude Include="stbText.h" />
-    <ClInclude Include="stb_image_write.h" />
-    <ClInclude Include="stb_truetype.h" />
-    <ClInclude Include="targetver.h" />
-    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="exif.cpp" />
-    <ClCompile Include="jarkViewer.cpp" />
-    <ClCompile Include="LRU.h" />
+    <ClCompile Include="src\exif.cpp" />
+    <ClCompile Include="src\jarkViewer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc" />
