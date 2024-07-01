@@ -105,7 +105,7 @@ public:
     }
 
     // str : UTF-8
-    void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Scalar& color) {
+    void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Vec4b& color) {
         int codePoint = '?';
         int xOffset = x, yOffset = y;
         const auto len = strlen(str);
@@ -144,7 +144,7 @@ public:
     }
 
 
-    void putCenter(cv::Mat& img, RECT r, const char* str, const cv::Scalar& color) {
+    void putCenter(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
         int codePoint = '?';
         int H = 1, W = 0, W_cnt = 0;
         const auto len = strlen(str);
@@ -196,7 +196,7 @@ public:
         putText(img, x, y, str, color);
     }
 
-    void putLeft(cv::Mat& img, RECT r, const char* str, const cv::Scalar& color) {
+    void putLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
         int codePoint = '?';
         int xOffset = r.left, yOffset = r.top;
         const auto len = strlen(str);
@@ -260,7 +260,7 @@ private:
         scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
 
-    int putWord(cv::Mat& img, int x, int y, const int codePoint, const cv::Scalar& color) {
+    int putWord(cv::Mat& img, int x, int y, const int codePoint, const cv::Vec4b& color) {
         int c_x0, c_y0, c_x1, c_y1;
         stbtt_GetCodepointBitmapBox(&info, codePoint, scale, scale, &c_x0, &c_y0, &c_x1, &c_y1);
 
@@ -276,17 +276,16 @@ private:
             for (int xx = 0; xx < wordWidth; xx++) {
                 if (x + xx >= img.cols)break;
                 auto& orgColor = img.at<cv::Vec4b>(y + yy, x + xx);
-                auto alpha = wordBuff[yy * fontSize + xx] * orgColor[3] * color[3] / (256 * 256 * 256.0);
+                int alpha = wordBuff[yy * fontSize + xx] * color[3] / 255;
 
                 orgColor = {
-                    (uint8_t)(orgColor[0] * (1 - alpha) + color[0] * alpha),
-                    (uint8_t)(orgColor[1] * (1 - alpha) + color[1] * alpha),
-                    (uint8_t)(orgColor[2] * (1 - alpha) + color[2] * alpha),
+                    (uint8_t)((orgColor[0] * (255 - alpha) + color[0] * alpha) / 255),
+                    (uint8_t)((orgColor[1] * (255 - alpha) + color[1] * alpha) / 255),
+                    (uint8_t)((orgColor[2] * (255 - alpha) + color[2] * alpha) / 255),
                     255
                 };
             }
         }
-        //return int((wordWidth <= (fontSize / 3) ? (fontSize / 3) : wordWidth) * (1+lineGapPercent)); //不等宽字体
 
         const int size = int(fontSize * (1 + lineGapPercent));//等宽字体
         return codePoint < 128 ? (size / 2) : size;

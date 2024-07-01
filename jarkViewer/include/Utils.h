@@ -32,6 +32,8 @@ using std::endl;
 #include<opencv2/highgui/highgui_c.h>
 
 #include "libheif/heif.h"
+#include "avif/avif.h"
+#include "exif.h"
 
 struct rcFileInfo {
 	uint8_t* addr = nullptr;
@@ -41,6 +43,14 @@ struct rcFileInfo {
 union intUnion {
 	uint32_t u32;
 	uint8_t u8[4];
+	intUnion() :u32(0) {}
+	intUnion(uint32_t n) :u32(n) {}
+	intUnion(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
+		u8[0] = b0;
+		u8[1] = b1;
+		u8[2] = b2;
+		u8[3] = b3;
+	}
 	uint8_t& operator[](const int i) {
 		return u8[i];
 	}
@@ -88,6 +98,11 @@ struct Cood {
 	}
 };
 
+struct ImageNode{
+	cv::Mat img;
+	string exifStr;
+};
+
 namespace Utils {
 
 	static const bool TO_LOG_FILE = false;
@@ -129,37 +144,50 @@ namespace Utils {
 	}
 
 	std::wstring ansiToWstring(const std::string& str) {
-		int len = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, nullptr, 0);
-		std::wstring ret(len, 0);
-		MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, ret.data(), len);
+		if (str.empty())return L"";
+
+		int wcharLen = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.length(), nullptr, 0);
+		if (wcharLen == 0) return L"";
+
+		std::wstring ret(wcharLen, 0);
+		MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
+
 		return ret;
 	}
 
 	std::string wstringToAnsi(const std::wstring& wstr) {
-		int len = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-		std::string ret(len, 0);
-		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, ret.data(), len, nullptr, nullptr);
+		if (wstr.empty())return "";
+
+		int byteLen = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
+		if (byteLen == 0) return "";
+
+		std::string ret(byteLen, 0);
+		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
 		return ret;
 	}
 
 	//UTF8 to UTF16
 	std::wstring utf8ToWstring(const std::string& str) {
-		int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
-		if (len == 0) return L"";
+		if (str.empty())return L"";
 
-		std::wstring ret(len, 0);
-		MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, ret.data(), len);
+		int wcharLen = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
+		if (wcharLen == 0) return L"";
+
+		std::wstring ret(wcharLen, 0);
+		MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
 
 		return ret;
 	}
 
 	//UTF16 to UTF8
 	std::string wstringToUtf8(const std::wstring& wstr) {
-		int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
-		if (len == 0) return "";
+		if (wstr.empty())return "";
 
-		std::string ret(len, 0);
-		WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, ret.data(), len, NULL, NULL);
+		int byteLen = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
+		if (byteLen == 0) return "";
+
+		std::string ret(byteLen, 0);
+		WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
 		return ret;
 	}
 
@@ -171,25 +199,24 @@ namespace Utils {
 		return wstringToUtf8(ansiToWstring(str));
 	}
 
-	rcFileInfo GetResource(unsigned int idi, const wchar_t* type)
-	{
+	rcFileInfo GetResource(unsigned int idi, const wchar_t* type) {
 		rcFileInfo rc;
 
 		HMODULE ghmodule = GetModuleHandle(NULL);
 		if (ghmodule == NULL) {
-			//log("ghmodule null");
+			log("ghmodule null");
 			return rc;
 		}
 
 		HRSRC hrsrc = FindResource(ghmodule, MAKEINTRESOURCE(idi), type);
 		if (hrsrc == NULL) {
-			//log("hrstc null");
+			log("hrstc null");
 			return rc;
 		}
 
 		HGLOBAL hg = LoadResource(ghmodule, hrsrc);
 		if (hg == NULL) {
-			//log("hg null");
+			log("hg null");
 			return rc;
 		}
 
@@ -199,59 +226,77 @@ namespace Utils {
 	}
 
 
+	static cv::Mat& getDefaultMat() {
+		static cv::Mat defaultMat;
+		static bool isInit = false;
+
+		if (!isInit) {
+			isInit = true;
+			auto rc = Utils::GetResource(IDB_PNG, L"PNG");
+			std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+			defaultMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+		}
+		return defaultMat;
+	}
+
+	static cv::Mat& getHomeMat() {
+		static cv::Mat homeMat;
+		static bool isInit = false;
+
+		if (!isInit) {
+			isInit = true;
+			auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
+			std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+			homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+		}
+		return homeMat;
+	}
+
 	// HEIC ONLY, AVIF not support
 	// https://github.com/strukturag/libheif
 	// vcpkg install libheif
-	cv::Mat loadHeic(const wstring& path) {
-		cv::Mat ret;
+	cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
 
-		auto f = _wfopen(path.c_str(), L"rb");
-		if (f == nullptr)return ret;
-
-		fseek(f, 0, SEEK_END);
-		auto fileSize = ftell(f);
-		fseek(f, 0, SEEK_SET);
-		auto fileBuff = std::make_unique<uint8_t[]>(fileSize);
-		fread(fileBuff.get(), 1, fileSize, f);
-		fclose(f);
-
-		auto filetype_check = heif_check_filetype(fileBuff.get(), 12);
+		auto filetype_check = heif_check_filetype(buf.data(), 12);
 		if (filetype_check == heif_filetype_no) {
-			log("Input file is not an HEIF/AVIF file\n");
-			return ret;
+			log("Input file is not an HEIF/AVIF file: {}", wstringToUtf8(path));
+			return cv::Mat();
 		}
 
 		if (filetype_check == heif_filetype_yes_unsupported) {
-			log("Input file is an unsupported HEIF/AVIF file type\n");
-			return ret;
+			log("Input file is an unsupported HEIF/AVIF file type: {}", wstringToUtf8(path));
+			return cv::Mat();
 		}
 
 		heif_context* ctx = heif_context_alloc();
-		auto err = heif_context_read_from_memory_without_copy(ctx, fileBuff.get(), fileSize, nullptr);
+		auto err = heif_context_read_from_memory_without_copy(ctx, buf.data(), fileSize, nullptr);
 		if (err.code) {
-			log(err.message);
-			return ret;
+			log("Error: {}", wstringToUtf8(path));
+			log("heif_context_read_from_memory_without_copy error: {}", err.message);
+			return cv::Mat();
 		}
 
 		// get a handle to the primary image
 		heif_image_handle* handle = nullptr;
 		err = heif_context_get_primary_image_handle(ctx, &handle);
 		if (err.code) {
-			log(err.message);
+			log("Error: {}", wstringToUtf8(path));
+			log("heif_context_get_primary_image_handle error: {}", err.message);
 			if (ctx) heif_context_free(ctx);
 			if (handle) heif_image_handle_release(handle);
-			return ret;
+			return cv::Mat();
 		}
 
 		// decode the image and convert colorspace to RGB, saved as 24bit interleaved
 		heif_image* img = nullptr;
 		err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, nullptr);
 		if (err.code) {
-			log(err.message);
+			log("Error: {}", wstringToUtf8(path));
+			log("heif_decode_image error: {}", err.message);
 			if (ctx) heif_context_free(ctx);
 			if (handle) heif_image_handle_release(handle);
 			if (img) heif_image_release(img);
-			return ret;
+			return cv::Mat();
 		}
 
 		int stride = 0;
@@ -261,17 +306,16 @@ namespace Utils {
 		auto height = heif_image_handle_get_height(handle);
 
 		cv::Mat matImg(height, width, CV_8UC4);
-		memcpy(matImg.ptr(), data, (size_t)height * width * 4);
 
-		//  ARGB -> ABGR
-		[](uint32_t* data, size_t pixelCount) {
-			for (size_t i = 0; i < pixelCount; ++i) {
-				uint32_t pixel = data[i];
-				uint32_t r = (pixel >> 16) & 0xFF;
-				uint32_t b = pixel & 0xFF;
-				data[i] = (b << 16) | (pixel & 0xff00ff00) | r;
-			}
-			}((uint32_t*)matImg.ptr(), (size_t)width * height);
+		auto srcPtr = (uint32_t*)data;
+		auto dstPtr = (uint32_t*)matImg.ptr();
+		auto pixelCount = (size_t)width * height;
+		for (size_t i = 0; i < pixelCount; ++i) { // ARGB -> ABGR
+			uint32_t pixel = srcPtr[i];
+			uint32_t r = (pixel >> 16) & 0xFF;
+			uint32_t b = pixel & 0xFF;
+			dstPtr[i] = (b << 16) | (pixel & 0xff00ff00) | r;
+		}
 
 		// clean up resources
 		heif_context_free(ctx);
@@ -281,33 +325,166 @@ namespace Utils {
 		return matImg;
 	}
 
+	cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
+		// TODO
+		return cv::Mat();
+	}
 
-	cv::Mat loadMat(const wstring& path) {
-		if (path.length() < 4)return cv::Mat();
+	cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
+		auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
+
+		if (img.empty()) {
+			log("cvMat cannot decode: {}", wstringToUtf8(path));
+			return cv::Mat();
+		}
+
+		if (img.channels() != 1 && img.channels() != 3 && img.channels() != 4) {
+			log("cvMat unsupport channel: {}", img.channels());
+			return cv::Mat();
+		}
+		return img;
+	}
+
+
+	static std::string getExif(const wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
+		static easyexif::EXIFInfo exifInfo;
+
+		auto res = std::format("    路径: {}\n  分辨率: {}x{}", Utils::wstringToUtf8(path), width, height);
 
 		auto ext = path.substr(path.length() - 4);
 		for (auto& c : ext) c = std::tolower(c);
-		if (ext == L"heic" || ext == L"heif")
-			return loadHeic(path);
+		if (ext != L".jpg" && ext != L"jpeg" && ext != L".jpe") {
+			return res;
+		}
+
+		exifInfo.hasInfo = (exifInfo.parseFrom(buf, fileSize) == 0);
+
+		if (!exifInfo.hasInfo) {
+			log("getExif no exif info: {}", wstringToUtf8(path));
+			return res;
+		}
+
+		if (exifInfo.ISOSpeedRatings)
+			res += std::format("\n     ISO: {}", exifInfo.ISOSpeedRatings);
+
+		if (exifInfo.FNumber)
+			res += std::format("\n   F光圈: f/{}", exifInfo.FNumber);
+
+		if (exifInfo.FocalLength)
+			res += std::format("\n    焦距: {} mm", exifInfo.FocalLength);
+
+		if (exifInfo.FocalLengthIn35mm)
+			res += std::format("\n35mm焦距: {} mm", exifInfo.FocalLengthIn35mm);
+
+		if (exifInfo.ExposureBiasValue)
+			res += std::format("\n曝光误差: {} Ev", exifInfo.ExposureBiasValue);
+
+		if (exifInfo.ExposureTime)
+			res += std::format("\n曝光时长: {:.2f} s", exifInfo.ExposureTime);
+
+		if (exifInfo.SubjectDistance)
+			res += std::format("\n目标距离: {:.2f} m", exifInfo.SubjectDistance);
+
+		if (exifInfo.GeoLocation.Longitude)
+			res += std::format("\nGPS 经度: {:.6f}°", exifInfo.GeoLocation.Longitude);
+
+		if (exifInfo.GeoLocation.Latitude)
+			res += std::format("\nGPS 纬度: {:.6f}°", exifInfo.GeoLocation.Latitude);
+
+		if (exifInfo.GeoLocation.Altitude)
+			res += std::format("\n海拔高度: {:.2f} m", exifInfo.GeoLocation.Altitude);
+
+		if (exifInfo.Copyright.length())
+			res += std::format("\n    版权: {}", exifInfo.Copyright);
+
+		if (exifInfo.Software.length())
+			res += std::format("\n    软件: {}", exifInfo.Software);
+
+		if (exifInfo.ImageDescription.length())
+			res += std::format("\n    描述: {}", exifInfo.ImageDescription);
+
+		if (exifInfo.Flash)
+			res += "\n    闪光: 是";
+
+		if (exifInfo.DateTime.length())
+			res += std::format("\n创建时间: {}", exifInfo.DateTime);
+
+		if (exifInfo.DateTimeOriginal.length())
+			res += std::format("\n原始时间: {}", exifInfo.DateTimeOriginal);
+
+		if (exifInfo.DateTimeDigitized.length())
+			res += std::format("\n数字时间: {}", exifInfo.DateTimeDigitized);
+
+		if (exifInfo.Make.length() + exifInfo.Model.length())
+			res += std::format("\n相机型号: {}", exifInfo.Make + " " + exifInfo.Model);
+
+		if (exifInfo.LensInfo.Make.length() + exifInfo.LensInfo.Model.length())
+			res += std::format("\n镜头型号: {}", exifInfo.LensInfo.Make + " " + exifInfo.LensInfo.Model);
+
+		return res;
+	}
+
+
+	static ImageNode loadImage(const wstring& path) {
+		if (path.length() < 4) {
+			log("path.length() < 4: {}", wstringToUtf8(path));
+			return { getDefaultMat(), "" };
+		}
 
 		auto f = _wfopen(path.c_str(), L"rb");
-		if (f == nullptr)return cv::Mat();
+		if (f == nullptr) {
+			log("path canot open: {}", wstringToUtf8(path));
+			return { getDefaultMat(), "" };
+		}
+
 		fseek(f, 0, SEEK_END);
-		auto size = ftell(f);
+		auto fileSize = ftell(f);
 		fseek(f, 0, SEEK_SET);
-		vector<uchar> tmp(size, 0);
-		fread(tmp.data(), 1, size, f);
+		vector<uchar> tmp(fileSize, 0);
+		fread(tmp.data(), 1, fileSize, f);
 		fclose(f);
 
-		auto img = cv::imdecode(tmp, cv::IMREAD_UNCHANGED);
+		auto ext = path.substr(path.length() - 4);
+		for (auto& c : ext)	c = std::tolower(c);
 
-		if (img.empty())
-			log("Cannot load: {}", wstringToUtf8(path));
+		ImageNode ret;
+		if (ext == L"heic" || ext == L"heif")
+			ret.img = loadHeic(path, tmp, fileSize);
+		else if(ext == L"avif")
+			ret.img = loadAvif(path, tmp, fileSize);
+		else
+			ret.img = loadMat(path, tmp, fileSize);
 
-		if (img.channels() != 1 && img.channels() != 3 && img.channels() != 4) {
-			log("Unsupport channel: {}", img.channels());
-			img.release();
+		if (ret.img.empty()) {
+			ret.img = getDefaultMat();
+			ret.exifStr = "";
 		}
-		return img;
+		else {
+			ret.exifStr = getExif(path, ret.img.cols, ret.img.rows, tmp.data(), fileSize);
+		}
+
+		return ret;
+	}
+
+	static HWND getCvWindow(LPCSTR lpWndName) {
+		HWND hWnd = (HWND)cvGetWindowHandle(lpWndName);
+		if (IsWindow(hWnd)) {
+			HWND hParent = GetParent(hWnd);
+			DWORD dwPid = 0;
+			GetWindowThreadProcessId(hWnd, &dwPid);
+			if (dwPid == GetCurrentProcessId()) {
+				return hParent;
+			}
+		}
+
+		return hWnd;
+	}
+
+	static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {
+		if (IsWindow(hWnd)) {
+			HICON hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(wIconId));
+			SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+			SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+		}
 	}
 }

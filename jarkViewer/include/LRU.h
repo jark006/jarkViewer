@@ -1,44 +1,66 @@
 #pragma once
-
 #include <unordered_map>
+#include <list>
+#include <functional>
 
-template<typename keyType, typename valueType, int MAX_SIZE = 10>
-class LRU {  // 假假的 LRU
+template<typename keyType, typename valueType>
+class LRU {
 private:
-    int size = 0;
-    keyType link[MAX_SIZE];
-    std::unordered_map<keyType, valueType> mapData;
+    using ListIterator = typename std::list<std::pair<keyType, valueType>>::iterator;
+    using LoaderFunction = std::function<valueType(const keyType&)>;
+
+    std::unordered_map<keyType, ListIterator> cache_map;
+    std::list<std::pair<keyType, valueType>> cache_list;
+    LoaderFunction loader;
+    size_t CAPACITY = 20;
 
 public:
-    valueType& get(const keyType& key, valueType(load)(const keyType&), valueType& defaultMat) {
-        auto it = mapData.find(key);
-        if (it != mapData.end()) {
-            for (int i = 0; i < size; i++) {  // 顺序查找
-                if (link[i] != key) continue;
+    LRU() = default;
+    LRU(LoaderFunction loader_func) : loader(loader_func) {}
 
-                auto backup = std::move(link[i]);
-                for (int j = i; j > 0; j--)
-                    link[j] = std::move(link[j - 1]);
-                link[0] = std::move(backup);;
-
-                break;
-            }
-            return it->second;
+    valueType& get(const keyType& key) {
+        auto it = cache_map.find(key);
+        if (it != cache_map.end()) {
+            cache_list.splice(cache_list.begin(), cache_list, it->second);
+            return it->second->second;
         }
 
-        valueType newData = load(key);
-        if (newData.empty())
-            newData = defaultMat;
+        put(key, loader(key));
+        return cache_list.begin()->second;
+    }
 
-        for (int j = size - 1; j > 0; j--)
-            link[j] = std::move(link[j - 1]);
+    void put(const keyType& key, valueType&& value) {
+        auto it = cache_map.find(key);
+        if (it != cache_map.end()) {
+            it->second->second = std::move(value);
+            cache_list.splice(cache_list.begin(), cache_list, it->second);
+        }
+        else {
+            if (cache_map.size() >= CAPACITY) {
+                cache_map.erase(cache_list.back().first);
+                cache_list.pop_back();
+            }
+            cache_list.emplace_front(key, std::forward<valueType>(value));
+            cache_map[key] = cache_list.begin();
+        }
+    }
 
-        link[0] = key;
-        mapData[key] = std::move(newData);
+    void clear() {
+        cache_map.clear();
+        cache_list.clear();
+    }
 
-        if (size < MAX_SIZE)
-            size++;
+    size_t size() const {
+        return cache_map.size();
+    }
 
-        return mapData[key];
+    void setCapacity(size_t capacity) {
+        if (capacity < 10 || capacity > 4096)
+            capacity = 20;
+        CAPACITY = capacity;
+    }
+
+    bool contains(const keyType& key) const {
+        return cache_map.find(key) != cache_map.end();
     }
 };
