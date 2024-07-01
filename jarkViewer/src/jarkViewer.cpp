@@ -15,9 +15,9 @@ const int BG_GRID_WIDTH = 8;
 //const cv::Vec4b BG_COLOR{ 70, 70, 70, 255 };
 
 HWND mainHWND;
-const uint32_t GRID_DARK = 0xFF282828;// { 40, 40, 40, 255 };
-const uint32_t GRID_LIGHT = 0xFF3c3c3c;// { 60, 60, 60, 255 };
-const uint32_t BG_COLOR = 0xFF464646;// { 70, 70, 70, 255 };
+const uint32_t GRID_DARK = 0xFF282828;
+const uint32_t GRID_LIGHT = 0xFF3C3C3C;
+const uint32_t BG_COLOR = 0xFF464646;
 
 const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
@@ -25,9 +25,11 @@ auto last_end = std::chrono::high_resolution_clock::now();
 
 const wstring appName = L"JarkViewer V1.2";
 const string windowName = "mainWindows";
-const int64_t ZOOM_BASE = 1 << 16; // 基础缩放
-const int64_t ZOOM_MIN = 1 << 10;
-const int64_t ZOOM_MAX = 1 << 22;
+const vector<int64_t> ZOOM_LIST = {
+    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 
+    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
+};
+const int64_t ZOOM_BASE = ZOOM_LIST[ZOOM_LIST.size()/2]; // 100%缩放
 int64_t zoomFitWindow = 0;  //适应显示窗口宽高的缩放比例
 cv::Mat mainImg;
 
@@ -132,62 +134,53 @@ static uint32_t getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mai
         GRID_DARK : GRID_LIGHT;
 }
 
-static int64 keep_msb_1_clear_others(int64 n) {
-    if (n == 0)
+static bool is_power_of_two(int64_t num) {
+    if (num <= 0) {
         return 0;
-    int msb = 63;
-    while (((n >> msb) & 1) == 0)
-        msb--;
-    return 1LL << msb;
+    }
+    return (num & (num - 1)) == 0;
 }
 
 static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
-    static int64_t zoomFitWindow = 0;  //适应显示窗口宽高的缩放比例
+    static vector<int64_t> zoomList = ZOOM_LIST;
+    static int zoomIndex = 0;
 
     const int srcH = srcImg.rows;
     const int srcW = srcImg.cols;
 
     if (zoomTarget == 0) {
-        zoomFitWindow = (srcH > 0 && srcW > 0) ? 
-            std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW) : 
+        //适应显示窗口宽高的缩放比例
+        int64_t zoomFitWindow = (srcH > 0 && srcW > 0) ?
+            std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW) :
             ZOOM_BASE;
         zoomTarget = (srcH > winSize.height || srcW > winSize.width) ? zoomFitWindow : ZOOM_BASE;
         zoomCur = zoomTarget;
+
+        zoomList = ZOOM_LIST;
+        if (!is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+            zoomList.push_back(zoomFitWindow);
+        std::sort(zoomList.begin(), zoomList.end());
+        auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
+        zoomIndex = (it != zoomList.end()) ? std::distance(zoomList.begin(), it) : 6;
     }
 
-    if (zoomOperate > 0) {
-        zoomOperate = 0;
-        if (zoomTarget < ZOOM_MAX) {
-            int64 zoomNext = zoomTarget * 2;
-            if (zoomTarget == zoomFitWindow)
-                zoomNext = keep_msb_1_clear_others(zoomTarget * 2);
-            else if (zoomTarget < zoomFitWindow && zoomFitWindow < zoomNext)
-                zoomNext = zoomFitWindow;
-
-            if (zoomTarget) {
-                hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
-                hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
-            }
-            zoomTarget = zoomNext;
+    if (zoomOperate) {
+        if (zoomOperate > 0) {
+            if (zoomIndex < zoomList.size() - 1)
+                zoomIndex++;
         }
-    }
-    else if (zoomOperate < 0) {
-        zoomOperate = 0;
-        if (zoomTarget > ZOOM_MIN) {
-            int64 zoomNext = zoomTarget / 2;
-            if (zoomTarget == zoomFitWindow) {
-                if (zoomFitWindow != keep_msb_1_clear_others(zoomFitWindow))
-                    zoomNext = keep_msb_1_clear_others(zoomFitWindow);
-            }
-            else if (zoomTarget > zoomFitWindow && zoomFitWindow > zoomNext)
-                zoomNext = zoomFitWindow;
-
-            if (zoomTarget) {
-                hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
-                hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
-            }
-            zoomTarget = zoomNext;
+        else {
+            if (zoomIndex > 0)
+                zoomIndex--;
         }
+
+        zoomOperate = 0;
+        auto zoomNext = zoomList[zoomIndex];
+        if (zoomTarget && zoomNext != zoomTarget) {
+            hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
+            hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
+        }
+        zoomTarget = zoomNext;
     }
 
     const int64_t deltaW = hasDropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
