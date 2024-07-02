@@ -4,20 +4,20 @@
 #include "stbText.h"
 #include "LRU.h"
 
-
-// TODO GIF 等动图
+/*
+TODO 
+1. GIF
+2. RAW
+3. file with color profile 颜色不正确 red-at-12-oclock-with-color-profile.jpg
+4. avif crop 无法解码 kimono.crop.avif
+*/
 
 //#define TEST
 
 const int BG_GRID_WIDTH = 8;
-//const cv::Vec4b BG_COLOR_DARK{ 40, 40, 40, 255 };
-//const cv::Vec4b BG_COLOR_LIGHT{ 60, 60, 60, 255 };
-//const cv::Vec4b BG_COLOR{ 70, 70, 70, 255 };
-
-HWND mainHWND;
+const uint32_t BG_COLOR = 0x46;
 const uint32_t GRID_DARK = 0xFF282828;
 const uint32_t GRID_LIGHT = 0xFF3C3C3C;
-const uint32_t BG_COLOR = 0xFF464646;
 
 const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
@@ -25,30 +25,24 @@ auto last_end = std::chrono::high_resolution_clock::now();
 
 const wstring appName = L"JarkViewer V1.2";
 const string windowName = "mainWindows";
+
 const vector<int64_t> ZOOM_LIST = {
     1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 
     1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
 };
 const int64_t ZOOM_BASE = ZOOM_LIST[ZOOM_LIST.size()/2]; // 100%缩放
-int64_t zoomFitWindow = 0;  //适应显示窗口宽高的缩放比例
-cv::Mat mainImg;
 
 bool isBusy = false;
 bool needFresh = false;
 bool showExif = false;
-bool requitExit = false;
-
-Cood mouse{}, hasDropCur{}, hasDropTarget{};
-int zoomOperate = 0;     // 缩放操作
-int switchOperate = 0;   // 切换图片操作
-int64_t zoomTarget = 0;  // 设定的缩放比例
-int64_t zoomCur = 0;     // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
-
-
-stbText stb; //给Mat绘制文字
+int zoomOperate = 0;        // 缩放操作
+int switchOperate = 0;      // 切换图片操作
+int64_t zoomTarget = 0;     // 设定的缩放比例
+int64_t zoomCur = 0;        // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
+stbText stb;                // 给Mat绘制文字
+cv::Mat mainImg;
 cv::Rect winSize(0, 0, 200, 100);
-
-//LRU<wstring, cv::Mat, 10> myLRU;
+Cood mouse{}, hasDropCur{}, hasDropTarget{};
 LRU<wstring, ImageNode> imageDB(Utils::loadImage);
 
 const unordered_set<wstring> supportExt = {
@@ -150,9 +144,8 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
 
     if (zoomTarget == 0) {
         //适应显示窗口宽高的缩放比例
-        int64_t zoomFitWindow = (srcH > 0 && srcW > 0) ?
-            std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW) :
-            ZOOM_BASE;
+        int64_t zoomFitWindow = (srcH <= 0 || srcW <= 0) ? ZOOM_BASE :
+            std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW);
         zoomTarget = (srcH > winSize.height || srcW > winSize.width) ? zoomFitWindow : ZOOM_BASE;
         zoomCur = zoomTarget;
 
@@ -161,7 +154,7 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
             zoomList.push_back(zoomFitWindow);
         std::sort(zoomList.begin(), zoomList.end());
         auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
-        zoomIndex = (it != zoomList.end()) ? std::distance(zoomList.begin(), it) : 6;
+        zoomIndex = (it != zoomList.end()) ? (int)std::distance(zoomList.begin(), it) : 6;
     }
 
     if (zoomOperate) {
@@ -186,14 +179,13 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
     const int64_t deltaW = hasDropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
     const int64_t deltaH = hasDropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
 
+    memset(mainImg.ptr(), BG_COLOR, 4ULL * winSize.height * winSize.width);
     for (int y = 0; y < winSize.height; y++)
         for (int x = 0; x < winSize.width; x++) {
-
-            int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
-            int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
-
-            mainImg.at<uint32_t>(y, x) = (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH) ?
-                getSrcPx(srcImg, srcX, srcY, x, y) : BG_COLOR;
+            const int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
+            const int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
+            if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH)
+                mainImg.at<uint32_t>(y, x) = getSrcPx(srcImg, srcX, srcY, x, y);
         }
 }
 
@@ -230,7 +222,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
     vector<wstring> imgFileList; //工作目录下所有图像文件路径
 
     cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
-    mainHWND = Utils::getCvWindow(windowName.c_str());
+    auto mainHWND = Utils::getCvWindow(windowName.c_str());
     ShowWindow(mainHWND, SW_MAXIMIZE); //最大化窗口
     if (hInstance) Utils::setCvWindowIcon(hInstance, mainHWND, IDI_JARKVIEWER);
 

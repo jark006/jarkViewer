@@ -254,7 +254,8 @@ namespace Utils {
 
 	// HEIC ONLY, AVIF not support
 	// https://github.com/strukturag/libheif
-	// vcpkg install libheif
+	// vcpkg install libheif:x64-windows-static
+	// vcpkg install libheif[hevc]:x64-windows-static
 	cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
 
 		auto filetype_check = heif_check_filetype(buf.data(), 12);
@@ -325,7 +326,7 @@ namespace Utils {
 		return matImg;
 	}
 
-
+	// vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
 	// https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
 	cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
 		avifImage* image = avifImageCreateEmpty();
@@ -373,12 +374,13 @@ namespace Utils {
 
 		avifImageDestroy(image);
 		avifDecoderDestroy(decoder);
-		
+
 		auto ret = cv::Mat(rgb.height, rgb.width, CV_8UC4);
 		if (rgb.depth == 8) {
 			memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
 		}
 		else {
+			log("rgb.depth: {} {}", rgb.depth, wstringToUtf8(path));
 			const uint16_t* src = (uint16_t*)rgb.pixels;
 			uint8_t* dst = ret.ptr();
 			int bitShift = 2;
@@ -419,14 +421,15 @@ namespace Utils {
 			cv::Mat tmp;
 			img.convertTo(tmp, CV_8U, 1.0 / 256);
 			return tmp;
-		}if (img.depth() <= 5) {
+		}
+		else if (img.depth() <= 5) {
 			cv::Mat tmp;
 			img.convertTo(tmp, CV_8U, 1.0 / 65536);
 			return tmp;
 		}
 		log("Special: {}, img.depth(): {}, img.channels(): {}",
 			wstringToUtf8(path), img.depth(), img.channels());
-		return img;
+		return cv::Mat();
 	}
 
 
