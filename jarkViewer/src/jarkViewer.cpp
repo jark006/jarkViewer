@@ -55,7 +55,7 @@ const unordered_set<wstring> supportExt = {
     L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
     L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
     L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic" , 
-    L".heic" , L".heif", L".avif" };
+    L".heic" , L".heif", L".avif", L".avifs" };
 
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
@@ -239,9 +239,8 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
     fs::path fullPath = fs::absolute(filePath);
     wstring fileName = fullPath.filename().wstring();
 
-    if (fs::exists(fs::directory_entry(fullPath))) {
-        auto workDir = fullPath.parent_path();
-
+    auto workDir = fullPath.parent_path();
+    if (fs::exists(workDir)) {
         for (const auto& entry : fs::directory_iterator(workDir)) {
             if (!entry.is_regular_file())continue;
 

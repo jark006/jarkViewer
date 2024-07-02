@@ -53,7 +53,7 @@ extern "C" {
 //  1.15           4            5             1             1            1            1
 //  1.16           5            6             1             1            1            1
 
-#if defined(_WIN32)
+#if 0
 #if 0
 #define LIBHEIF_API __declspec(dllexport)
 #else

@@ -325,10 +325,78 @@ namespace Utils {
 		return matImg;
 	}
 
+
+	// https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
 	cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
-		// TODO
-		return cv::Mat();
+		avifImage* image = avifImageCreateEmpty();
+		if (image == nullptr) {
+			log("avifImageCreateEmpty failure: {}", wstringToUtf8(path));
+			return cv::Mat();
+		}
+
+		avifDecoder* decoder = avifDecoderCreate();
+		if (decoder == nullptr) {
+			log("avifDecoderCreate failure: {}", wstringToUtf8(path));
+			avifImageDestroy(image);
+			return cv::Mat();
+		}
+
+		//decoder->strictFlags = 0; // 
+
+		avifResult result = avifDecoderReadMemory(decoder, image, buf.data(), fileSize);
+		if (result != AVIF_RESULT_OK) {
+			log("avifDecoderReadMemory failure: {} {}", wstringToUtf8(path), avifResultToString(result));
+			avifImageDestroy(image);
+			avifDecoderDestroy(decoder);
+			return cv::Mat();
+		}
+
+		avifRGBImage rgb;
+		avifRGBImageSetDefaults(&rgb, image);
+		result = avifRGBImageAllocatePixels(&rgb);
+		if (result != AVIF_RESULT_OK) {
+			log("avifRGBImageAllocatePixels failure: {} {}", wstringToUtf8(path), avifResultToString(result));
+			avifImageDestroy(image);
+			avifDecoderDestroy(decoder);
+			return cv::Mat();
+		}
+
+		rgb.format = AVIF_RGB_FORMAT_BGRA; // OpenCV is BGRA
+		result = avifImageYUVToRGB(image, &rgb);
+		if (result != AVIF_RESULT_OK) {
+			log("avifImageYUVToRGB failure: {} {}", wstringToUtf8(path), avifResultToString(result));
+			avifImageDestroy(image);
+			avifDecoderDestroy(decoder);
+			avifRGBImageFreePixels(&rgb);
+			return cv::Mat();
+		}
+
+		avifImageDestroy(image);
+		avifDecoderDestroy(decoder);
+		
+		auto ret = cv::Mat(rgb.height, rgb.width, CV_8UC4);
+		if (rgb.depth == 8) {
+			memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
+		}
+		else {
+			const uint16_t* src = (uint16_t*)rgb.pixels;
+			uint8_t* dst = ret.ptr();
+			int bitShift = 2;
+			switch (rgb.depth) {
+			case 10: bitShift = 2; break;
+			case 12: bitShift = 4; break;
+			case 16: bitShift = 8; break;
+			}
+			const size_t length = (size_t)rgb.width * rgb.height * 4;
+			for (size_t i = 0; i < length; ++i) {
+				dst[i] = (uint8_t)(src[i] >> bitShift);
+			}
+		}
+
+		avifRGBImageFreePixels(&rgb);
+		return ret;
 	}
+
 
 	cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
 		auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
@@ -342,6 +410,22 @@ namespace Utils {
 			log("cvMat unsupport channel: {}", img.channels());
 			return cv::Mat();
 		}
+
+		// enum { CV_8U=0, CV_8S=1, CV_16U=2, CV_16S=3, CV_32S=4, CV_32F=5, CV_64F=6 }
+		if (img.depth() <= 1) {
+			return img;
+		}
+		else if (img.depth() <= 3) {
+			cv::Mat tmp;
+			img.convertTo(tmp, CV_8U, 1.0 / 256);
+			return tmp;
+		}if (img.depth() <= 5) {
+			cv::Mat tmp;
+			img.convertTo(tmp, CV_8U, 1.0 / 65536);
+			return tmp;
+		}
+		log("Special: {}, img.depth(): {}, img.channels(): {}",
+			wstringToUtf8(path), img.depth(), img.channels());
 		return img;
 	}
 
@@ -450,7 +534,7 @@ namespace Utils {
 		ImageNode ret;
 		if (ext == L"heic" || ext == L"heif")
 			ret.img = loadHeic(path, tmp, fileSize);
-		else if(ext == L"avif")
+		else if(ext == L"avif" || ext == L"vifs") // .avifs
 			ret.img = loadAvif(path, tmp, fileSize);
 		else
 			ret.img = loadMat(path, tmp, fileSize);

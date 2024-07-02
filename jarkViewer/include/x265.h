@@ -26,6 +26,7 @@
 #define X265_H
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include "x265_config.h"
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +60,7 @@ typedef enum
     NAL_UNIT_CODED_SLICE_TRAIL_N = 0,
     NAL_UNIT_CODED_SLICE_TRAIL_R,
     NAL_UNIT_CODED_SLICE_TSA_N,
-    NAL_UNIT_CODED_SLICE_TLA_R,
+    NAL_UNIT_CODED_SLICE_TSA_R,
     NAL_UNIT_CODED_SLICE_STSA_N,
     NAL_UNIT_CODED_SLICE_STSA_R,
     NAL_UNIT_CODED_SLICE_RADL_N,
@@ -311,6 +312,7 @@ typedef struct x265_frame_stats
     double           vmafFrameScore;
     double           bufferFillFinal;
     double           unclippedBufferFillFinal;
+    uint8_t          tLayer;
 } x265_frame_stats;
 
 typedef struct x265_ctu_info_t
@@ -536,6 +538,8 @@ typedef enum
 /* ARM */
 #define X265_CPU_ARMV6           0x0000001
 #define X265_CPU_NEON            0x0000002  /* ARM NEON */
+#define X265_CPU_SVE2            0x0000008  /* ARM SVE2 */
+#define X265_CPU_SVE             0x0000010  /* ARM SVE2 */
 #define X265_CPU_FAST_NEON_MRC   0x0000004  /* Transfer from NEON to ARM register is fast (Cortex-A9) */
 
 /* IBM Power8 */
@@ -613,6 +617,13 @@ typedef enum
 #define SLICE_TYPE_DELTA        0.3 /* The offset decremented or incremented for P-frames or b-frames respectively*/
 #define BACKWARD_WINDOW         1 /* Scenecut window before a scenecut */
 #define FORWARD_WINDOW          2 /* Scenecut window after a scenecut */
+#define BWD_WINDOW_DELTA        0.4
+
+#define X265_MAX_GOP_CONFIG 3
+#define X265_MAX_GOP_LENGTH 16
+#define MAX_T_LAYERS 7
+
+#define X265_IPRATIO_STRENGTH   1.43
 
 typedef struct x265_cli_csp
 {
@@ -696,6 +707,7 @@ struct x265_param;
 typedef struct x265_zone
 {
     int   startFrame, endFrame; /* range of frame numbers */
+    int   keyframeMax;          /* it store the default/user defined keyframeMax value*/
     int   bForceQp;             /* whether to use qp vs bitrate factor */
     int   qp;
     float bitrateFactor;
@@ -746,6 +758,271 @@ typedef struct x265_vmaf_commondata
 }x265_vmaf_commondata;
 
 static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.pkl", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1, 0 } };
+
+typedef struct x265_temporal_layer {
+    int poc_offset;      /* POC offset */
+    int8_t layer;        /* Current layer */
+    int8_t qp_offset;    /* QP offset */
+} x265_temporal_layer;
+
+static const int8_t x265_temporal_layer_bframes[MAX_T_LAYERS] = {-1, -1, 3, 7, 15, -1, -1};
+
+static const int8_t x265_gop_ra_length[X265_MAX_GOP_CONFIG] = { 4, 8, 16};
+static const x265_temporal_layer x265_gop_ra[X265_MAX_GOP_CONFIG][X265_MAX_GOP_LENGTH] = {
+    {
+        {
+            4,
+            0,
+            1,
+        },
+        {
+            2,
+            1,
+            5,
+        },
+        {
+            1,
+            2,
+            3,
+        },
+        {
+            3,
+            2,
+            5,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        }
+    },
+
+    {
+        {
+            8,
+            0,
+            1,
+        },
+        {
+            4,
+            1,
+            5,
+        },
+        {
+            2,
+            2,
+            4,
+        },
+        {
+            1,
+            3,
+            5,
+        },
+        {
+            3,
+            3,
+            2,
+        },
+        {
+            6,
+            2,
+            5,
+        },
+        {
+            5,
+            3,
+            4,
+        },
+        {
+            7,
+            3,
+            5,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+        {
+            -1,
+            -1,
+            -1,
+        },
+    },
+    {
+        {
+            16,
+            0,
+            1,
+        },
+        {
+            8,
+            1,
+            6,
+        },
+        {
+            4,
+            2,
+            5,
+        },
+        {
+            2,
+            3,
+            6,
+        },
+        {
+            1,
+            4,
+            4,
+        },
+        {
+            3,
+            4,
+            6,
+        },
+        {
+            6,
+            3,
+            5,
+        },
+        {
+            5,
+            4,
+            6,
+        },
+        {
+            7,
+            4,
+            1,
+        },
+        {
+            12,
+            2,
+            6,
+        },
+        {
+            10,
+            3,
+            5,
+        },
+        {
+            9,
+            4,
+            6,
+        },
+        {
+            11,
+            4,
+            4,
+        },
+        {
+            14,
+            3,
+            6,
+        },
+        {
+            13,
+            4,
+            5,
+        },
+        {
+            15,
+            4,
+            6,
+        }
+    }
+};
+
+typedef enum
+{
+    X265_SHARE_MODE_FILE = 0,
+    X265_SHARE_MODE_SHAREDMEM
+}X265_DATA_SHARE_MODES;
 
 /* x265 input parameters
  *
@@ -982,6 +1259,9 @@ typedef struct x265_param
      * generally has better compression efficiency and negligible encoder
      * performance impact, but the use case may preclude it.  Default true */
     int       bOpenGOP;
+
+	/*Force nal type to CRA to all frames expect first frame. Default disabled*/
+	int       craNal;
 
     /* Scene cuts closer together than this are coded as I, not IDR. */
     int       keyframeMin;
@@ -1433,10 +1713,10 @@ typedef struct x265_param
         double    rfConstantMin;
 
         /* Multi-pass encoding */
-        /* Enable writing the stats in a multi-pass encode to the stat output file */
+        /* Enable writing the stats in a multi-pass encode to the stat output file/memory */
         int       bStatWrite;
 
-        /* Enable loading data from the stat input file in a multi pass encode */
+        /* Enable loading data from the stat input file/memory in a multi pass encode */
         int       bStatRead;
 
         /* Filename of the 2pass output/input stats file, if unspecified the
@@ -1488,6 +1768,21 @@ typedef struct x265_param
 
         /* internally enable if tune grain is set */
         int      bEnableConstVbv;
+
+        /* if only the focused frames would be re-encode or not */
+        int       bEncFocusedFramesOnly;
+
+        /* Share the data with stats file or shared memory.
+        It must be one of the X265_DATA_SHARE_MODES enum values
+        Available if the bStatWrite or bStatRead is true.
+        Use stats file by default.
+        The stats file mode would be used among the encoders running in sequence.
+        The shared memory mode could only be used among the encoders running in parallel.
+        Now only the cutree data could be shared among shared memory. More data would be support in the future.*/
+        int       dataShareMode;
+
+        /* Unique shared memory name. Required if the shared memory mode enabled. NULL by default */
+        const char* sharedMemName;
 
     } rc;
 
@@ -1850,6 +2145,10 @@ typedef struct x265_param
       Default 1 (Enabled). API only. */
     int       bResetZoneConfig;
 
+    /*Flag to indicate rate-control history has not to be reset during zone reconfiguration.
+      Default 0 (Disabled) */
+    int       bNoResetZoneConfig;
+
     /* It reduces the bits spent on the inter-frames within the scenecutWindow before and / or after a scenecut
      * by increasing their QP in ratecontrol pass2 algorithm without any deterioration in visual quality.
      * 0 - Disabled (default).
@@ -1860,20 +2159,15 @@ typedef struct x265_param
 
     /* The duration(in milliseconds) for which there is a reduction in the bits spent on the inter-frames after a scenecut
      * by increasing their QP, when bEnableSceneCutAwareQp is 1 or 3. Default is 500ms.*/
-    int       fwdScenecutWindow;
+    int       fwdMaxScenecutWindow;
+    int       fwdScenecutWindow[6];
 
     /* The offset by which QP is incremented for inter-frames after a scenecut when bEnableSceneCutAwareQp is 1 or 3.
      * Default is +5. */
-    double    fwdRefQpDelta;
+    double    fwdRefQpDelta[6];
 
     /* The offset by which QP is incremented for non-referenced inter-frames after a scenecut when bEnableSceneCutAwareQp is 1 or 3. */
-    double    fwdNonRefQpDelta;
-
-    /* A genuine threshold used for histogram based scene cut detection.
-     * This threshold determines whether a frame is a scenecut or not
-     * when compared against the edge and chroma histogram sad values.
-     * Default 0.03. Range: Real number in the interval (0,1). */
-    double    edgeTransitionThreshold;
+    double    fwdNonRefQpDelta[6];
 
     /* Enables histogram based scenecut detection algorithm to detect scenecuts. Default disabled */
     int       bHistBasedSceneCut;
@@ -1941,13 +2235,39 @@ typedef struct x265_param
 
     /* The duration(in milliseconds) for which there is a reduction in the bits spent on the inter-frames before a scenecut
      * by increasing their QP, when bEnableSceneCutAwareQp is 2 or 3. Default is 100ms.*/
-    int       bwdScenecutWindow;
+    int       bwdMaxScenecutWindow;
+    int       bwdScenecutWindow[6];
 
     /* The offset by which QP is incremented for inter-frames before a scenecut when bEnableSceneCutAwareQp is 2 or 3. */
-    double    bwdRefQpDelta;
+    double    bwdRefQpDelta[6];
 
     /* The offset by which QP is incremented for non-referenced inter-frames before a scenecut when bEnableSceneCutAwareQp is 2 or 3. */
-    double    bwdNonRefQpDelta;
+    double    bwdNonRefQpDelta[6];
+
+    /* Specify combinations of color primaries, transfer characteristics, color matrix,
+    * range of luma and chroma signals, and chroma sample location. This has higher
+    * precedence than individual VUI parameters. If any individual VUI option is specified
+    * together with this, which changes the values set corresponding to the system-id
+    * or color-volume, it will be discarded. */
+    const char* videoSignalTypePreset;
+
+    /* Flag indicating whether the encoder should emit an End of Bitstream
+     * NAL at the end of bitstream. Default false */
+    int      bEnableEndOfBitstream;
+
+    /* Flag indicating whether the encoder should emit an End of Sequence
+     * NAL at the end of every Coded Video Sequence. Default false */
+    int      bEnableEndOfSequence;
+
+    /* Film Grain Characteristic file */
+    char* filmGrain;
+
+    /*Motion compensated temporal filter*/
+    int      bEnableTemporalFilter;
+    double   temporalFilterStrength;
+
+    /*SBRC*/
+    int      bEnableSBRC;
 } x265_param;
 
 /* x265_param_alloc:
@@ -1981,6 +2301,8 @@ x265_zone *x265_zone_alloc(int zoneCount, int isZoneFile);
 void x265_zone_free(x265_param *param);
 
 int x265_zone_param_parse(x265_param* p, const char* name, const char* value);
+
+int x265_scenecut_aware_qp_param_parse(x265_param* p, const char* name, const char* value);
 
 static const char * const x265_profile_names[] = {
     /* HEVC v1 */
@@ -2251,6 +2573,7 @@ typedef struct x265_api
     void          (*param_free)(x265_param*);
     void          (*param_default)(x265_param*);
     int           (*param_parse)(x265_param*, const char*, const char*);
+    int           (*scenecut_aware_qp_param_parse)(x265_param*, const char*, const char*);
     int           (*param_apply_profile)(x265_param*, const char*);
     int           (*param_default_preset)(x265_param*, const char*, const char *);
     x265_picture* (*picture_alloc)(void);
