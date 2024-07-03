@@ -45,6 +45,9 @@
     <ClInclude Include="include\avif\avif.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\gif_lib.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\exif.cpp">

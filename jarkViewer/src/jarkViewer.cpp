@@ -6,10 +6,9 @@
 
 /*
 TODO 
-1. GIF
-2. RAW
-3. file with color profile 颜色不正确 red-at-12-oclock-with-color-profile.jpg
-4. avif crop 无法解码 kimono.crop.avif
+1. raw, ico
+2. file with color profile 颜色不正确 red-at-12-oclock-with-color-profile.jpg
+3. avif crop 无法解码 kimono.crop.avif
 */
 
 //#define TEST
@@ -23,7 +22,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer V1.2";
+const wstring appName = L"JarkViewer V1.3";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
@@ -32,7 +31,6 @@ const vector<int64_t> ZOOM_LIST = {
 };
 const int64_t ZOOM_BASE = ZOOM_LIST[ZOOM_LIST.size()/2]; // 100%缩放
 
-bool isBusy = false;
 bool needFresh = false;
 bool showExif = false;
 int zoomOperate = 0;        // 缩放操作
@@ -43,28 +41,28 @@ stbText stb;                // 给Mat绘制文字
 cv::Mat mainImg;
 cv::Rect winSize(0, 0, 200, 100);
 Cood mouse{}, hasDropCur{}, hasDropTarget{};
-LRU<wstring, ImageNode> imageDB(Utils::loadImage);
+LRU<wstring, Frames> imageDB(Utils::loadImage);
 
 const unordered_set<wstring> supportExt = {
     L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
     L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
     L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic" , 
-    L".heic" , L".heif", L".avif", L".avifs" };
+    L".heic" , L".heif", L".avif", L".avifs", L".gif"};
 
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
-void test();
+int test();
 
-static uint32_t getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
+static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
         auto& srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
         intUnion ret=255;
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
-            auto& px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
-            auto& px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
-            auto& px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
+            cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
+            cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
+            cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
             for (int i = 0; i < 3; i++)
                 ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
 
@@ -82,11 +80,11 @@ static uint32_t getSrcPx(cv::Mat& srcImg, int srcX, int srcY, int mainX, int mai
 
         intUnion px;
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) {
-            auto& px0 = srcImg.at<intUnion>(srcY - 1, srcX - 1);
-            auto& px1 = srcImg.at<intUnion>(srcY - 1, srcX);
-            auto& px2 = srcImg.at<intUnion>(srcY, srcX - 1);
+            intUnion srcPx1 = srcImg.at<intUnion>(srcY - 1, srcX - 1);
+            intUnion srcPx2 = srcImg.at<intUnion>(srcY - 1, srcX);
+            intUnion srcPx3 = srcImg.at<intUnion>(srcY, srcX - 1);
             for (int i = 0; i < 4; i++)
-                px[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
+                px[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) / 4;
         }
         else {
             px = srcPx;
@@ -135,7 +133,7 @@ static bool is_power_of_two(int64_t num) {
     return (num & (num - 1)) == 0;
 }
 
-static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
+static void processSrc(const cv::Mat& srcImg, cv::Mat& mainImg) {
     static vector<int64_t> zoomList = ZOOM_LIST;
     static int zoomIndex = 0;
 
@@ -189,35 +187,16 @@ static void processSrc(cv::Mat& srcImg, cv::Mat& mainImg) {
         }
 }
 
-
-
-static void processMainImg(const wstring& path, cv::Mat& mainImg) {
-    isBusy = true;
-
-    auto& imgNode = imageDB.get(path);
-    cv::Mat& srcImg = imgNode.img;
-
-    processSrc(srcImg, mainImg);
-
-    if (showExif) {
-        const int padding = 10;
-        RECT r{ padding, padding, winSize.width-padding, winSize.height-padding};
-        stb.putLeft(mainImg, r, imgNode.exifStr.c_str(), { 255, 255, 255, 255 });
-    }
-
-    isBusy = false;
-}
-
-
-
 static int myMain(const wstring filePath, HINSTANCE hInstance) {
     namespace fs = std::filesystem;
 
 #ifdef TEST
-    test();
-    exit(0);
+    return test();
 #endif // TEST
 
+    int curFrameIdx = -1;        // 小于0则单张静态图像，否则为动画当前帧索引
+    int curFrameIdxMax = -1;     // 若是动画则为帧数量
+    int curFrameDelay = 1;       // 当前帧延迟
     int curFileIdx = -1;         //文件在路径列表的索引
     vector<wstring> imgFileList; //工作目录下所有图像文件路径
 
@@ -239,7 +218,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             std::wstring ext = entry.path().extension().wstring();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-            if (supportExt.contains(ext)){
+            if (supportExt.contains(ext)) {
                 imgFileList.push_back(fs::absolute(entry.path()).wstring());
                 if (curFileIdx == -1 && fileName == entry.path().filename())
                     curFileIdx = (int)imgFileList.size() - 1;
@@ -254,12 +233,13 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
         if (filePath.empty()) { //直接打开软件，没有传入参数
             imgFileList.emplace_back(appName);
             curFileIdx = (int)imgFileList.size() - 1;
-            imageDB.put(appName, { Utils::getHomeMat(), "请在图像文件右键使用本软件打开" });
+            imageDB.put(appName, { { { Utils::getHomeMat(), 0 } }, "请在图像文件右键使用本软件打开" });
+
         }
         else { // 打开的文件不支持，默认加到尾部
             imgFileList.emplace_back(fullPath.wstring());
             curFileIdx = (int)imgFileList.size() - 1;
-            imageDB.put(fullPath.wstring(), { Utils::getDefaultMat(), "图像格式不支持或已删除" });
+            imageDB.put(fullPath.wstring(), { { { Utils::getDefaultMat(), 0 } }, "图像格式不支持或已删除" });
         }
     }
 
@@ -294,9 +274,29 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 hasDropTarget = { 0, 0 };
                 zoomTarget = 0;
                 zoomCur = 0;
+
+                curFrameIdx = -1;
             }
 
-            processMainImg(imgFileList[curFileIdx], mainImg);
+            const auto& frames = imageDB.get(imgFileList[curFileIdx]);
+            const auto& [srcImg, delay] = frames.imgList[curFrameIdx < 0 ? 0 : curFrameIdx];
+
+            curFrameIdxMax = (int)frames.imgList.size();
+            if (curFrameIdxMax > 1) {
+                if (curFrameIdx == -1) {
+                    curFrameDelay = delay;
+                    curFrameIdx = 0;
+                }
+            }
+
+            processSrc(srcImg, mainImg);
+
+            if (showExif) {
+                const int padding = 10;
+                RECT r{ padding, padding, winSize.width - padding, winSize.height - padding };
+                stb.putLeft(mainImg, r, frames.exifStr.c_str(), { 255, 255, 255, 255 });
+            }
+
             cv::imshow(windowName, mainImg);
 
             wstring str = std::format(L" [{}/{}] {}% ",
@@ -331,8 +331,25 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             }
         }
 
-        if (cv::waitKey(5) == 27) //ESC
-            break;
+        if (curFrameIdx < 0) {
+            if (cv::waitKey(5) == 27) //ESC
+                break;
+        }
+        else {
+            static int delayRemain = 0;
+
+            if (cv::waitKey(5) == 27) //ESC
+                break;
+
+            delayRemain -= 5;
+            if (delayRemain <= 0) {
+                delayRemain = curFrameDelay;
+                curFrameIdx++;
+                needFresh = true;
+                if (curFrameIdx >= curFrameIdxMax)
+                    curFrameIdx = 0;
+            }
+        }
 
         if (!IsWindowVisible(mainHWND))
             break;
@@ -395,14 +412,12 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         }
     }break;
 
-                            //左键按下
-    case cv::EVENT_LBUTTONDOWN: {
+    case cv::EVENT_LBUTTONDOWN: {//左键按下
         mousePress = mouse - hasDropTarget;
         isPresing = true;
     }break;
 
-                              //左键抬起
-    case cv::EVENT_LBUTTONUP: {
+    case cv::EVENT_LBUTTONUP: {//左键抬起
         isPresing = false;
         auto now = system_clock::now();
         auto delta = duration_cast<milliseconds>(now - lastTimestamp).count();
@@ -422,9 +437,7 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         exit(0);
     }break;
 
-                            // 滚轮
-    case cv::EVENT_MOUSEWHEEL: {
-        if (isBusy) break;
+    case cv::EVENT_MOUSEWHEEL: { // 滚轮
         int mouseWheel = cv::getMouseWheelDelta(flags);
         if (cursorIsView) {//光标在 缩放 区域
             zoomOperate = mouseWheel;
@@ -437,7 +450,6 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     }
 }
 
-
-void test() {
-
+int test() {
+    return 0;
 }

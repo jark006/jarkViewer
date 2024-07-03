@@ -33,6 +33,7 @@ using std::endl;
 
 #include "libheif/heif.h"
 #include "avif/avif.h"
+#include "gif_lib.h"
 #include "exif.h"
 
 struct rcFileInfo {
@@ -98,9 +99,19 @@ struct Cood {
 	}
 };
 
-struct ImageNode{
+struct ImageNode {
 	cv::Mat img;
+	int delay;
+};
+struct Frames {
+	std::vector<ImageNode> imgList;
 	string exifStr;
+};
+
+struct GifData {
+	const unsigned char* m_lpBuffer;
+	size_t m_nBufferSize;
+	size_t m_nPosition;
 };
 
 namespace Utils {
@@ -399,6 +410,15 @@ namespace Utils {
 		return ret;
 	}
 
+	// TODO
+	vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
+		vector<cv::Mat> imgs;
+
+		if (!cv::imdecodemulti(buf, cv::IMREAD_UNCHANGED, imgs)) {
+			return imgs;
+		}
+		return imgs;
+	}
 
 	cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
 		auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
@@ -430,6 +450,93 @@ namespace Utils {
 		log("Special: {}, img.depth(): {}, img.channels(): {}",
 			wstringToUtf8(path), img.depth(), img.channels());
 		return cv::Mat();
+	}
+	
+
+	std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf, size_t size) {
+
+		auto InternalRead_Mem = [](GifFileType* gif, GifByteType* buf, int len) -> int {
+			if (len == 0)
+				return 0;
+
+			GifData* pData = (GifData*)gif->UserData;
+			if (pData->m_nPosition > pData->m_nBufferSize)
+				return 0;
+
+			UINT nRead;
+			if (pData->m_nPosition + len > pData->m_nBufferSize || pData->m_nPosition + len < pData->m_nPosition)
+				nRead = (UINT)(pData->m_nBufferSize - pData->m_nPosition);
+			else
+				nRead = len;
+
+			memcpy((BYTE*)buf, (BYTE*)pData->m_lpBuffer + pData->m_nPosition, nRead);
+			pData->m_nPosition += nRead;
+
+			return nRead;
+			};
+
+		std::vector<ImageNode> frames;
+
+		GifData data;
+		memset(&data, 0, sizeof(data));
+		data.m_lpBuffer = buf.data();
+		data.m_nBufferSize = size;
+
+		int error;
+		GifFileType* gif = DGifOpen((void*)&data, InternalRead_Mem, &error);
+
+		if (gif == nullptr) {
+			log("DGifOpen: Error: {} {}", wstringToUtf8(path), GifErrorString(error));
+			frames.push_back({ getDefaultMat(), 0 });
+			return frames;
+		}
+
+		if (DGifSlurp(gif) != GIF_OK) {
+			log("DGifSlurp Error: {} {}", wstringToUtf8(path), GifErrorString(gif->Error));
+			DGifCloseFile(gif, &error);
+			frames.push_back({ getDefaultMat(), 0 });
+			return frames;
+		}
+
+		const auto byteSize = 4ULL * gif->SWidth * gif->SHeight;
+		auto gifRaster = std::make_unique<GifByteType[]>(byteSize);
+
+		memset(gifRaster.get(), 0, byteSize);
+
+		for (int i = 0; i < gif->ImageCount; ++i) {
+			SavedImage& image = gif->SavedImages[i];
+			GraphicsControlBlock gcb;
+			if (DGifSavedExtensionToGCB(gif, i, &gcb) != GIF_OK) {
+				continue;
+			}
+			auto colorMap = image.ImageDesc.ColorMap != nullptr ? image.ImageDesc.ColorMap : gif->SColorMap;
+			auto ptr = gifRaster.get();
+
+			for (int y = 0; y < image.ImageDesc.Height; ++y) {
+				for (int x = 0; x < image.ImageDesc.Width; ++x) {
+					int gifX = x + image.ImageDesc.Left;
+					int gifY = y + image.ImageDesc.Top;
+					GifByteType colorIndex = image.RasterBits[y * image.ImageDesc.Width + x];
+					if (colorIndex == gcb.TransparentColor) {
+						continue;
+					}
+					GifColorType& color = colorMap->Colors[colorIndex];
+					int pixelIdx = (gifY * gif->SWidth + gifX) * 4;
+					ptr[pixelIdx] = color.Blue;
+					ptr[pixelIdx + 1] = color.Green;
+					ptr[pixelIdx + 2] = color.Red;
+					ptr[pixelIdx + 3] = 255;
+				}
+			}
+
+			cv::Mat frame(gif->SHeight, gif->SWidth, CV_8UC4, gifRaster.get());
+			cv::Mat cloneFrame;
+			frame.copyTo(cloneFrame);
+			frames.emplace_back(cloneFrame, gcb.DelayTime * 10);
+		}
+
+		DGifCloseFile(gif, nullptr);
+		return frames;
 	}
 
 
@@ -512,16 +619,16 @@ namespace Utils {
 	}
 
 
-	static ImageNode loadImage(const wstring& path) {
+	Frames loadImage(const wstring& path) {
 		if (path.length() < 4) {
 			log("path.length() < 4: {}", wstringToUtf8(path));
-			return { getDefaultMat(), "" };
+			return { {{getDefaultMat(), 0}}, "" };
 		}
 
 		auto f = _wfopen(path.c_str(), L"rb");
 		if (f == nullptr) {
 			log("path canot open: {}", wstringToUtf8(path));
-			return { getDefaultMat(), "" };
+			return { {{getDefaultMat(), 0}}, "" };
 		}
 
 		fseek(f, 0, SEEK_END);
@@ -534,21 +641,31 @@ namespace Utils {
 		auto ext = path.substr(path.length() - 4);
 		for (auto& c : ext)	c = std::tolower(c);
 
-		ImageNode ret;
-		if (ext == L"heic" || ext == L"heif")
-			ret.img = loadHeic(path, tmp, fileSize);
-		else if(ext == L"avif" || ext == L"vifs") // .avifs
-			ret.img = loadAvif(path, tmp, fileSize);
-		else
-			ret.img = loadMat(path, tmp, fileSize);
+		Frames ret;
 
-		if (ret.img.empty()) {
-			ret.img = getDefaultMat();
-			ret.exifStr = "";
+		if (ext == L".gif") {
+			ret.imgList = loadGif(path, tmp, fileSize);
+			if(!ret.imgList.empty() && ret.imgList.front().delay >= 0)
+				ret.exifStr = getExif(path, ret.imgList.front().img.cols, ret.imgList.front().img.rows, tmp.data(), fileSize);
+			return ret;
+		}
+		
+		cv::Mat img;
+		if (ext == L"heic" || ext == L"heif") {
+			img = loadHeic(path, tmp, fileSize);
+		}
+		else if (ext == L"avif" || ext == L"vifs") { // .avifs
+			img = loadAvif(path, tmp, fileSize);
 		}
 		else {
-			ret.exifStr = getExif(path, ret.img.cols, ret.img.rows, tmp.data(), fileSize);
+			img = loadMat(path, tmp, fileSize);
 		}
+
+		ret.exifStr = getExif(path, img.cols, img.rows, tmp.data(), fileSize);
+		if (img.empty())
+			img = getDefaultMat();
+
+		ret.imgList.push_back({ img , 0 });
 
 		return ret;
 	}
