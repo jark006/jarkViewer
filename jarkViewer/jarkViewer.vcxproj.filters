@@ -18,9 +18,6 @@
     <ClInclude Include="Resource.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\exif.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\LRU.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -53,9 +50,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\exif.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\jarkViewer.cpp">
       <Filter>src</Filter>
     </ClCompile>

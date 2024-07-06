@@ -11,8 +11,6 @@ TODO
 3. avif crop 无法解码 kimono.crop.avif
 */
 
-//#define TEST
-
 const int BG_GRID_WIDTH = 8;
 const uint32_t BG_COLOR = 0x46;
 const uint32_t GRID_DARK = 0xFF282828;
@@ -45,7 +43,7 @@ LRU<wstring, Frames> imageDB(Utils::loadImage);
 
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
-int test();
+void test();
 
 static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
@@ -184,9 +182,7 @@ static void processSrc(const cv::Mat& srcImg, cv::Mat& mainImg) {
 static int myMain(const wstring filePath, HINSTANCE hInstance) {
     namespace fs = std::filesystem;
 
-#ifdef TEST
-    return test();
-#endif // TEST
+    test();
 
     int curFrameIdx = -1;        // 小于0则单张静态图像，否则为动画当前帧索引
     int curFrameIdxMax = -1;     // 若是动画则为帧数量
@@ -287,8 +283,8 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
 
             if (showExif) {
                 const int padding = 10;
-                RECT r{ padding, padding, winSize.width - padding, winSize.height - padding };
-                stb.putLeft(mainImg, r, frames.exifStr.c_str(), { 255, 255, 255, 255 });
+                RECT r{ padding, padding, winSize.width/4 - padding, winSize.height - padding };
+                stb.putAlignLeft(mainImg, r, frames.exifStr.c_str(), { 255, 255, 255, 255 });
             }
 
             cv::imshow(windowName, mainImg);
@@ -444,6 +440,7 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     }
 }
 
-int test() {
-    return 0;
+void test() {
+    return;
+    exit(0);
 }

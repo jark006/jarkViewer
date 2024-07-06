@@ -144,7 +144,7 @@ public:
     }
 
 
-    void putCenter(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
+    void putAlignCenter(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
         int codePoint = '?';
         int H = 1, W = 0, W_cnt = 0;
         const auto len = strlen(str);
@@ -196,9 +196,10 @@ public:
         putText(img, x, y, str, color);
     }
 
-    void putLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
+    void putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
         int codePoint = '?';
         int xOffset = r.left, yOffset = r.top;
+        int areaWidth = r.right - r.left;
         const auto len = strlen(str);
         size_t i = 0;
         while (i < len) {
@@ -225,19 +226,23 @@ public:
 
             if (codePoint == '\n' || (xOffset + fontSize) > r.right) {
                 yOffset += int(fontSize * (1 + lineGapPercent));
+                if (yOffset + fontSize > r.bottom) {
+                    r.left += areaWidth;
+                    r.right += areaWidth;
+                    yOffset = r.top;
+                }
                 xOffset = r.left;
-                if (yOffset > r.bottom)
-                    return;
+                if (codePoint == '\n')
+                    continue;
             }
-            else {
-                xOffset += putWord(img, xOffset, yOffset, codePoint, color);
-            }
+            
+            xOffset += putWord(img, xOffset, yOffset, codePoint, color);
         }
     }
 
 private:
 
-    const static int fontSizeDefault = 24;
+    const static int fontSizeDefault = 16;
     uint8_t wordBuffDefault[fontSizeDefault * fontSizeDefault * 2] = { 0 };
 
     float scale = 0.1f;

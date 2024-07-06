@@ -47,12 +47,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LibraryPath>$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
@@ -79,7 +79,7 @@
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ExceptionHandling>false</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -90,7 +90,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
     </Link>
     <ResourceCompile>
@@ -110,7 +110,7 @@
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ExceptionHandling>false</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <DebugInformationFormat>None</DebugInformationFormat>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -126,7 +126,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <StackReserveSize>8388608</StackReserveSize>
@@ -137,7 +137,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\avif\avif.h" />
-    <ClInclude Include="include\exif.h" />
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
@@ -150,7 +149,6 @@
     <ClInclude Include="Resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\exif.cpp" />
     <ClCompile Include="src\jarkViewer.cpp" />
   </ItemGroup>
   <ItemGroup>
