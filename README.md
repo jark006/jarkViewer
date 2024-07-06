@@ -1,4 +1,8 @@
 # jarkViewer
 A simple image viewer
+一个简易图片浏览器
 
-先将 jarkViewer/lib/lib.7z 里面所有 `*.lib` 静态库解压到 ` jarkViewer/lib/` 文件夹中, 再编译
+### 编译前操作
+
+1. 解压 `jarkViewer/lib/lib.7z` 所有 `*.lib` 静态库
+2. 解压 `jarkViewer/libopencv/libopencv.7z` 所有 `*.lib` 静态库

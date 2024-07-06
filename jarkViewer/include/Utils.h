@@ -31,6 +31,7 @@ using std::endl;
 #include<opencv2/highgui.hpp>
 #include<opencv2/highgui/highgui_c.h>
 
+#include "libraw/libraw.h"
 #include "libheif/heif.h"
 #include "avif/avif.h"
 #include "gif_lib.h"
@@ -115,6 +116,28 @@ struct GifData {
 };
 
 namespace Utils {
+
+	static const unordered_set<wstring> supportExt = {
+		L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
+		L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
+		L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
+		L".heic", L".heif", L".avif", L".avifs", L".gif",
+	};
+
+	static const unordered_set<wstring> supportRaw = {
+		L".crw", L".cr2", L".cr3", // Canon
+		L".nef", // Nikon
+		L".arw", L".srf", L".sr2", // Sony
+		L".pef", // Pentax
+		L".orf", // Olympus
+		L".rw2", // Panasonic
+		L".raf", // Fujifilm
+		L".kdc", // Kodak
+		L".raw", L".dng", // Leica
+		L".x3f", // Sigma
+		L".mrw", // Minolta
+		L".3fr"  // Hasselblad
+	};
 
 	static const bool TO_LOG_FILE = false;
 	static FILE* fp = nullptr;
@@ -236,6 +259,179 @@ namespace Utils {
 		return rc;
 	}
 
+	string size2Str(const int fileSize) {
+		if (fileSize < 1024) return std::format("{} Bytes", fileSize);
+		if (fileSize < 1024 * 1024) return std::format("{:.1f} KiB", fileSize / 1024.0);
+		if (fileSize < 1024 * 1024 * 1024) return std::format("{:.1f} MiB", fileSize / (1024.0 * 1024));
+		return std::format("{:.1f} GiB", fileSize / (1024.0 * 1024 * 1024));
+	}
+
+	string timeStamp2Str(time_t timeStamp) {
+		timeStamp += 8ULL * 3600; // UTC+8
+		std::tm* ptm = std::gmtime(&timeStamp);
+		std::stringstream ss;
+		ss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S UTC+8");
+		return ss.str();
+	}
+
+	std::string getExif(const wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
+		static easyexif::EXIFInfo exifInfo;
+
+		auto res = std::format("    路径: {}\n    大小：{}\n  分辨率: {}x{}",
+			wstringToUtf8(path),
+			size2Str(fileSize),
+			width, height);
+
+		auto ext = path.substr(path.length() - 4);
+		for (auto& c : ext) c = std::tolower(c);
+		if (ext != L".jpg" && ext != L"jpeg" && ext != L".jpe") {
+			return res;
+		}
+
+		exifInfo.hasInfo = (exifInfo.parseFrom(buf, fileSize) == 0);
+
+		if (!exifInfo.hasInfo) {
+			log("getExif no exif info: {}", wstringToUtf8(path));
+			return res;
+		}
+
+		if (exifInfo.ISOSpeedRatings)
+			res += std::format("\n     ISO: {}", exifInfo.ISOSpeedRatings);
+
+		if (exifInfo.FNumber)
+			res += std::format("\n   F光圈: f/{}", exifInfo.FNumber);
+
+		if (exifInfo.FocalLength)
+			res += std::format("\n    焦距: {} mm", exifInfo.FocalLength);
+
+		if (exifInfo.FocalLengthIn35mm)
+			res += std::format("\n35mm焦距: {} mm", exifInfo.FocalLengthIn35mm);
+
+		if (exifInfo.ExposureBiasValue)
+			res += std::format("\n曝光误差: {} Ev", exifInfo.ExposureBiasValue);
+
+		if (exifInfo.ExposureTime)
+			res += std::format("\n曝光时长: {:.2f} s", exifInfo.ExposureTime);
+
+		if (exifInfo.SubjectDistance)
+			res += std::format("\n目标距离: {:.2f} m", exifInfo.SubjectDistance);
+
+		if (exifInfo.GeoLocation.Longitude)
+			res += std::format("\nGPS 经度: {:.6f}°", exifInfo.GeoLocation.Longitude);
+
+		if (exifInfo.GeoLocation.Latitude)
+			res += std::format("\nGPS 纬度: {:.6f}°", exifInfo.GeoLocation.Latitude);
+
+		if (exifInfo.GeoLocation.Altitude)
+			res += std::format("\n海拔高度: {:.2f} m", exifInfo.GeoLocation.Altitude);
+
+		if (exifInfo.Copyright.length())
+			res += std::format("\n    版权: {}", exifInfo.Copyright);
+
+		if (exifInfo.Software.length())
+			res += std::format("\n    软件: {}", exifInfo.Software);
+
+		if (exifInfo.ImageDescription.length())
+			res += std::format("\n    描述: {}", exifInfo.ImageDescription);
+
+		if (exifInfo.Flash)
+			res += "\n    闪光: 是";
+
+		if (exifInfo.DateTime.length())
+			res += std::format("\n创建时间: {}", exifInfo.DateTime);
+
+		if (exifInfo.DateTimeOriginal.length())
+			res += std::format("\n原始时间: {}", exifInfo.DateTimeOriginal);
+
+		if (exifInfo.DateTimeDigitized.length())
+			res += std::format("\n数字时间: {}", exifInfo.DateTimeDigitized);
+
+		if (exifInfo.Make.length() + exifInfo.Model.length())
+			res += std::format("\n相机型号: {}", exifInfo.Make + " " + exifInfo.Model);
+
+		if (exifInfo.LensInfo.Make.length() + exifInfo.LensInfo.Model.length())
+			res += std::format("\n镜头型号: {}", exifInfo.LensInfo.Make + " " + exifInfo.LensInfo.Model);
+
+		return res;
+	}
+
+	std::string getExifFromEXIFSegment(const wstring& path, int width, int height, const uint8_t* buf, int size) {
+		static easyexif::EXIFInfo exifInfo;
+
+		auto res = std::format("    路径: {}\n    大小：{}\n  分辨率: {}x{}",
+			wstringToUtf8(path),
+			size2Str(size),
+			width, height);
+
+		log("{}", bin2Hex(buf, 6));
+
+		exifInfo.clear();
+		exifInfo.hasInfo = (exifInfo.parseFromEXIFSegment(buf, size) == 0);
+
+		//if (!exifInfo.hasInfo) {
+		//	log("getExif no exif info: {}", wstringToUtf8(path));
+		//	return res;
+		//}
+
+		if (exifInfo.ISOSpeedRatings)
+			res += std::format("\n     ISO: {}", exifInfo.ISOSpeedRatings);
+
+		if (exifInfo.FNumber)
+			res += std::format("\n   F光圈: f/{}", exifInfo.FNumber);
+
+		if (exifInfo.FocalLength)
+			res += std::format("\n    焦距: {} mm", exifInfo.FocalLength);
+
+		if (exifInfo.FocalLengthIn35mm)
+			res += std::format("\n35mm焦距: {} mm", exifInfo.FocalLengthIn35mm);
+
+		if (exifInfo.ExposureBiasValue)
+			res += std::format("\n曝光误差: {} Ev", exifInfo.ExposureBiasValue);
+
+		if (exifInfo.ExposureTime)
+			res += std::format("\n曝光时长: {:.2f} s", exifInfo.ExposureTime);
+
+		if (exifInfo.SubjectDistance)
+			res += std::format("\n目标距离: {:.2f} m", exifInfo.SubjectDistance);
+
+		if (exifInfo.GeoLocation.Longitude)
+			res += std::format("\nGPS 经度: {:.6f}°", exifInfo.GeoLocation.Longitude);
+
+		if (exifInfo.GeoLocation.Latitude)
+			res += std::format("\nGPS 纬度: {:.6f}°", exifInfo.GeoLocation.Latitude);
+
+		if (exifInfo.GeoLocation.Altitude)
+			res += std::format("\n海拔高度: {:.2f} m", exifInfo.GeoLocation.Altitude);
+
+		if (exifInfo.Copyright.length())
+			res += std::format("\n    版权: {}", exifInfo.Copyright);
+
+		if (exifInfo.Software.length())
+			res += std::format("\n    软件: {}", exifInfo.Software);
+
+		if (exifInfo.ImageDescription.length())
+			res += std::format("\n    描述: {}", exifInfo.ImageDescription);
+
+		if (exifInfo.Flash)
+			res += "\n    闪光: 是";
+
+		if (exifInfo.DateTime.length())
+			res += std::format("\n创建时间: {}", exifInfo.DateTime);
+
+		if (exifInfo.DateTimeOriginal.length())
+			res += std::format("\n原始时间: {}", exifInfo.DateTimeOriginal);
+
+		if (exifInfo.DateTimeDigitized.length())
+			res += std::format("\n数字时间: {}", exifInfo.DateTimeDigitized);
+
+		if (exifInfo.Make.length() + exifInfo.Model.length())
+			res += std::format("\n相机型号: {}", exifInfo.Make + " " + exifInfo.Model);
+
+		if (exifInfo.LensInfo.Make.length() + exifInfo.LensInfo.Model.length())
+			res += std::format("\n镜头型号: {}", exifInfo.LensInfo.Make + " " + exifInfo.LensInfo.Model);
+
+		return res;
+	}
 
 	static cv::Mat& getDefaultMat() {
 		static cv::Mat defaultMat;
@@ -243,7 +439,7 @@ namespace Utils {
 
 		if (!isInit) {
 			isInit = true;
-			auto rc = Utils::GetResource(IDB_PNG, L"PNG");
+			auto rc = GetResource(IDB_PNG, L"PNG");
 			std::vector<char> imgData(rc.addr, rc.addr + rc.size);
 			defaultMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 		}
@@ -256,7 +452,7 @@ namespace Utils {
 
 		if (!isInit) {
 			isInit = true;
-			auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
+			auto rc = GetResource(IDB_PNG1, L"PNG");
 			std::vector<char> imgData(rc.addr, rc.addr + rc.size);
 			homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 		}
@@ -267,17 +463,21 @@ namespace Utils {
 	// https://github.com/strukturag/libheif
 	// vcpkg install libheif:x64-windows-static
 	// vcpkg install libheif[hevc]:x64-windows-static
-	cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
+	std::pair<cv::Mat, string> loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
+
+		auto exifStr = std::format("    路径: {}\n    大小：{}",
+			wstringToUtf8(path),
+			size2Str(fileSize));
 
 		auto filetype_check = heif_check_filetype(buf.data(), 12);
 		if (filetype_check == heif_filetype_no) {
 			log("Input file is not an HEIF/AVIF file: {}", wstringToUtf8(path));
-			return cv::Mat();
+			return { cv::Mat(), exifStr };
 		}
 
 		if (filetype_check == heif_filetype_yes_unsupported) {
 			log("Input file is an unsupported HEIF/AVIF file type: {}", wstringToUtf8(path));
-			return cv::Mat();
+			return { cv::Mat(), exifStr };
 		}
 
 		heif_context* ctx = heif_context_alloc();
@@ -285,7 +485,7 @@ namespace Utils {
 		if (err.code) {
 			log("Error: {}", wstringToUtf8(path));
 			log("heif_context_read_from_memory_without_copy error: {}", err.message);
-			return cv::Mat();
+			return { cv::Mat(), exifStr };
 		}
 
 		// get a handle to the primary image
@@ -296,7 +496,7 @@ namespace Utils {
 			log("heif_context_get_primary_image_handle error: {}", err.message);
 			if (ctx) heif_context_free(ctx);
 			if (handle) heif_image_handle_release(handle);
-			return cv::Mat();
+			return { cv::Mat(), exifStr };
 		}
 
 		// decode the image and convert colorspace to RGB, saved as 24bit interleaved
@@ -308,7 +508,7 @@ namespace Utils {
 			if (ctx) heif_context_free(ctx);
 			if (handle) heif_image_handle_release(handle);
 			if (img) heif_image_release(img);
-			return cv::Mat();
+			return { cv::Mat(), exifStr };
 		}
 
 		int stride = 0;
@@ -329,12 +529,32 @@ namespace Utils {
 			dstPtr[i] = (b << 16) | (pixel & 0xff00ff00) | r;
 		}
 
+		heif_item_id metadata_id;
+		int metadata_count = heif_image_handle_get_list_of_metadata_block_IDs(handle, "Exif", &metadata_id, 1);
+		log("metadata_count {}", metadata_count);
+		if (metadata_count > 0) {
+			size_t exif_size = heif_image_handle_get_metadata_size(handle, metadata_id);
+			std::vector<uint8_t> exif_data(exif_size);
+
+			err = heif_image_handle_get_metadata(handle, metadata_id, exif_data.data());
+			if (err.code == heif_error_Ok) {
+				// 现在exif_data包含了EXIF数据
+				// 你可以使用其他库(如libexif)来解析这些数据
+				// 或者直接处理原始字节
+
+				// 示例:打印EXIF数据的大小
+				exifStr = getExifFromEXIFSegment(path, width, height, exif_data.data(), exif_data.size());
+				log("EXIF bytes {} ", exif_size);
+				log("EXIF {}", exifStr);
+			}
+		}
+
 		// clean up resources
 		heif_context_free(ctx);
 		heif_image_release(img);
 		heif_image_handle_release(handle);
 
-		return matImg;
+		return { matImg, exifStr };
 	}
 
 	// vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
@@ -410,6 +630,103 @@ namespace Utils {
 		return ret;
 	}
 
+	std::pair<cv::Mat, string> loadRaw(const wstring& path, const vector<uchar>& buf, int fileSize) {
+
+		auto exifStr = std::format("    路径: {}\n    大小：{}",
+			wstringToUtf8(path),
+			size2Str(fileSize));
+
+		if (buf.empty() || fileSize <= 0) {
+			log("Buf is empty: {} {}", wstringToUtf8(path), fileSize);
+			return { cv::Mat(), exifStr };
+		}
+
+		auto rawProcessor = std::make_unique<LibRaw>();
+
+		int ret = rawProcessor->open_buffer(buf.data(), fileSize);
+		if (ret != LIBRAW_SUCCESS) {
+			log("Cannot open RAW file: {} {}", wstringToUtf8(path), libraw_strerror(ret));
+			return { cv::Mat(), exifStr };
+		}
+
+		ret = rawProcessor->unpack();
+		if (ret != LIBRAW_SUCCESS) {
+			log("Cannot unpack RAW file: {} {}", wstringToUtf8(path), libraw_strerror(ret));
+			return { cv::Mat(), exifStr };
+		}
+
+		ret = rawProcessor->dcraw_process();
+		if (ret != LIBRAW_SUCCESS) {
+			log("Cannot process RAW file: {} {}", wstringToUtf8(path), libraw_strerror(ret));
+			return { cv::Mat(), exifStr };
+		}
+
+		libraw_processed_image_t* image = rawProcessor->dcraw_make_mem_image(&ret);
+		if (image == nullptr) {
+			log("Cannot make image from RAW data: {} {}", wstringToUtf8(path), libraw_strerror(ret));
+			return { cv::Mat(), exifStr };
+		}
+
+		cv::Mat img(image->height, image->width, CV_8UC3, image->data);
+
+		cv::Mat bgrImage;
+		cv::cvtColor(img, bgrImage, cv::COLOR_RGB2BGR);
+
+		exifStr += std::format("\n  分辨率: {}x{}", image->width, image->height);
+		exifStr += std::format("\n     ISO: {}", rawProcessor->imgdata.other.iso_speed);
+		exifStr += std::format("\n    相机: {} {}", rawProcessor->imgdata.idata.make, rawProcessor->imgdata.idata.model);
+		if (rawProcessor->imgdata.other.shutter != 0)
+			exifStr += std::format("\n    快门: {:.4f} s", rawProcessor->imgdata.other.shutter);
+		if (rawProcessor->imgdata.other.aperture != 0)
+			exifStr += std::format("\n    光圈: f/{}", rawProcessor->imgdata.other.aperture);
+		if (rawProcessor->imgdata.other.focal_len != 0)
+			exifStr += std::format("\n    焦距: {:.4f} mm", 1.0 / rawProcessor->imgdata.other.focal_len);
+		if (rawProcessor->imgdata.other.timestamp)
+			exifStr += std::format("\n    时间: {}\n  时间戳: {}",
+				timeStamp2Str(rawProcessor->imgdata.other.timestamp),
+				rawProcessor->imgdata.other.timestamp);
+
+		auto& longitude = rawProcessor->imgdata.other.parsed_gps.longitude;
+		if (longitude[0] != 0 && longitude[1] != 0 && longitude[2] != 0)
+			exifStr += std::format("\n GPS经度: {:.6f}°{}",
+				longitude[0] + longitude[1] / 60 + longitude[2] / 3600,
+				rawProcessor->imgdata.other.parsed_gps.longref);
+
+		auto& latitude = rawProcessor->imgdata.other.parsed_gps.latitude;
+		if (latitude[0] != 0 && latitude[1] != 0 && latitude[2] != 0)
+			exifStr += std::format("\n GPS纬度: {:.6f}°{}",
+				latitude[0] + latitude[1] / 60 + latitude[2] / 3600,
+				rawProcessor->imgdata.other.parsed_gps.latref);
+
+		if (rawProcessor->imgdata.other.parsed_gps.altitude != 0)
+			exifStr += std::format("\n GPS海拔: {:.2f} m",
+				rawProcessor->imgdata.other.parsed_gps.altitude);
+
+		exifStr += std::format("\n RAW尺寸: {}x{}", rawProcessor->imgdata.sizes.raw_width, rawProcessor->imgdata.sizes.raw_height);
+		exifStr += std::format("\n颜色模式: {}", rawProcessor->imgdata.idata.cdesc);
+		exifStr += std::format("\n  Foveon: {}", rawProcessor->imgdata.idata.is_foveon ? "是" : "否");
+
+		// 获取EXIF信息
+		if (rawProcessor->imgdata.idata.dng_version) {
+			exifStr += std::format("\n DNG版本: {}", rawProcessor->imgdata.idata.dng_version);
+		}
+		if (rawProcessor->imgdata.other.artist[0]) {
+			exifStr += std::format("\n  艺术家: {}", rawProcessor->imgdata.other.artist);
+		}
+		if (rawProcessor->imgdata.idata.software) {
+			exifStr += std::format("\n    软件: {}", rawProcessor->imgdata.idata.software);
+		}
+		if (rawProcessor->imgdata.other.desc[0]) {
+			exifStr += std::format("\n    描述: {}", rawProcessor->imgdata.other.desc);
+		}
+
+		// Clean up
+		LibRaw::dcraw_clear_mem(image);
+		rawProcessor->recycle();
+
+		return { bgrImage, exifStr };
+	}
+
 	// TODO
 	vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
 		vector<cv::Mat> imgs;
@@ -451,7 +768,7 @@ namespace Utils {
 			wstringToUtf8(path), img.depth(), img.channels());
 		return cv::Mat();
 	}
-	
+
 
 	std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf, size_t size) {
 
@@ -539,86 +856,6 @@ namespace Utils {
 		return frames;
 	}
 
-
-	static std::string getExif(const wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
-		static easyexif::EXIFInfo exifInfo;
-
-		auto res = std::format("    路径: {}\n  分辨率: {}x{}", Utils::wstringToUtf8(path), width, height);
-
-		auto ext = path.substr(path.length() - 4);
-		for (auto& c : ext) c = std::tolower(c);
-		if (ext != L".jpg" && ext != L"jpeg" && ext != L".jpe") {
-			return res;
-		}
-
-		exifInfo.hasInfo = (exifInfo.parseFrom(buf, fileSize) == 0);
-
-		if (!exifInfo.hasInfo) {
-			log("getExif no exif info: {}", wstringToUtf8(path));
-			return res;
-		}
-
-		if (exifInfo.ISOSpeedRatings)
-			res += std::format("\n     ISO: {}", exifInfo.ISOSpeedRatings);
-
-		if (exifInfo.FNumber)
-			res += std::format("\n   F光圈: f/{}", exifInfo.FNumber);
-
-		if (exifInfo.FocalLength)
-			res += std::format("\n    焦距: {} mm", exifInfo.FocalLength);
-
-		if (exifInfo.FocalLengthIn35mm)
-			res += std::format("\n35mm焦距: {} mm", exifInfo.FocalLengthIn35mm);
-
-		if (exifInfo.ExposureBiasValue)
-			res += std::format("\n曝光误差: {} Ev", exifInfo.ExposureBiasValue);
-
-		if (exifInfo.ExposureTime)
-			res += std::format("\n曝光时长: {:.2f} s", exifInfo.ExposureTime);
-
-		if (exifInfo.SubjectDistance)
-			res += std::format("\n目标距离: {:.2f} m", exifInfo.SubjectDistance);
-
-		if (exifInfo.GeoLocation.Longitude)
-			res += std::format("\nGPS 经度: {:.6f}°", exifInfo.GeoLocation.Longitude);
-
-		if (exifInfo.GeoLocation.Latitude)
-			res += std::format("\nGPS 纬度: {:.6f}°", exifInfo.GeoLocation.Latitude);
-
-		if (exifInfo.GeoLocation.Altitude)
-			res += std::format("\n海拔高度: {:.2f} m", exifInfo.GeoLocation.Altitude);
-
-		if (exifInfo.Copyright.length())
-			res += std::format("\n    版权: {}", exifInfo.Copyright);
-
-		if (exifInfo.Software.length())
-			res += std::format("\n    软件: {}", exifInfo.Software);
-
-		if (exifInfo.ImageDescription.length())
-			res += std::format("\n    描述: {}", exifInfo.ImageDescription);
-
-		if (exifInfo.Flash)
-			res += "\n    闪光: 是";
-
-		if (exifInfo.DateTime.length())
-			res += std::format("\n创建时间: {}", exifInfo.DateTime);
-
-		if (exifInfo.DateTimeOriginal.length())
-			res += std::format("\n原始时间: {}", exifInfo.DateTimeOriginal);
-
-		if (exifInfo.DateTimeDigitized.length())
-			res += std::format("\n数字时间: {}", exifInfo.DateTimeDigitized);
-
-		if (exifInfo.Make.length() + exifInfo.Model.length())
-			res += std::format("\n相机型号: {}", exifInfo.Make + " " + exifInfo.Model);
-
-		if (exifInfo.LensInfo.Make.length() + exifInfo.LensInfo.Model.length())
-			res += std::format("\n镜头型号: {}", exifInfo.LensInfo.Make + " " + exifInfo.LensInfo.Model);
-
-		return res;
-	}
-
-
 	Frames loadImage(const wstring& path) {
 		if (path.length() < 4) {
 			log("path.length() < 4: {}", wstringToUtf8(path));
@@ -638,34 +875,45 @@ namespace Utils {
 		fread(tmp.data(), 1, fileSize, f);
 		fclose(f);
 
-		auto ext = path.substr(path.length() - 4);
+		auto dotPos = path.rfind(L'.');
+		auto ext = (dotPos != std::wstring::npos && dotPos < path.size() - 1) ?
+			path.substr(dotPos) : path;
 		for (auto& c : ext)	c = std::tolower(c);
 
 		Frames ret;
 
 		if (ext == L".gif") {
 			ret.imgList = loadGif(path, tmp, fileSize);
-			if(!ret.imgList.empty() && ret.imgList.front().delay >= 0)
+			if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
 				ret.exifStr = getExif(path, ret.imgList.front().img.cols, ret.imgList.front().img.rows, tmp.data(), fileSize);
 			return ret;
 		}
-		
+
 		cv::Mat img;
-		if (ext == L"heic" || ext == L"heif") {
-			img = loadHeic(path, tmp, fileSize);
+		if (ext == L".heic" || ext == L".heif") {
+			auto [_img, exifStr] = loadHeic(path, tmp, fileSize);
+			img = std::move(_img);
+			ret.exifStr = std::move(exifStr);
 		}
-		else if (ext == L"avif" || ext == L"vifs") { // .avifs
+		else if (ext == L".avif" || ext == L".avifs") {
 			img = loadAvif(path, tmp, fileSize);
 		}
-		else {
-			img = loadMat(path, tmp, fileSize);
+		else if (supportRaw.contains(ext)) {
+			auto [_img, exifStr] = loadRaw(path, tmp, fileSize);
+			img = std::move(_img);
+			ret.exifStr = std::move(exifStr);
 		}
 
-		ret.exifStr = getExif(path, img.cols, img.rows, tmp.data(), fileSize);
+		if (img.empty())
+			img = loadMat(path, tmp, fileSize);
+
+		if (ret.exifStr.empty())
+			ret.exifStr = getExif(path, img.cols, img.rows, tmp.data(), fileSize);
+
 		if (img.empty())
 			img = getDefaultMat();
 
-		ret.imgList.push_back({ img , 0 });
+		ret.imgList.emplace_back(img, 0);
 
 		return ret;
 	}

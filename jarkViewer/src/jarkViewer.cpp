@@ -6,8 +6,8 @@
 
 /*
 TODO 
-1. raw, ico
-2. file with color profile 颜色不正确 red-at-12-oclock-with-color-profile.jpg
+1. ico
+2. exif 的旋转信息
 3. avif crop 无法解码 kimono.crop.avif
 */
 
@@ -42,12 +42,6 @@ cv::Mat mainImg;
 cv::Rect winSize(0, 0, 200, 100);
 Cood mouse{}, hasDropCur{}, hasDropTarget{};
 LRU<wstring, Frames> imageDB(Utils::loadImage);
-
-const unordered_set<wstring> supportExt = {
-    L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
-    L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
-    L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic" , 
-    L".heic" , L".heif", L".avif", L".avifs", L".gif"};
 
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
@@ -218,7 +212,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             std::wstring ext = entry.path().extension().wstring();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-            if (supportExt.contains(ext)) {
+            if (Utils::supportExt.contains(ext) || Utils::supportRaw.contains(ext)) {
                 imgFileList.push_back(fs::absolute(entry.path()).wstring());
                 if (curFileIdx == -1 && fileName == entry.path().filename())
                     curFileIdx = (int)imgFileList.size() - 1;
