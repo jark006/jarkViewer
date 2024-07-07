@@ -21,12 +21,6 @@
     <ClInclude Include="include\LRU.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\stb_image_write.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\stb_truetype.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\stbText.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -46,6 +40,12 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\libraw\libraw.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\exifParse.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ImageDatabase.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

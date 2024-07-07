@@ -2,13 +2,14 @@
 #include "Utils.h"
 
 #include "stbText.h"
-#include "LRU.h"
+#include "ImageDatabase.h"
 
 /*
 TODO 
 1. ico
 2. exif 的旋转信息
 3. avif crop 无法解码 kimono.crop.avif
+4. 重构程序结构
 */
 
 const int BG_GRID_WIDTH = 8;
@@ -39,8 +40,6 @@ stbText stb;                // 给Mat绘制文字
 cv::Mat mainImg;
 cv::Rect winSize(0, 0, 200, 100);
 Cood mouse{}, hasDropCur{}, hasDropTarget{};
-LRU<wstring, Frames> imageDB(Utils::loadImage);
-
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
 void test();
@@ -184,6 +183,8 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
 
     test();
 
+    ImageDatabase imgDB;
+
     int curFrameIdx = -1;        // 小于0则单张静态图像，否则为动画当前帧索引
     int curFrameIdxMax = -1;     // 若是动画则为帧数量
     int curFrameDelay = 1;       // 当前帧延迟
@@ -208,7 +209,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             std::wstring ext = entry.path().extension().wstring();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-            if (Utils::supportExt.contains(ext) || Utils::supportRaw.contains(ext)) {
+            if (ImageDatabase::supportExt.contains(ext) || ImageDatabase::supportRaw.contains(ext)) {
                 imgFileList.push_back(fs::absolute(entry.path()).wstring());
                 if (curFileIdx == -1 && fileName == entry.path().filename())
                     curFileIdx = (int)imgFileList.size() - 1;
@@ -223,13 +224,13 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
         if (filePath.empty()) { //直接打开软件，没有传入参数
             imgFileList.emplace_back(appName);
             curFileIdx = (int)imgFileList.size() - 1;
-            imageDB.put(appName, { { { Utils::getHomeMat(), 0 } }, "请在图像文件右键使用本软件打开" });
+            imgDB().put(appName, {{{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开"});
 
         }
         else { // 打开的文件不支持，默认加到尾部
             imgFileList.emplace_back(fullPath.wstring());
             curFileIdx = (int)imgFileList.size() - 1;
-            imageDB.put(fullPath.wstring(), { { { Utils::getDefaultMat(), 0 } }, "图像格式不支持或已删除" });
+            imgDB().put(fullPath.wstring(), {{{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除"});
         }
     }
 
@@ -268,7 +269,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 curFrameIdx = -1;
             }
 
-            const auto& frames = imageDB.get(imgFileList[curFileIdx]);
+            const auto& frames = imgDB().get(imgFileList[curFileIdx]);
             const auto& [srcImg, delay] = frames.imgList[curFrameIdx < 0 ? 0 : curFrameIdx];
 
             curFrameIdxMax = (int)frames.imgList.size();

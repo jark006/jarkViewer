@@ -137,12 +137,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\avif\avif.h" />
+    <ClInclude Include="include\exifParse.h" />
     <ClInclude Include="include\gif_lib.h" />
+    <ClInclude Include="include\ImageDatabase.h" />
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\stbText.h" />
-    <ClInclude Include="include\stb_image_write.h" />
-    <ClInclude Include="include\stb_truetype.h" />
     <ClInclude Include="include\Utils.h" />
     <ClInclude Include="include\x265.h" />
     <ClInclude Include="include\x265_config.h" />
