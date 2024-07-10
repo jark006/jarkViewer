@@ -32,8 +32,92 @@ public:
                     ("缩略图." + exifTagsMap.at(tag)) :
                     ("缩略图" + tagName.substr(14));
             }
+            else if (tagName.starts_with("Exif.Nikon")) {
+                toEnd = true;
+                translatedTagName = "尼康" + tagName.substr(10);
+            }
+            else if (tagName.starts_with("Exif.CanonCs")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(12);
+                if(!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("佳能Cs." + exifTagsMap.at(tag)) :
+                    ("佳能Cs." + tagName.substr(13));
+            }
+            else if (tagName.starts_with("Exif.CanonSi")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(12);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("佳能Si." + exifTagsMap.at(tag)) :
+                    ("佳能Si." + tagName.substr(13));
+            }
+            else if (tagName.starts_with("Exif.CanonPi")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(12);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("佳能Pi." + exifTagsMap.at(tag)) :
+                    ("佳能Pi." + tagName.substr(13));
+            }
+            else if (tagName.starts_with("Exif.CanonPa")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(12);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("佳能Pa." + exifTagsMap.at(tag)) :
+                    ("佳能Pa." + tagName.substr(13));
+            }
+            else if (tagName.starts_with("Exif.Canon")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(10);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(10);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("佳能." + exifTagsMap.at(tag)) :
+                    ("佳能." + tagName.substr(11));
+            }
+            else if (tagName.starts_with("Exif.Pentax")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(11);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(11);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("宾得." + exifTagsMap.at(tag)) :
+                    ("宾得." + tagName.substr(12));
+            }
+            else if (tagName.starts_with("Exif.Fujifilm")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(13);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(13);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("富士." + exifTagsMap.at(tag)) :
+                    ("富士." + tagName.substr(14));
+            }
+            else if (tagName.starts_with("Exif.Olympus")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(12);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("奥林巴斯." + exifTagsMap.at(tag)) :
+                    ("奥林巴斯." + tagName.substr(13));
+            }
+            else if (tagName.starts_with("Exif.Panasonic")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(14);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(14);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("松下." + exifTagsMap.at(tag)) :
+                    ("松下." + tagName.substr(15));
+            }
+            else if (tagName.starts_with("Exif.Sony1")) {
+                toEnd = true;
+                string tag = "Exif.Image" + tagName.substr(10);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(10);
+                translatedTagName = exifTagsMap.contains(tag) ?
+                    ("索尼." + exifTagsMap.at(tag)) :
+                    ("索尼." + tagName.substr(11));
+            }
             else {
-                toEnd = tagName.starts_with("Exif.Canon") ? true : false;
+                toEnd = false;
                 translatedTagName = exifTagsMap.contains(tagName) ? exifTagsMap.at(tagName) : tagName;
             }
 

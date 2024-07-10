@@ -23,6 +23,7 @@ using std::endl;
 
 #include "framework.h"
 #include "resource.h"
+#include "psapi.h"
 
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
@@ -32,9 +33,10 @@ using std::endl;
 #include "libraw/libraw.h"
 #include "libheif/heif.h"
 #include "avif/avif.h"
+#include "jxl/decode_cxx.h"
+#include "jxl/resizable_parallel_runner_cxx.h"
+#include "jxl/types.h"
 #include "gif_lib.h"
-#include "jxl/decode.h"
-#include "psapi.h"
 
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
@@ -74,6 +76,11 @@ union intUnion {
 struct Cood {
     int x = 0;
     int y = 0;
+
+    void operator+=(const Cood& t) {
+        this->x += t.x;
+        this->y += t.y;
+    }
 
     Cood operator+(const Cood& t) const {
         Cood temp;

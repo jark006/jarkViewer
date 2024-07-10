@@ -248,6 +248,179 @@ public:
         return bgrImage;
     }
 
+    static const std::string jxlStatusCode2String(JxlDecoderStatus status) {
+        switch (status) {
+        case JXL_DEC_SUCCESS:
+            return "Success: Function call finished successfully or decoding is finished.";
+        case JXL_DEC_ERROR:
+            return "Error: An error occurred, e.g. invalid input file or out of memory.";
+        case JXL_DEC_NEED_MORE_INPUT:
+            return "Need more input: The decoder needs more input bytes to continue.";
+        case JXL_DEC_NEED_PREVIEW_OUT_BUFFER:
+            return "Need preview output buffer: The decoder requests setting a preview output buffer.";
+        case JXL_DEC_NEED_IMAGE_OUT_BUFFER:
+            return "Need image output buffer: The decoder requests an output buffer for the full resolution image.";
+        case JXL_DEC_JPEG_NEED_MORE_OUTPUT:
+            return "JPEG needs more output: The JPEG reconstruction buffer is too small.";
+        case JXL_DEC_BOX_NEED_MORE_OUTPUT:
+            return "Box needs more output: The box contents output buffer is too small.";
+        case JXL_DEC_BASIC_INFO:
+            return "Basic info: Basic information such as image dimensions and extra channels is available.";
+        case JXL_DEC_COLOR_ENCODING:
+            return "Color encoding: Color encoding or ICC profile from the codestream header is available.";
+        case JXL_DEC_PREVIEW_IMAGE:
+            return "Preview image: A small preview frame has been decoded.";
+        case JXL_DEC_FRAME:
+            return "Frame: Beginning of a frame, frame header information is available.";
+        case JXL_DEC_FULL_IMAGE:
+            return "Full image: A full frame or layer has been decoded.";
+        case JXL_DEC_JPEG_RECONSTRUCTION:
+            return "JPEG reconstruction: JPEG reconstruction data is decoded.";
+        case JXL_DEC_BOX:
+            return "Box: The header of a box in the container format (BMFF) is decoded.";
+        case JXL_DEC_FRAME_PROGRESSION:
+            return "Frame progression: A progressive step in decoding the frame is reached.";
+        default:
+            return "Unknown status code.";
+        }
+    }
+
+    static cv::Mat loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
+
+        uint32_t xsize = 0, ysize = 0;
+        cv::Mat mat;
+
+        // Multi-threaded parallel runner.
+        auto runner = JxlResizableParallelRunnerMake(nullptr);
+
+        auto dec = JxlDecoderMake(nullptr);
+        JxlDecoderStatus status = JxlDecoderSubscribeEvents(dec.get(),
+            JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE);
+        if (JXL_DEC_SUCCESS != status) {
+            Utils::log("JxlDecoderSubscribeEvents failed\n{}\n{}",
+                Utils::wstringToUtf8(path),
+                jxlStatusCode2String(status));
+            return mat;
+        }
+
+        status = JxlDecoderSetParallelRunner(dec.get(), JxlResizableParallelRunner, runner.get());
+        if (JXL_DEC_SUCCESS != status) {
+            Utils::log("JxlDecoderSetParallelRunner failed\n{}\n{}",
+                Utils::wstringToUtf8(path),
+                jxlStatusCode2String(status));
+            return mat;
+        }
+
+        JxlBasicInfo info;
+        JxlPixelFormat format = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+
+        JxlDecoderSetInput(dec.get(), buf.data(), fileSize);
+        JxlDecoderCloseInput(dec.get());
+
+        for (;;) {
+            status = JxlDecoderProcessInput(dec.get());
+
+            if (status == JXL_DEC_ERROR) {
+                Utils::log("Decoder error\n{}\n{}",
+                    Utils::wstringToUtf8(path),
+                    jxlStatusCode2String(status));
+                return mat;
+            }
+            else if (status == JXL_DEC_NEED_MORE_INPUT) {
+                Utils::log("Error, already provided all input\n{}\n{}",
+                    Utils::wstringToUtf8(path),
+                    jxlStatusCode2String(status));
+                return mat;
+            }
+            else if (status == JXL_DEC_BASIC_INFO) {
+                if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), &info)) {
+                    Utils::log("JxlDecoderGetBasicInfo failed\n{}\n{}",
+                        Utils::wstringToUtf8(path),
+                        jxlStatusCode2String(status));
+                    return mat;
+                }
+                xsize = info.xsize;
+                ysize = info.ysize;
+                JxlResizableParallelRunnerSetThreads(
+                    runner.get(),
+                    JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize));
+            }
+            else if (status == JXL_DEC_COLOR_ENCODING) {
+                // Get the ICC color profile of the pixel data
+                //size_t icc_size;
+                //if (JXL_DEC_SUCCESS !=
+                //    JxlDecoderGetICCProfileSize(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                //        &icc_size)) {
+                //    Utils::log("JxlDecoderGetICCProfileSize failed\n{}\n{}",
+                //        Utils::wstringToUtf8(path),
+                //        jxlStatusCode2String(status));
+                //    return mat;
+                //}
+                //icc_profile.resize(icc_size);
+                //if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(
+                //    dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
+                //    icc_profile.data(), icc_profile.size())) {
+                //    Utils::log("JxlDecoderGetColorAsICCProfile failed\n{}\n{}",
+                //        Utils::wstringToUtf8(path),
+                //        jxlStatusCode2String(status));
+                //    return mat;
+                //}
+            }
+            else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
+                size_t buffer_size;
+
+                status = JxlDecoderImageOutBufferSize(dec.get(), &format, &buffer_size);
+                if (JXL_DEC_SUCCESS != status) {
+                    Utils::log("JxlDecoderImageOutBufferSize failed\n{}\n{}",
+                        Utils::wstringToUtf8(path),
+                        jxlStatusCode2String(status));
+                    return mat;
+                }
+                auto byteSizeRequire = 4ULL * xsize * ysize;
+                if (buffer_size != byteSizeRequire) {
+                    Utils::log("Invalid out buffer size {} {}\n{}\n{}",
+                        buffer_size, byteSizeRequire,
+                        Utils::wstringToUtf8(path),
+                        jxlStatusCode2String(status));
+                    return mat;
+                }
+                mat = cv::Mat(ysize, xsize, CV_8UC4);
+                status = JxlDecoderSetImageOutBuffer(dec.get(), &format, mat.ptr(), byteSizeRequire);
+                if (JXL_DEC_SUCCESS != status) {
+                    Utils::log("JxlDecoderSetImageOutBuffer failed\n{}\n{}",
+                        Utils::wstringToUtf8(path),
+                        jxlStatusCode2String(status));
+                    return mat;
+                }
+            }
+            else if (status == JXL_DEC_FULL_IMAGE) {
+                // Nothing to do. Do not yet return. If the image is an animation, more
+                // full frames may be decoded. This example only keeps the last one.
+            }
+            else if (status == JXL_DEC_SUCCESS) {
+                // All decoding successfully finished.
+                // It's not required to call JxlDecoderReleaseInput(dec.get()) here since
+                // the decoder will be destroyed.
+
+                auto srcPtr = (uint32_t* const)mat.ptr();
+                auto pixelCount = (size_t)xsize * ysize;
+                for (size_t i = 0; i < pixelCount; ++i) { // ARGB -> ABGR
+                    uint32_t& pixel = srcPtr[i];
+                    uint32_t r = (pixel >> 16) & 0xFF;
+                    uint32_t b = pixel & 0xFF;
+                    pixel = (b << 16) | (pixel & 0xff00ff00) | r;
+                }
+                return mat;
+            }
+            else {
+                Utils::log("Unknown decoder status\n{}\n{}",
+                    Utils::wstringToUtf8(path),
+                    jxlStatusCode2String(status));
+                return mat;
+            }
+        }
+    }
+
     // TODO
     static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
@@ -417,6 +590,9 @@ public:
         }
         else if (ext == L".avif" || ext == L".avifs") {
             img = loadAvif(path, tmp, fileSize);
+        }
+        else if (ext == L".jxl") {
+            img = loadJXL(path, tmp, fileSize);
         }
         else if (supportRaw.contains(ext)) {
             img = loadRaw(path, tmp, fileSize);
