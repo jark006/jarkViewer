@@ -48,6 +48,15 @@
     <ClInclude Include="include\ImageDatabase.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\thread_pool.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\channel.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\imageProcess.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">

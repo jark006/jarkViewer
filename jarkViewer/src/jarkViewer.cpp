@@ -36,10 +36,9 @@ int zoomOperate = 0;        // 缩放操作
 int switchOperate = 0;      // 切换图片操作
 int64_t zoomTarget = 0;     // 设定的缩放比例
 int64_t zoomCur = 0;        // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
-stbText stb;                // 给Mat绘制文字
-cv::Mat mainImg;
-cv::Rect winSize(0, 0, 200, 100);
-Cood mouse{}, hasDropCur{}, hasDropTarget{};
+
+WinSize winSize(200, 100);
+Cood hasDropCur{}, hasDropTarget{};
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
 void test();
@@ -90,27 +89,6 @@ static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, i
             ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
         return ret.u32;
     }
-    case 1: {
-        auto srcPx = srcImg.at<uchar>(srcY, srcX);
-
-        if (zoomCur < ZOOM_BASE) {
-            if (srcY > 0 && srcX > 0) { // 简单临近像素平均
-                auto& px0 = srcImg.at<uchar>(srcY - 1, srcX - 1);
-                auto& px1 = srcImg.at<uchar>(srcY - 1, srcX);
-                auto& px2 = srcImg.at<uchar>(srcY, srcX - 1);
-                srcPx = (px0 + px1 + px2 + srcPx) / 4;
-            }
-            else if (srcY == 0) {
-                auto& px2 = srcImg.at<uchar>(srcY + 1, srcX);
-                srcPx = (px2 + srcPx) / 2;
-            }
-            else {
-                auto& px2 = srcImg.at<uchar>(srcY, srcX + 1);
-                srcPx = (px2 + srcPx) / 2;
-            }
-        }
-        return intUnion(srcPx, srcPx, srcPx, 255).u32;
-    }
     }
 
     return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? 
@@ -118,23 +96,22 @@ static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, i
 }
 
 static bool is_power_of_two(int64_t num) {
-    if (num <= 0) {
-        return 0;
-    }
-    return (num & (num - 1)) == 0;
+    return (num <= 0) ? 0 : ((num & (num - 1)) == 0);
 }
 
-static void processSrc(const cv::Mat& srcImg, cv::Mat& mainImg) {
+static void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) {
     static vector<int64_t> zoomList = ZOOM_LIST;
     static int zoomIndex = 0;
 
     const int srcH = srcImg.rows;
     const int srcW = srcImg.cols;
 
+    if (srcH <= 0 || srcW <= 0)
+        return;
+
     if (zoomTarget == 0) {
         //适应显示窗口宽高的缩放比例
-        int64_t zoomFitWindow = (srcH <= 0 || srcW <= 0) ? ZOOM_BASE :
-            std::min(winSize.height * ZOOM_BASE / srcH, winSize.width * ZOOM_BASE / srcW);
+        int64_t zoomFitWindow = std::min(winSize.width * ZOOM_BASE / srcW, winSize.height * ZOOM_BASE / srcH);
         zoomTarget = (srcH > winSize.height || srcW > winSize.width) ? zoomFitWindow : ZOOM_BASE;
         zoomCur = zoomTarget;
 
@@ -143,7 +120,7 @@ static void processSrc(const cv::Mat& srcImg, cv::Mat& mainImg) {
             zoomList.push_back(zoomFitWindow);
         std::sort(zoomList.begin(), zoomList.end());
         auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
-        zoomIndex = (it != zoomList.end()) ? (int)std::distance(zoomList.begin(), it) : 6;
+        zoomIndex = (it != zoomList.end()) ? (int)std::distance(zoomList.begin(), it) : (int)(ZOOM_LIST.size() / 2);
     }
 
     if (zoomOperate) {
@@ -168,13 +145,14 @@ static void processSrc(const cv::Mat& srcImg, cv::Mat& mainImg) {
     const int64_t deltaW = hasDropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
     const int64_t deltaH = hasDropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
 
-    memset(mainImg.ptr(), BG_COLOR, 4ULL * winSize.height * winSize.width);
+    memset(canvas.ptr(), BG_COLOR, 4ULL * winSize.height * winSize.width);
+    // 1360*768 1-10ms
     for (int y = 0; y < winSize.height; y++)
         for (int x = 0; x < winSize.width; x++) {
             const int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
             const int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
             if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH)
-                mainImg.at<uint32_t>(y, x) = getSrcPx(srcImg, srcX, srcY, x, y);
+                canvas.at<uint32_t>(y, x) = getSrcPx(srcImg, srcX, srcY, x, y);
         }
 }
 
@@ -188,8 +166,11 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
     int curFrameIdx = -1;        // 小于0则单张静态图像，否则为动画当前帧索引
     int curFrameIdxMax = -1;     // 若是动画则为帧数量
     int curFrameDelay = 1;       // 当前帧延迟
-    int curFileIdx = -1;         //文件在路径列表的索引
-    vector<wstring> imgFileList; //工作目录下所有图像文件路径
+    int curFileIdx = -1;         // 文件在路径列表的索引
+    vector<wstring> imgFileList; // 工作目录下所有图像文件路径
+
+    stbText stb;                 // 给Mat绘制文字
+    cv::Mat mainCanvas;          // 窗口内容画布
 
     cv::namedWindow(windowName, cv::WindowFlags::WINDOW_NORMAL);  // WINDOW_AUTOSIZE  WINDOW_NORMAL
     auto mainHWND = Utils::getCvWindow(windowName.c_str());
@@ -235,17 +216,17 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
     }
 
     while (true) {
-        auto ws = cv::getWindowImageRect(windowName);
-        if ((ws.width != winSize.width || ws.height != winSize.height) && ws.width != 0 && ws.height != 0) {
+        auto newSize = Utils::getWindowSize(mainHWND);
+        if (newSize != winSize && !newSize.isZero()) {
             needFresh = true;
             if (winSize.width)
-                hasDropTarget.x = hasDropTarget.x * ws.width / winSize.width;
+                hasDropTarget.x = hasDropTarget.x * newSize.width / winSize.width;
             if (winSize.height)
-                hasDropTarget.y = hasDropTarget.y * ws.height / winSize.height;
+                hasDropTarget.y = hasDropTarget.y * newSize.height / winSize.height;
 
-            winSize = ws;
+            winSize = newSize;
 
-            mainImg = cv::Mat(ws.height, ws.width, CV_8UC4);
+            mainCanvas = cv::Mat(newSize.height, newSize.width, CV_8UC4);
         }
 
         if (needFresh) {
@@ -280,15 +261,15 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 }
             }
 
-            processSrc(srcImg, mainImg);
+            drawCanvas(srcImg, mainCanvas);
 
             if (showExif) {
                 const int padding = 10;
                 RECT r{ padding, padding, winSize.width/4 - padding, winSize.height - padding };
-                stb.putAlignLeft(mainImg, r, frames.exifStr.c_str(), { 255, 255, 255, 255 });
+                stb.putAlignLeft(mainCanvas, r, frames.exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
             }
 
-            cv::imshow(windowName, mainImg);
+            cv::imshow(windowName, mainCanvas);
 
             wstring str = std::format(L" [{}/{}] {}% ",
                 curFileIdx + 1, imgFileList.size(),
@@ -332,7 +313,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             if (cv::waitKey(5) == 27) //ESC
                 break;
 
-            delayRemain -= 5;
+            delayRemain -= 10;
             if (delayRemain <= 0) {
                 delayRemain = curFrameDelay;
                 curFrameIdx++;
@@ -342,8 +323,10 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             }
         }
 
-        if (!IsWindowVisible(mainHWND))
+        if (!IsWindowVisible(mainHWND)) {
+            Utils::log("IsWindowVisible false, exit.");
             break;
+        }
     }
     cv::destroyAllWindows();
     return 0;
@@ -380,17 +363,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 void onMouseHandle(int event, int x, int y, int flags, void* param) {
     using namespace std::chrono;
 
-    static Cood mousePress;
+    static Cood mouse, mousePress;
     static bool isPresing = false;
     static bool cursorIsView = true; // 鼠标位置，若在看图区域，滚轮就缩放，其他区域滚轮就切换图片
     static bool fullScreen = false;
     static auto lastTimestamp = system_clock::now();
 
-    switch (event)
-    {
+    switch (event){
     case cv::EVENT_MOUSEMOVE: {
-        mouse.x = x; //这里获取的是当前像素在源图像的坐标， 不是绘图窗口坐标
-        mouse.y = y;
+        mouse = { x, y };
         if (winSize.width >= 500)
             cursorIsView = (50 < x) && (x < (winSize.width - 50)); // 在窗口中间
         else
@@ -412,7 +393,7 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
         isPresing = false;
         auto now = system_clock::now();
         auto delta = duration_cast<milliseconds>(now - lastTimestamp).count();
-        if (delta < 500) { // 500ms
+        if (50 < delta && delta < 500) { // 500ms
             cv::setWindowProperty(windowName, cv::WND_PROP_FULLSCREEN, fullScreen ? cv::WINDOW_NORMAL : cv::WINDOW_FULLSCREEN); // 全屏
             fullScreen = !fullScreen;
         }
@@ -443,5 +424,6 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
 
 void test() {
     return;
+
     exit(0);
 }

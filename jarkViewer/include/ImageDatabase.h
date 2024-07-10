@@ -10,7 +10,7 @@ public:
         L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
-        L".heic", L".heif", L".avif", L".avifs", L".gif",
+        L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -411,7 +411,7 @@ public:
             return ret;
         }
 
-        cv::Mat img;
+        cv::Mat img, imgBGRA;
         if (ext == L".heic" || ext == L".heif") {
             img = loadHeic(path, tmp, fileSize);
         }
@@ -431,7 +431,12 @@ public:
         if (img.empty())
             img = getDefaultMat();
 
-        ret.imgList.emplace_back(img, 0);
+        if (img.channels() == 1)
+            cv::cvtColor(img, imgBGRA, cv::COLOR_GRAY2BGR);
+        else
+            imgBGRA = std::move(img);
+
+        ret.imgList.emplace_back(imgBGRA, 0);
 
         return ret;
     }

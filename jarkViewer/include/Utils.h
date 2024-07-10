@@ -33,7 +33,13 @@ using std::endl;
 #include "libheif/heif.h"
 #include "avif/avif.h"
 #include "gif_lib.h"
+#include "jxl/decode.h"
 #include "psapi.h"
+
+
+#define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
+#define END_TIME_COUNT auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count();\
+                                            Utils::log("{}(): {} ms", __FUNCTION__, duration_ms)
 
 struct rcFileInfo {
     uint8_t* addr = nullptr;
@@ -113,19 +119,59 @@ struct GifData {
     size_t m_nPosition;
 };
 
-namespace Utils {
+enum class ActionENUM:int64_t {
+    unknow = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit
+};
 
-    static const bool TO_LOG_FILE = false;
-    static FILE* fp = nullptr;
+struct Action {
+    ActionENUM action = ActionENUM::unknow;
+    union {
+        int x;
+        int width;
+    };
+    union {
+        int y;
+        int height;
+    };
+};
+
+struct WinSize {
+    int width = 0;
+    int height = 0;
+    WinSize() {}
+    WinSize(int w, int h) :width(w), height(h) {}
+
+    bool operator==(const WinSize size) const {
+        return this->width == size.width && this->height == size.height;
+    }
+    bool operator!=(const WinSize size) const {
+        return this->width != size.width || this->height != size.height;
+    }
+    bool isZero() const {
+        return this->width == 0 && this->height == 0;
+    }
+};
+
+struct MatPack {
+    cv::Mat* matPtr = nullptr;
+    wstring* titleStrPtr = nullptr;
+    void clear() {
+        matPtr = nullptr;
+        titleStrPtr = nullptr;
+    }
+};
+
+namespace Utils {
 
     template<typename... Args>
     static void log(const string_view fmt, Args&&... args) {
-        auto ts = time(nullptr) + 8 * 3600ULL;// UTC+8
-        int HH = (ts / 3600) % 24;
-        int MM = (ts / 60) % 60;
-        int SS = ts % 60;
+        static const bool TO_LOG_FILE = false;
+        static FILE* fp = nullptr;
 
-        const string str = std::format("[{:02d}:{:02d}:{:02d}] ", HH, MM, SS) +
+        auto now = std::chrono::system_clock::now();
+        auto time = std::chrono::current_zone()->to_local(now);
+
+        string str = std::format("[{:%H:%M:%S}] ", time)+
             std::vformat(fmt, std::make_format_args(args...)) + "\n";
 
         if (TO_LOG_FILE) {
@@ -261,6 +307,17 @@ namespace Utils {
             }
         }
         return hWnd;
+    }
+
+    static WinSize getWindowSize(HWND hwnd) {
+        RECT rect;
+        if (GetClientRect(hwnd, &rect)) {
+            return { rect.right,rect.bottom};
+        }
+        else {
+            log("getWindowSize fail.");
+            return { 0,0 };
+        }
     }
 
     static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {

@@ -5,7 +5,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>"C:\Program Files\Adobe\Adobe Photoshop 2024\test_files\images\Canon_EOS_R_1to1_4480by4480.CR3"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>"D:\Downloads\test\00.jpg"</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
