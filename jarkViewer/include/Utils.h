@@ -102,6 +102,11 @@ struct Cood {
         temp.y = this->y / i;
         return temp;
     }
+
+    void operator=(int n) {
+        this->x = n;
+        this->y = n;
+    }
 };
 
 struct ImageNode {

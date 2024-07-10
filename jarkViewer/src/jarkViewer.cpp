@@ -38,7 +38,7 @@ int64_t zoomTarget = 0;     // 设定的缩放比例
 int64_t zoomCur = 0;        // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
 
 WinSize winSize(200, 100);
-Cood hasDropCur{}, hasDropTarget{};
+Cood dropCur, dropTarget;
 
 void onMouseHandle(int event, int x, int y, int flags, void* param);
 void test();
@@ -136,14 +136,14 @@ static void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) {
         zoomOperate = 0;
         auto zoomNext = zoomList[zoomIndex];
         if (zoomTarget && zoomNext != zoomTarget) {
-            hasDropTarget.x = (int)(zoomNext * hasDropTarget.x / zoomTarget);
-            hasDropTarget.y = (int)(zoomNext * hasDropTarget.y / zoomTarget);
+            dropTarget.x = (int)(zoomNext * dropTarget.x / zoomTarget);
+            dropTarget.y = (int)(zoomNext * dropTarget.y / zoomTarget);
         }
         zoomTarget = zoomNext;
     }
 
-    const int64_t deltaW = hasDropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
-    const int64_t deltaH = hasDropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
+    const int64_t deltaW = dropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
+    const int64_t deltaH = dropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
 
     memset(canvas.ptr(), BG_COLOR, 4ULL * winSize.height * winSize.width);
     // 1360*768 1-10ms
@@ -220,9 +220,9 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
         if (newSize != winSize && !newSize.isZero()) {
             needFresh = true;
             if (winSize.width)
-                hasDropTarget.x = hasDropTarget.x * newSize.width / winSize.width;
+                dropTarget.x = dropTarget.x * newSize.width / winSize.width;
             if (winSize.height)
-                hasDropTarget.y = hasDropTarget.y * newSize.height / winSize.height;
+                dropTarget.y = dropTarget.y * newSize.height / winSize.height;
 
             winSize = newSize;
 
@@ -242,10 +242,12 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
 
                 switchOperate = 0;
                 zoomOperate = 0;
-                hasDropCur = { 0, 0 };
-                hasDropTarget = { 0, 0 };
-                zoomTarget = 0;
+
+                dropCur = 0;
+                dropTarget = 0;
+
                 zoomCur = 0;
+                zoomTarget = 0;
 
                 curFrameIdx = -1;
             }
@@ -287,17 +289,17 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 if (progressCnt >= (progressMax - 1)) {
                     progressCnt = 0;
                     zoomInit = zoomCur;
-                    hasDropInit = hasDropCur;
+                    hasDropInit = dropCur;
                 }
                 else {
                     progressCnt += ((progressMax - progressCnt) / 2);
                     if (progressCnt >= (progressMax - 1)) {
                         zoomCur = zoomTarget;
-                        hasDropCur = hasDropTarget;
+                        dropCur = dropTarget;
                     }
                     else {
                         zoomCur = zoomInit + (zoomTarget - zoomInit) * progressCnt / progressMax;
-                        hasDropCur = hasDropInit + (hasDropTarget - hasDropInit) * progressCnt / progressMax;
+                        dropCur = hasDropInit + (dropTarget - hasDropInit) * progressCnt / progressMax;
                     }
                 }
             }
@@ -378,14 +380,14 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
             cursorIsView = ((winSize.width / 5) < x) && (x < (winSize.width * 4 / 5));
 
         if (isPresing) {
-            hasDropTarget = mouse - mousePress;
-            hasDropCur = hasDropTarget;
+            dropTarget = mouse - mousePress;
+            dropCur = dropTarget;
             needFresh = true;
         }
     }break;
 
     case cv::EVENT_LBUTTONDOWN: {//左键按下
-        mousePress = mouse - hasDropTarget;
+        mousePress = mouse - dropTarget;
         isPresing = true;
     }break;
 
