@@ -11,6 +11,7 @@ public:
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
+        L".ico", L".icon",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -35,7 +36,7 @@ public:
         if (!isInit) {
             isInit = true;
             auto rc = Utils::GetResource(IDB_PNG, L"PNG");
-            std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+            cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
             defaultMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
         }
         return defaultMat;
@@ -48,7 +49,7 @@ public:
         if (!isInit) {
             isInit = true;
             auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
-            std::vector<char> imgData(rc.addr, rc.addr + rc.size);
+            cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
             homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
         }
         return homeMat;
@@ -421,6 +422,245 @@ public:
         }
     }
 
+
+    struct IconDirEntry {
+        uint8_t width;
+        uint8_t height;
+        uint8_t colorCount;
+        uint8_t reserved;
+        uint16_t planes;
+        uint16_t bitsPerPixel;
+        uint32_t dataSize;
+        uint32_t dataOffset;
+    };
+
+    struct DibHeader {
+        uint32_t headerSize;
+        int32_t width;
+        int32_t height;
+        uint16_t planes;
+        uint16_t bitCount;
+        uint32_t compression;
+        uint32_t imageSize;
+        int32_t xPelsPerMeter;
+        int32_t yPelsPerMeter;
+        uint32_t clrUsed;
+        uint32_t clrImportant;
+    };
+
+    static cv::Mat readDibFromMemory(const uint8_t* data, size_t size) {
+        // 确保有足够的数据用于DIB头
+        if (size < sizeof(DibHeader)) {
+            Utils::log("Insufficient data for DIB header. {}", size);
+            return cv::Mat();
+        }
+
+        // 读取DIB头
+        DibHeader header;
+        std::memcpy(&header, data, sizeof(DibHeader));
+
+        // 验证头大小是否符合预期
+        if (header.headerSize != sizeof(DibHeader)) {
+            Utils::log("Unsupported DIB header size {}", header.headerSize);
+            return cv::Mat();
+        }
+
+        // 计算调色板大小（如果存在）
+        int paletteSize = 0;
+        if (header.bitCount <= 8) {
+            paletteSize = (header.clrUsed == 0 ? 1 << header.bitCount : header.clrUsed) * 4;
+        }
+
+        // 确保有足够的数据用于调色板和像素数据
+        if (size < header.headerSize + paletteSize + header.imageSize) {
+            Utils::log("Insufficient data for image.");
+            return cv::Mat();
+        }
+
+        // 读取调色板（如果存在）
+        std::vector<cv::Vec4b> palette;
+        if (paletteSize > 0) {
+            palette.resize(paletteSize / 4);
+            std::memcpy(palette.data(), data + sizeof(DibHeader), paletteSize);
+        }
+
+        // 指向像素数据的指针
+        const uint8_t* pixelData = data + header.headerSize + paletteSize;
+
+        // 检查是否存在透明度掩码
+        bool hasAlphaMask = (header.height == 2 * header.width);
+        int imageHeight = hasAlphaMask ? header.height / 2 : header.height;
+
+        // 创建cv::Mat对象
+        cv::Mat image(imageHeight, header.width, header.bitCount <= 8 ? CV_8UC3 : CV_8UC4);
+
+        // 根据位深度处理像素数据
+        switch (header.bitCount) {
+        case 1: {
+            // 处理1位图像
+            int byteWidth = (header.width + 7) / 8; // 每行字节数
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int byteIndex = (imageHeight - y - 1) * byteWidth + x / 8;
+                    int bitIndex = x % 8;
+                    int colorIndex = (pixelData[byteIndex] >> (7 - bitIndex)) & 0x01;
+                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                }
+            }
+            break;
+        }
+        case 4: {
+            // 处理4位图像
+            int byteWidth = (header.width + 1) / 2; // 每行字节数
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int byteIndex = (imageHeight - y - 1) * byteWidth + x / 2;
+                    int nibbleIndex = x % 2;
+                    int colorIndex = (pixelData[byteIndex] >> (4 * (1 - nibbleIndex))) & 0x0F;
+                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                }
+            }
+            break;
+        }
+        case 8: {
+            // 处理8位图像
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int byteIndex = (imageHeight - y - 1) * header.width + x;
+                    int colorIndex = pixelData[byteIndex];
+                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                }
+            }
+            break;
+        }
+        case 16: {
+            // 处理16位图像
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int pixelIndex = (imageHeight - y - 1) * header.width + x;
+                    uint16_t pixel = ((uint16_t*)pixelData)[pixelIndex];
+                    uint8_t r = (pixel >> 10) & 0x1F;
+                    uint8_t g = (pixel >> 5) & 0x1F;
+                    uint8_t b = pixel & 0x1F;
+                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(b << 3, g << 3, r << 3);
+                }
+            }
+            break;
+        }
+        default:
+            Utils::log("Unsupported bit count {}", header.bitCount);
+            return cv::Mat();
+        }
+
+        // 如果存在透明度掩码
+        if (hasAlphaMask) {
+            cv::Mat alphaMask(imageHeight, header.width, CV_8UC1);
+            const uint8_t* maskData = pixelData + header.imageSize;
+
+            int byteWidth = (header.width + 7) / 8; // 每行字节数
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int byteIndex = (imageHeight - y - 1) * byteWidth + x / 8;
+                    int bitIndex = x % 8;
+                    int alpha = ((maskData[byteIndex] >> (7 - bitIndex)) & 0x01) ? 0 : 255;
+                    alphaMask.at<uint8_t>(y, x) = alpha;
+                }
+            }
+
+            // 将Alpha掩码应用到图像中
+            if (image.channels() == 3) {
+                cv::cvtColor(image, image, cv::COLOR_BGR2BGRA);
+            }
+
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    image.at<cv::Vec4b>(y, x)[3] = alphaMask.at<uint8_t>(y, x);
+                }
+            }
+        }
+
+        return image;
+    }
+
+    static cv::Mat loadICO(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        if (buf.size() < 6) {
+            Utils::log("Invalid ICO file: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        uint16_t numImages = *reinterpret_cast<const uint16_t*>(&buf[4]);
+        std::vector<IconDirEntry> entries;
+
+        if (numImages > 255) {
+            Utils::log("numImages Error: {} {}", Utils::wstringToUtf8(path), numImages);
+            return cv::Mat();
+        }
+
+        size_t offset = 6;
+        for (int i = 0; i < numImages; ++i) {
+            if (offset + sizeof(IconDirEntry) > buf.size()) {
+                Utils::log("Invalid ICO file structure: {}", Utils::wstringToUtf8(path));
+                return cv::Mat();
+            }
+
+            entries.push_back(*reinterpret_cast<const IconDirEntry*>(&buf[offset]));
+            offset += sizeof(IconDirEntry);
+        }
+
+        auto maxResEntry = std::max_element(entries.begin(), entries.end(),
+            [](const IconDirEntry& a, const IconDirEntry& b) {
+                if (a.width == 0)return false;
+                if (b.width == 0)return true;
+                return a.width < b.width;
+            });
+
+        if (maxResEntry == entries.end()) {
+            Utils::log("No valid image entries found: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        int width = maxResEntry->width == 0 ? 256 : maxResEntry->width;
+        int height = maxResEntry->height == 0 ? 256 : maxResEntry->height;
+
+        if (maxResEntry->dataOffset + maxResEntry->dataSize > buf.size()) {
+            Utils::log("Invalid image data offset or size: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        cv::Mat rawData(1, maxResEntry->dataSize, CV_8UC1, (uint8_t*)(buf.data() + maxResEntry->dataOffset));
+
+        // PNG BMP
+        if (memcmp(rawData.ptr(), "\x89PNG", 4) == 0 || memcmp(rawData.ptr(), "BM", 2) == 0)
+            return cv::imdecode(rawData, cv::IMREAD_UNCHANGED);
+
+        DibHeader* dibHeader = (DibHeader*)(buf.data() + maxResEntry->dataOffset);
+        if (dibHeader->headerSize != 0x28)
+            return cv::Mat();
+
+        size_t byteSize = (size_t)width * height * maxResEntry->bitsPerPixel / 8;
+        if (maxResEntry->bitsPerPixel >= 24 && maxResEntry->dataSize >= byteSize + dibHeader->headerSize) {
+            auto imgOrg = cv::Mat(height, width, maxResEntry->bitsPerPixel == 24 ? CV_8UC3 : CV_8UC4,
+                (uint8_t*)(buf.data() + maxResEntry->dataOffset + dibHeader->headerSize));
+            cv::Mat img;
+
+            if (maxResEntry->bitsPerPixel == 24)
+                cv::cvtColor(imgOrg, img, CV_BGR2BGRA);
+            else img = imgOrg.clone();
+
+            uint32_t* ptr = (uint32_t*)img.ptr();
+            // 上下翻转Y轴， 即上下翻转
+            for (int y = 0; y < height / 2; y++)
+                for (int x = 0; x < width; x++) {
+                    uint32_t tmp = ptr[y * width + x];
+                    ptr[y * width + x] = ptr[(height - 1 - y) * width + x];
+                    ptr[(height - 1 - y) * width + x] = tmp;
+                }
+            return img;
+        }
+
+        return readDibFromMemory((uint8_t*)(buf.data() + maxResEntry->dataOffset), maxResEntry->dataSize);
+    }
+
     // TODO
     static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
@@ -565,8 +805,8 @@ public:
         fseek(f, 0, SEEK_END);
         auto fileSize = ftell(f);
         fseek(f, 0, SEEK_SET);
-        vector<uchar> tmp(fileSize, 0);
-        fread(tmp.data(), 1, fileSize, f);
+        vector<uchar> buf(fileSize, 0);
+        fread(buf.data(), 1, fileSize, f);
         fclose(f);
 
         auto dotPos = path.rfind(L'.');
@@ -577,32 +817,36 @@ public:
         Frames ret;
 
         if (ext == L".gif") {
-            ret.imgList = loadGif(path, tmp, fileSize);
+            ret.imgList = loadGif(path, buf, fileSize);
             if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
                 ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols, 
-                    ret.imgList.front().img.rows, tmp.data(), fileSize);
+                    ret.imgList.front().img.rows, buf.data(), fileSize);
             return ret;
         }
 
         cv::Mat img, imgBGRA;
         if (ext == L".heic" || ext == L".heif") {
-            img = loadHeic(path, tmp, fileSize);
+            img = loadHeic(path, buf, fileSize);
         }
         else if (ext == L".avif" || ext == L".avifs") {
-            img = loadAvif(path, tmp, fileSize);
+            img = loadAvif(path, buf, fileSize);
         }
         else if (ext == L".jxl") {
-            img = loadJXL(path, tmp, fileSize);
+            img = loadJXL(path, buf, fileSize);
+        }
+        else if (ext == L".ico" || ext == L".icon") {
+            img = loadICO(path, buf, fileSize);
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
         }
         else if (supportRaw.contains(ext)) {
-            img = loadRaw(path, tmp, fileSize);
+            img = loadRaw(path, buf, fileSize);
         }
 
         if (img.empty())
-            img = loadMat(path, tmp, fileSize);
+            img = loadMat(path, buf, fileSize);
 
         if (ret.exifStr.empty())
-            ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, tmp.data(), fileSize);
+            ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
 
         if (img.empty())
             img = getDefaultMat();

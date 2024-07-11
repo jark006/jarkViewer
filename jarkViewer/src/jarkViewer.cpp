@@ -426,6 +426,8 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
 
 void test() {
     return;
+    //std::ifstream file("D:\\Downloads\\ico.ico", std::ios::binary);
+    //auto buf = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
 
     exit(0);
 }
