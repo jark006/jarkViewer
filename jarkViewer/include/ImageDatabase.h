@@ -6,12 +6,12 @@
 class ImageDatabase{
 public:
 
-    static inline const unordered_set<wstring> supportExt {
+    static inline const unordered_set<wstring> supportExt{
         L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon",
+        L".ico", L".icon", L".psd",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -661,7 +661,34 @@ public:
         return readDibFromMemory((uint8_t*)(buf.data() + maxResEntry->dataOffset), maxResEntry->dataSize);
     }
 
-    // TODO
+
+    static cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        psd_context* context = nullptr;
+        psd_status status = psd_image_load_from_memory(&context, (psd_char*)buf.data(), buf.size());
+
+        if (status != psd_status_done) {
+            Utils::log("Failed to load PSD file: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        if (context->width == 0 || context->height == 0) {
+            Utils::log("PSD error {} width:{} height:{}", Utils::wstringToUtf8(path), context->width, context->height);
+            return cv::Mat();
+        }
+
+        const auto* imageData = context->merged_image_data;
+        if (!imageData) {
+            psd_image_free(context);
+            Utils::log("Failed to get image data from PSD file {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        auto img = cv::Mat(context->height, context->width, CV_8UC4, (void*)imageData).clone();
+        psd_image_free(context);
+
+        return img;
+    }
+
     static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
 
@@ -824,7 +851,7 @@ public:
             return ret;
         }
 
-        cv::Mat img, imgBGRA;
+        cv::Mat img;
         if (ext == L".heic" || ext == L".heif") {
             img = loadHeic(path, buf, fileSize);
         }
@@ -836,10 +863,19 @@ public:
         }
         else if (ext == L".ico" || ext == L".icon") {
             img = loadICO(path, buf, fileSize);
+            if (img.empty())
+                img = getDefaultMat();
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+        }
+        else if (ext == L".psd") {
+            img = loadPSD(path, buf, fileSize);
+            if (img.empty())
+                img = getDefaultMat();
         }
         else if (supportRaw.contains(ext)) {
             img = loadRaw(path, buf, fileSize);
+            if (img.empty())
+                img = getDefaultMat();
         }
 
         if (img.empty())
@@ -852,11 +888,9 @@ public:
             img = getDefaultMat();
 
         if (img.channels() == 1)
-            cv::cvtColor(img, imgBGRA, cv::COLOR_GRAY2BGR);
-        else
-            imgBGRA = std::move(img);
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
 
-        ret.imgList.emplace_back(imgBGRA, 0);
+        ret.imgList.emplace_back(img, 0);
 
         return ret;
     }

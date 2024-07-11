@@ -429,5 +429,8 @@ void test() {
     //std::ifstream file("D:\\Downloads\\ico.ico", std::ios::binary);
     //auto buf = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
 
+    //cv::Mat img(height, width, CV_8UC4, (void*)imageData);
+    //cv::imshow("asd", img);
+    //cv::waitKey(0);
     exit(0);
 }

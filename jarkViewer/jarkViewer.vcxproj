@@ -144,6 +144,7 @@
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
     <ClInclude Include="include\imageProcess.h" />
+    <ClInclude Include="include\libpsd.h" />
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\stbText.h" />
@@ -152,9 +153,68 @@
     <ClInclude Include="include\x265.h" />
     <ClInclude Include="include\x265_config.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="src_psd\psd_bitmap.h" />
+    <ClInclude Include="src_psd\psd_blend.h" />
+    <ClInclude Include="src_psd\psd_descriptor.h" />
+    <ClInclude Include="src_psd\psd_fixed.h" />
+    <ClInclude Include="src_psd\psd_gradient.h" />
+    <ClInclude Include="src_psd\psd_math.h" />
+    <ClInclude Include="src_psd\psd_rect.h" />
+    <ClInclude Include="src_psd\psd_stream.h" />
+    <ClInclude Include="src_psd\psd_system.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp" />
+    <ClCompile Include="src_psd\adjustment.c" />
+    <ClCompile Include="src_psd\bevel_emboss.c" />
+    <ClCompile Include="src_psd\bitmap.c" />
+    <ClCompile Include="src_psd\blend.c" />
+    <ClCompile Include="src_psd\boundary.c" />
+    <ClCompile Include="src_psd\brightness_contrast.c" />
+    <ClCompile Include="src_psd\channel_image.c" />
+    <ClCompile Include="src_psd\channel_mixer.c" />
+    <ClCompile Include="src_psd\color.c" />
+    <ClCompile Include="src_psd\color_balance.c" />
+    <ClCompile Include="src_psd\color_mode.c" />
+    <ClCompile Include="src_psd\color_overlay.c" />
+    <ClCompile Include="src_psd\curves.c" />
+    <ClCompile Include="src_psd\descriptor.c" />
+    <ClCompile Include="src_psd\drop_shadow.c" />
+    <ClCompile Include="src_psd\effects.c" />
+    <ClCompile Include="src_psd\file_header.c" />
+    <ClCompile Include="src_psd\fixed.c" />
+    <ClCompile Include="src_psd\gaussian_blur.c" />
+    <ClCompile Include="src_psd\gradient_blend.c" />
+    <ClCompile Include="src_psd\gradient_fill.c" />
+    <ClCompile Include="src_psd\gradient_map.c" />
+    <ClCompile Include="src_psd\gradient_overlay.c" />
+    <ClCompile Include="src_psd\hue_saturation.c" />
+    <ClCompile Include="src_psd\image_data.c" />
+    <ClCompile Include="src_psd\image_resource.c" />
+    <ClCompile Include="src_psd\inner_glow.c" />
+    <ClCompile Include="src_psd\inner_shadow.c" />
+    <ClCompile Include="src_psd\invert.c" />
+    <ClCompile Include="src_psd\layer_mask.c" />
+    <ClCompile Include="src_psd\levels.c" />
+    <ClCompile Include="src_psd\outer_glow.c" />
+    <ClCompile Include="src_psd\path.c" />
+    <ClCompile Include="src_psd\pattern.c" />
+    <ClCompile Include="src_psd\pattern_fill.c" />
+    <ClCompile Include="src_psd\pattern_overlay.c" />
+    <ClCompile Include="src_psd\photo_filter.c" />
+    <ClCompile Include="src_psd\posterize.c" />
+    <ClCompile Include="src_psd\psd.c" />
+    <ClCompile Include="src_psd\psd_system.c" />
+    <ClCompile Include="src_psd\psd_zip.c" />
+    <ClCompile Include="src_psd\rect.c" />
+    <ClCompile Include="src_psd\satin.c" />
+    <ClCompile Include="src_psd\selective_color.c" />
+    <ClCompile Include="src_psd\solid_color.c" />
+    <ClCompile Include="src_psd\stream.c" />
+    <ClCompile Include="src_psd\stroke.c" />
+    <ClCompile Include="src_psd\threshold.c" />
+    <ClCompile Include="src_psd\thumbnail.c" />
+    <ClCompile Include="src_psd\type_tool.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc" />
@@ -163,7 +223,6 @@
     <Image Include="file\home.png" />
     <Image Include="file\tips.png" />
     <Image Include="jarkViewer.ico" />
-    <Image Include="png1.png" />
     <Image Include="small.ico" />
   </ItemGroup>
   <ItemGroup>

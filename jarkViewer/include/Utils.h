@@ -37,6 +37,7 @@ using std::endl;
 #include "jxl/resizable_parallel_runner_cxx.h"
 #include "jxl/types.h"
 #include "gif_lib.h"
+#include "libpsd.h"
 
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()

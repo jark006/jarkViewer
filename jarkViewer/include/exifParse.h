@@ -156,8 +156,6 @@ public:
             Exiv2::enableBMFF();
         }
 
-        if (width == 0 || height == 0)
-            return std::format("路径: {}\n大小: {}", Utils::wstringToUtf8(path), Utils::size2Str(fileSize));
 
         auto res = std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
             Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
