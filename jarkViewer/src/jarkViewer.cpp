@@ -5,8 +5,8 @@
 #include "ImageDatabase.h"
 
 /*
-TODO 
-1. ico
+TODO
+1. libpsd有BUG，部分PSD解码异常
 2. exif 的旋转信息
 3. avif crop 无法解码 kimono.crop.avif
 4. 重构程序结构
@@ -21,7 +21,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer V1.3";
+const wstring appName = L"JarkViewer V1.4";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
@@ -46,7 +46,7 @@ void test();
 static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
     switch (srcImg.channels()) {
     case 3: {
-        auto& srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
+        cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
         intUnion ret=255;
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
@@ -142,17 +142,25 @@ static void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) {
         zoomTarget = zoomNext;
     }
 
-    const int64_t deltaW = dropCur.x + (winSize.width - srcW * zoomCur / ZOOM_BASE) / 2;
-    const int64_t deltaH = dropCur.y + (winSize.height - srcH * zoomCur / ZOOM_BASE) / 2;
+    const int deltaW = dropCur.x + (int)((winSize.width - srcW * zoomCur / ZOOM_BASE) / 2);
+    const int deltaH = dropCur.y + (int)((winSize.height - srcH * zoomCur / ZOOM_BASE) / 2);
+
+    int xStart = deltaW < 0 ? 0 : deltaW;
+    int yStart = deltaH < 0 ? 0 : deltaH;
+    int xEnd = (int)(srcW * zoomCur / ZOOM_BASE + deltaW);
+    int yEnd = (int)(srcH * zoomCur / ZOOM_BASE + deltaH);
+    if (xEnd > winSize.width) xEnd = winSize.width;
+    if (yEnd > winSize.height) yEnd = winSize.height;
 
     memset(canvas.ptr(), BG_COLOR, 4ULL * winSize.height * winSize.width);
     // 1360*768 1-10ms
-    for (int y = 0; y < winSize.height; y++)
-        for (int x = 0; x < winSize.width; x++) {
+    auto ptr = (uint32_t*)canvas.ptr();
+    for (int y = yStart; y < yEnd; y++)
+        for (int x = xStart; x < xEnd; x++) {
             const int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
             const int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
-            if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH)
-                canvas.at<uint32_t>(y, x) = getSrcPx(srcImg, srcX, srcY, x, y);
+            if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
+                ptr[y * winSize.width + x] = getSrcPx(srcImg, srcX, srcY, x, y);
         }
 }
 
@@ -163,9 +171,9 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
 
     ImageDatabase imgDB;
 
-    int curFrameIdx = -1;        // 小于0则单张静态图像，否则为动画当前帧索引
-    int curFrameIdxMax = -1;     // 若是动画则为帧数量
-    int curFrameDelay = 1;       // 当前帧延迟
+    int curFrameIdx = 0;         // 小于0则单张静态图像，否则为动画当前帧索引
+    int curFrameIdxMax = 0;      // 若是动画则为帧数量
+    int curFrameDelay = 0;       // 当前帧延迟
     int curFileIdx = -1;         // 文件在路径列表的索引
     vector<wstring> imgFileList; // 工作目录下所有图像文件路径
 
@@ -249,18 +257,16 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 zoomCur = 0;
                 zoomTarget = 0;
 
-                curFrameIdx = -1;
+                curFrameIdx = 0;
+                curFrameDelay = 0;
             }
 
             const auto& frames = imgDB().get(imgFileList[curFileIdx]);
-            const auto& [srcImg, delay] = frames.imgList[curFrameIdx < 0 ? 0 : curFrameIdx];
+            const auto& [srcImg, delay] = frames.imgList[curFrameIdx];
 
-            curFrameIdxMax = (int)frames.imgList.size();
-            if (curFrameIdxMax > 1) {
-                if (curFrameIdx == -1) {
-                    curFrameDelay = delay;
-                    curFrameIdx = 0;
-                }
+            curFrameIdxMax = (int)frames.imgList.size()-1;
+            if (curFrameIdxMax > 0) { // Animation
+                curFrameDelay = (delay <= 0 ? 10 : delay);
             }
 
             drawCanvas(srcImg, mainCanvas);
@@ -315,12 +321,12 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             if (cv::waitKey(5) == 27) //ESC
                 break;
 
-            delayRemain -= 10;
+            delayRemain -= 17;
             if (delayRemain <= 0) {
                 delayRemain = curFrameDelay;
                 curFrameIdx++;
                 needFresh = true;
-                if (curFrameIdx >= curFrameIdxMax)
+                if (curFrameIdx > curFrameIdxMax)
                     curFrameIdx = 0;
             }
         }

@@ -37,6 +37,10 @@ using std::endl;
 #include "jxl/resizable_parallel_runner_cxx.h"
 #include "jxl/types.h"
 #include "gif_lib.h"
+#include "webp/decode.h"
+#include "webp/demux.h"
+#include "png.h"
+#include "pngstruct.h"
 #include "libpsd.h"
 
 

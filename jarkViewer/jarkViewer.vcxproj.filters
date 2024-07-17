@@ -57,9 +57,6 @@
     <ClInclude Include="include\channel.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\imageProcess.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\libpsd.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -89,6 +86,9 @@
     </ClInclude>
     <ClInclude Include="src_psd\psd_system.h">
       <Filter>src_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\png.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

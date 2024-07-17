@@ -276,19 +276,19 @@ private:
         y += fontSize + c_y0;
         x += c_x0;
 
+        auto ptr = (intUnion*)img.ptr();
         for (int yy = 0; yy < wordHigh; yy++) {
             if (y + yy >= img.rows)break;
             for (int xx = 0; xx < wordWidth; xx++) {
                 if (x + xx >= img.cols)break;
-                auto& orgColor = img.at<cv::Vec4b>(y + yy, x + xx);
+                auto& orgColor = ptr[(y + yy) * img.cols + x + xx];
                 int alpha = wordBuff[yy * fontSize + xx] * color[3] / 255;
-
-                orgColor = {
-                    (uint8_t)((orgColor[0] * (255 - alpha) + color[0] * alpha) / 255),
-                    (uint8_t)((orgColor[1] * (255 - alpha) + color[1] * alpha) / 255),
-                    (uint8_t)((orgColor[2] * (255 - alpha) + color[2] * alpha) / 255),
-                    255
-                };
+                if (alpha)
+                    orgColor = {
+                        (uint8_t)((orgColor[0] * (255 - alpha) + color[0] * alpha) / 255),
+                        (uint8_t)((orgColor[1] * (255 - alpha) + color[1] * alpha) / 255),
+                        (uint8_t)((orgColor[2] * (255 - alpha) + color[2] * alpha) / 255),
+                        255 };
             }
         }
 

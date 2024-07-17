@@ -7,7 +7,7 @@ class ImageDatabase{
 public:
 
     static inline const unordered_set<wstring> supportExt{
-        L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png",
+        L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png", L".apng",
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
@@ -456,8 +456,7 @@ public:
         }
 
         // 读取DIB头
-        DibHeader header;
-        std::memcpy(&header, data, sizeof(DibHeader));
+        DibHeader& header = *((DibHeader*)data);
 
         // 验证头大小是否符合预期
         if (header.headerSize != sizeof(DibHeader)) {
@@ -472,7 +471,7 @@ public:
         }
 
         // 确保有足够的数据用于调色板和像素数据
-        if (size < header.headerSize + paletteSize + header.imageSize) {
+        if (size < ((size_t)header.headerSize + paletteSize + header.imageSize)) {
             Utils::log("Insufficient data for image.");
             return cv::Mat();
         }
@@ -554,31 +553,31 @@ public:
 
         // 如果存在透明度掩码
         if (hasAlphaMask) {
-            cv::Mat alphaMask(imageHeight, header.width, CV_8UC1);
-            const uint8_t* maskData = pixelData + header.imageSize;
-
-            int byteWidth = (header.width + 7) / 8; // 每行字节数
-            for (int y = 0; y < imageHeight; ++y) {
-                for (int x = 0; x < header.width; ++x) {
-                    int byteIndex = (imageHeight - y - 1) * byteWidth + x / 8;
-                    int bitIndex = x % 8;
-                    int alpha = ((maskData[byteIndex] >> (7 - bitIndex)) & 0x01) ? 0 : 255;
-                    alphaMask.at<uint8_t>(y, x) = alpha;
-                }
-            }
-
-            // 将Alpha掩码应用到图像中
-            if (image.channels() == 3) {
+            if (image.channels() == 3)
                 cv::cvtColor(image, image, cv::COLOR_BGR2BGRA);
-            }
+
+            const uint8_t* maskData = pixelData + header.width * header.width * header.bitCount / 8;
+
+            int rowSize = (header.width + 31) / 32 * 4;
+            int totalSize = rowSize * header.height;
 
             for (int y = 0; y < imageHeight; ++y) {
                 for (int x = 0; x < header.width; ++x) {
-                    image.at<cv::Vec4b>(y, x)[3] = alphaMask.at<uint8_t>(y, x);
+                    int byteIndex = ((imageHeight - y - 1) * rowSize) + (x / 8);
+                    int bitIndex = 7 - (x % 8);
+
+                    // 读取透明掩码
+                    int transparencyBit = (maskData[byteIndex] >> bitIndex) & 1;
+                    if (transparencyBit == 1)
+                        image.at<uint32_t>(y, x) = 0;
+
+                    // 读取图像掩码
+                    //int imageBit = (maskData[totalSize + byteIndex] >> bitIndex) & 1;
+                    //if (imageBit == 0)
+                    //    image.at<uint32_t>(y, x) = 0;
                 }
             }
         }
-
         return image;
     }
 
@@ -622,7 +621,7 @@ public:
         int width = maxResEntry->width == 0 ? 256 : maxResEntry->width;
         int height = maxResEntry->height == 0 ? 256 : maxResEntry->height;
 
-        if (maxResEntry->dataOffset + maxResEntry->dataSize > buf.size()) {
+        if (((size_t)maxResEntry->dataOffset + maxResEntry->dataSize) > buf.size()) {
             Utils::log("Invalid image data offset or size: {}", Utils::wstringToUtf8(path));
             return cv::Mat();
         }
@@ -641,21 +640,9 @@ public:
         if (maxResEntry->bitsPerPixel >= 24 && maxResEntry->dataSize >= byteSize + dibHeader->headerSize) {
             auto imgOrg = cv::Mat(height, width, maxResEntry->bitsPerPixel == 24 ? CV_8UC3 : CV_8UC4,
                 (uint8_t*)(buf.data() + maxResEntry->dataOffset + dibHeader->headerSize));
-            cv::Mat img;
-
-            if (maxResEntry->bitsPerPixel == 24)
-                cv::cvtColor(imgOrg, img, CV_BGR2BGRA);
-            else img = imgOrg.clone();
-
-            uint32_t* ptr = (uint32_t*)img.ptr();
-            // 上下翻转Y轴， 即上下翻转
-            for (int y = 0; y < height / 2; y++)
-                for (int x = 0; x < width; x++) {
-                    uint32_t tmp = ptr[y * width + x];
-                    ptr[y * width + x] = ptr[(height - 1 - y) * width + x];
-                    ptr[(height - 1 - y) * width + x] = tmp;
-                }
-            return img;
+            cv::Mat flippedImage;
+            cv::flip(imgOrg, flippedImage, 0); // 上下翻转
+            return flippedImage;
         }
 
         return readDibFromMemory((uint8_t*)(buf.data() + maxResEntry->dataOffset), maxResEntry->dataSize);
@@ -817,6 +804,215 @@ public:
         return frames;
     }
 
+
+    static std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+        std::vector<ImageNode> frames;
+
+        WebPData webp_data{};
+        webp_data.bytes = buf.data();
+        webp_data.size = size;
+
+        WebPDemuxer* demux = WebPDemux(&webp_data);
+        if (!demux) {
+            Utils::log("Failed to create WebP demuxer: {}", Utils::wstringToUtf8(path));
+            frames.push_back({ getDefaultMat(), 0 });
+            return frames;
+        }
+
+        uint32_t canvas_width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
+        uint32_t canvas_height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
+
+        WebPIterator iter;
+        cv::Mat lastFrame(canvas_height, canvas_width, CV_8UC4, cv::Scalar(0, 0, 0, 0)); // Initialize the global canvas with transparency
+        cv::Mat canvas(canvas_height, canvas_width, CV_8UC4, cv::Scalar(0, 0, 0, 0)); // Initialize the global canvas with transparency
+
+        if (WebPDemuxGetFrame(demux, 1, &iter)) {
+            do {
+                WebPDecoderConfig config;
+                if (!WebPInitDecoderConfig(&config)) {
+                    WebPDemuxReleaseIterator(&iter);
+                    WebPDemuxDelete(demux);
+
+                    Utils::log("Failed to initialize WebP decoder config: {}", Utils::wstringToUtf8(path));
+                    frames.push_back({ getDefaultMat(), 0 });
+                    return frames;
+                }
+
+                config.output.colorspace = WEBP_CSP_MODE::MODE_bgrA;
+
+                if (WebPDecode(iter.fragment.bytes, iter.fragment.size, &config) != VP8_STATUS_OK) {
+                    WebPFreeDecBuffer(&config.output);
+                    WebPDemuxReleaseIterator(&iter);
+                    WebPDemuxDelete(demux);
+
+                    Utils::log("Failed to decode WebP frame: {}", Utils::wstringToUtf8(path));
+                    frames.push_back({ getDefaultMat(), 0 });
+                    return frames;
+                }
+
+                cv::Mat frame(config.output.height, config.output.width, CV_8UC4, config.output.u.RGBA.rgba);
+                cv::Mat roi = canvas(cv::Rect(iter.x_offset, iter.y_offset, config.output.width, config.output.height));
+                frame.copyTo(roi);
+
+                for (int y = 0; y < canvas.rows; ++y) {
+                    for (int x = 0; x < canvas.cols; ++x) {
+                        cv::Vec4b srcPixel = canvas.at<cv::Vec4b>(y, x);
+                        if (srcPixel[3] != 0) {
+                            lastFrame.at<cv::Vec4b>(y, x) = srcPixel;
+                        }
+                    }
+                }
+
+                frames.push_back({ lastFrame.clone(), iter.duration });
+
+                WebPFreeDecBuffer(&config.output);
+            } while (WebPDemuxNextFrame(&iter));
+            WebPDemuxReleaseIterator(&iter);
+        }
+
+        WebPDemuxDelete(demux);
+        return frames;
+    }
+
+
+    struct PngSource {
+        const uint8_t* data;
+        size_t size;
+        int    offset;
+    };
+
+    static void pngReadCallback(png_structp png_ptr, png_bytep data, png_size_t length) {
+        PngSource* isource = (PngSource*)png_get_io_ptr(png_ptr);
+        if ((isource->offset + length) <= isource->size) {
+            memcpy(data, isource->data + isource->offset, length);
+            isource->offset += (int)length;
+        }
+    }
+
+    static std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+        std::vector<ImageNode> frames;
+
+        if (size < 8 || png_sig_cmp(buf.data(), 0, 8)) {
+            Utils::log("FInvalid PNG signature in file: {}", Utils::wstringToUtf8(path));
+            return frames;
+        }
+
+        png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+        if (!png) {
+            Utils::log("Failed to create PNG read struct for file: : {}", Utils::wstringToUtf8(path));
+            return frames;
+        }
+
+        png_infop info = png_create_info_struct(png);
+        if (!info) {
+            png_destroy_read_struct(&png, nullptr, nullptr);
+            Utils::log("Failed to create PNG info struct for file: {}", Utils::wstringToUtf8(path));
+            return frames;
+        }
+
+        if (setjmp(png_jmpbuf(png))) {
+            png_destroy_read_struct(&png, &info, nullptr);
+            Utils::log("Error during PNG file reading: {}", Utils::wstringToUtf8(path));
+            return frames;
+        }
+
+        PngSource pngSource{ buf.data(), size, 0 };
+        png_set_read_fn(png, &pngSource, pngReadCallback);
+
+        // 读取PNG信息
+        png_read_info(png, info);
+
+        int width = png_get_image_width(png, info);
+        int height = png_get_image_height(png, info);
+        png_byte color_type = png_get_color_type(png, info);
+        png_byte bit_depth = png_get_bit_depth(png, info);
+
+        // 将所有颜色类型转换为RGBA
+        if (bit_depth == 16)
+            png_set_strip_16(png);
+
+        if (color_type == PNG_COLOR_TYPE_PALETTE)
+            png_set_palette_to_rgb(png);
+
+        if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+            png_set_expand_gray_1_2_4_to_8(png);
+
+        if (png_get_valid(png, info, PNG_INFO_tRNS))
+            png_set_tRNS_to_alpha(png);
+
+        if (color_type == PNG_COLOR_TYPE_RGB ||
+            color_type == PNG_COLOR_TYPE_GRAY ||
+            color_type == PNG_COLOR_TYPE_PALETTE)
+            png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
+
+        if (color_type == PNG_COLOR_TYPE_GRAY ||
+            color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+            png_set_gray_to_rgb(png);
+
+        png_read_update_info(png, info);
+
+        // 读取APNG帧信息
+        png_uint_32 num_frames = 1;
+        png_uint_32 num_plays = 0;
+
+        if (png_get_valid(png, info, PNG_INFO_acTL)) {
+            png_get_acTL(png, info, &num_frames, &num_plays);
+        }
+
+        // 若是静态图像，不再处理
+        if (num_frames <= 1) {
+            png_destroy_read_struct(&png, &info, nullptr);
+            return frames;
+        }
+
+        // 处理每一帧
+        for (png_uint_32 frame = 0; frame < num_frames; ++frame) {
+            png_read_frame_head(png, info); // 若是静态图像(num_frames==1)，这里有会问题
+
+            png_uint_32 frame_width = 0, frame_height = 0;
+            png_uint_32 frame_x_offset = 0, frame_y_offset = 0;
+            png_uint_16 delay_num = 0, delay_den = 0;
+            png_byte dispose_op = 0, blend_op = 0;
+
+            png_get_next_frame_fcTL(png, info, &frame_width, &frame_height, &frame_x_offset, &frame_y_offset, &delay_num, &delay_den, &dispose_op, &blend_op);
+
+            // 计算延迟时间（毫秒）
+            int delay = delay_num * 1000 / (delay_den ? delay_den : 100);
+
+            // 创建完整尺寸的Mat
+            cv::Mat full_frame(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+
+            // 读取当前帧数据
+            std::vector<png_bytep> row_pointers(frame_height);
+            for (png_uint_32 y = 0; y < frame_height; ++y) {
+                row_pointers[y] = new png_byte[png_get_rowbytes(png, info)];
+            }
+
+            png_read_image(png, row_pointers.data());
+
+            // 将帧数据复制到完整尺寸的Mat中
+            for (png_uint_32 y = 0; y < frame_height; ++y) {
+                std::memcpy(full_frame.ptr(frame_y_offset + y) + frame_x_offset * 4, row_pointers[y], frame_width * 4);
+            }
+
+            // 释放行指针
+            for (png_uint_32 y = 0; y < frame_height; ++y) {
+                delete[] row_pointers[y];
+            }
+
+            // 将RGBA转换为BGRA
+            cv::cvtColor(full_frame, full_frame, cv::COLOR_RGBA2BGRA);
+
+            // 添加到结果vector
+            frames.push_back({ full_frame, delay });
+        }
+
+        // 清理
+        png_destroy_read_struct(&png, &info, nullptr);
+
+        return frames;
+    }
+
     static Frames loadImage(const wstring& path) {
         if (path.length() < 4) {
             Utils::log("path.length() < 4: {}", Utils::wstringToUtf8(path));
@@ -846,9 +1042,29 @@ public:
         if (ext == L".gif") {
             ret.imgList = loadGif(path, buf, fileSize);
             if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
-                ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols, 
+                ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols,
                     ret.imgList.front().img.rows, buf.data(), fileSize);
             return ret;
+        }
+
+        if (ext == L".webp") { //静态或动画
+            ret.imgList = loadWebp(path, buf, fileSize);
+            if (!ret.imgList.empty()) {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
+                return ret;
+            }
+            // 若空白则往下执行，使用opencv读取
+        }
+
+        if (ext == L".png" || ext == L".apng") {
+            ret.imgList = loadApng(path, buf, fileSize); //若是静态图像则不解码，返回空
+            if (!ret.imgList.empty()) {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
+                return ret;
+            }
+            // 若空白则往下执行，使用opencv读取
         }
 
         cv::Mat img;
@@ -863,9 +1079,10 @@ public:
         }
         else if (ext == L".ico" || ext == L".icon") {
             img = loadICO(path, buf, fileSize);
-            if (img.empty())
-                img = getDefaultMat();
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+            if (img.empty()) {
+                img = getDefaultMat();
+            }
         }
         else if (ext == L".psd") {
             img = loadPSD(path, buf, fileSize);
