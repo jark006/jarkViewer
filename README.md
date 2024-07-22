@@ -1,5 +1,9 @@
 # jarkViewer
+
+![](ico.png)
+
 A simple image viewer
+
 一个简易图片浏览器
 
 ### 编译前操作
