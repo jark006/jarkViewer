@@ -42,6 +42,7 @@ using std::endl;
 #include "png.h"
 #include "pngstruct.h"
 #include "psdsdk.h"
+#include "lunasvg.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

@@ -13,7 +13,7 @@ public:
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon", L".psd", L".tga"
+        L".ico", L".icon", L".psd", L".tga", L".svg"
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -1022,6 +1022,40 @@ public:
         return final_result;
     }
 
+    static cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf, int fileSize){
+        const int maxEdge = 1024;
+
+        auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
+        if (!document) {
+            Utils::log("Failed to load SVG data {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        // 宽高比例
+        const double AspectRatio = (document->height() == 0) ? 1 : (document->width() / document->height());
+        int height, width;
+
+        if (AspectRatio == 1) {
+            height = width = maxEdge;
+        }
+        else if (AspectRatio > 1) {
+            width = maxEdge;
+            height = int(maxEdge / AspectRatio);
+        }
+        else {
+            height = maxEdge;
+            width = int(maxEdge * AspectRatio);
+        }
+
+        auto bitmap = document->renderToBitmap(width, height);
+        if (!bitmap.valid()) {
+            Utils::log("Failed to render SVG to bitmap {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
+    }
+
     static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
 
@@ -1426,6 +1460,13 @@ public:
         else if (ext == L".tga") {
             img = loadTGA(path, buf, fileSize);
         }
+        else if (ext == L".svg") {
+            img = loadSVG(path, buf, fileSize);
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+            if (img.empty()) {
+                img = getDefaultMat();
+            }
+        }
         else if (ext == L".ico" || ext == L".icon") {
             img = loadICO(path, buf, fileSize);
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
@@ -1455,6 +1496,37 @@ public:
 
         if (img.channels() == 1)
             cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+
+        const size_t idx = ret.exifStr.find("方向: ");
+        if (idx != string::npos) {
+            int exifOrientation = ret.exifStr[idx + 8] - '0';
+
+            switch (exifOrientation) {
+            case 2: // 水平翻转
+                cv::flip(img, img, 1);
+                break;
+            case 3: // 旋转180度
+                cv::rotate(img, img, cv::ROTATE_180);
+                break;
+            case 4: // 垂直翻转
+                cv::flip(img, img, 0);
+                break;
+            case 5: // 顺时针旋转90度后垂直翻转
+                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+                cv::flip(img, img, 0);
+                break;
+            case 6: // 顺时针旋转90度
+                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+                break;
+            case 7: // 顺时针旋转90度后水平翻转
+                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+                cv::flip(img, img, 1);
+                break;
+            case 8: // 逆时针旋转90度
+                cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
+                break;
+            }
+        }
 
         ret.imgList.emplace_back(img, 0);
 
