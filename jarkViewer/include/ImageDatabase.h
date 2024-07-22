@@ -13,7 +13,7 @@ public:
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon", L".psd", L".tga", L".svg"
+        L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif"
     };
 
     static inline const unordered_set<wstring> supportRaw {
