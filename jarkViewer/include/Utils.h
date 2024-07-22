@@ -43,6 +43,8 @@ using std::endl;
 #include "pngstruct.h"
 #include "psdsdk.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
 #define END_TIME_COUNT auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count();\

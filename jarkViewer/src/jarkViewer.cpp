@@ -6,11 +6,9 @@
 
 /*
 TODO
-1. libpsd有BUG，部分PSD解码异常
-2. exif 的旋转信息
-3. avif crop 无法解码 kimono.crop.avif
-4. 重构程序结构
-5. tga格式
+1. exif 的旋转信息
+2. avif crop 无法解码 kimono.crop.avif
+3. 重构程序结构
 */
 
 const int BG_GRID_WIDTH = 8;
@@ -22,7 +20,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer V1.5";
+const wstring appName = L"JarkViewer V1.6";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {

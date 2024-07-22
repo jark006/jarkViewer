@@ -13,7 +13,7 @@ public:
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon", L".psd",
+        L".ico", L".icon", L".psd", L".tga"
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -982,6 +982,46 @@ public:
         return img;
     }
 
+    static cv::Mat loadTGA(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        int width, height, channels;
+
+        // 使用stb_image从内存缓冲区加载图像
+        uint8_t* img = stbi_load_from_memory(buf.data(), (int)buf.size(), &width, &height, &channels, 0);
+
+        if (!img) {
+            Utils::log("Failed to load image: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        // 确定OpenCV的色彩空间
+        int cv_type;
+        switch (channels) {
+        case 1: cv_type = CV_8UC1; break;
+        case 3: cv_type = CV_8UC3; break;
+        case 4: cv_type = CV_8UC4; break;
+        default:
+            stbi_image_free(img);
+            Utils::log("Unsupported number of channels:{} {}", channels, Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        // 创建OpenCV Mat
+        cv::Mat result(height, width, cv_type, img);
+
+        // 如果是RGB或RGBA,需要转换颜色顺序
+        if (channels == 3 || channels == 4) {
+            cv::cvtColor(result, result, cv::COLOR_RGB2BGR);
+        }
+
+        // 复制数据,因为我们需要释放stb_image分配的内存
+        cv::Mat final_result = result.clone();
+
+        // 释放stb_image分配的内存
+        stbi_image_free(img);
+
+        return final_result;
+    }
+
     static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
 
@@ -1382,6 +1422,9 @@ public:
         }
         else if (ext == L".jxl") {
             img = loadJXL(path, buf, fileSize);
+        }
+        else if (ext == L".tga") {
+            img = loadTGA(path, buf, fileSize);
         }
         else if (ext == L".ico" || ext == L".icon") {
             img = loadICO(path, buf, fileSize);

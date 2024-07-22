@@ -1,16 +1,13 @@
 #pragma once
 
-//————————————————
-//版权声明：本文为CSDN博主「天上下橙雨」的原创文章，遵循CC 4.0 BY - SA版权协议，转载请附上原文出处链接及本声明。
-//原文链接：https://blog.csdn.net/weixin_40026797/article/details/112755090
-
+// https://github.com/nothings/stb
 #include "Utils.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h" /* http://nothings.org/stb/stb_image_write.h */
+#include "stb_image_write.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "stb_truetype.h" /* http://nothings.org/stb/stb_truetype.h */
+#include "stb_truetype.h"
 
 
 class stbText {
