@@ -13,8 +13,8 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="src_psd">
-      <UniqueIdentifier>{b00aa22a-6e6a-42fb-b512-0282948dffd7}</UniqueIdentifier>
+    <Filter Include="include_psd">
+      <UniqueIdentifier>{f24eae56-f8f6-4f02-b322-ed0a8ed84437}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -57,193 +57,205 @@
     <ClInclude Include="include\channel.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\libpsd.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_bitmap.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_blend.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_descriptor.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_fixed.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_gradient.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_math.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_rect.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_stream.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
-    <ClInclude Include="src_psd\psd_system.h">
-      <Filter>src_psd</Filter>
-    </ClInclude>
     <ClInclude Include="include\png.h">
       <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psd.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdAllocator.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdAlphaChannel.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdAssert.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdBitUtil.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdBlendMode.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdChannel.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdChannelType.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdColorMode.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdColorModeDataSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdCompilerMacros.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdCompressionType.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdDecompressRle.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdDocument.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdDocumentation.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdEndianConversion.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExport.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExportChannel.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExportColorMode.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExportDocument.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExportLayer.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdExportMetaDataAttribute.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdFile.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdFixedSizeString.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdImageDataSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdImageResourcesSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdImageResourceType.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdInterleave.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psdinttypes.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psdispod.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psdisunsigned.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdKey.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLayer.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLayerCanvasCopy.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLayerMask.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLayerMaskSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLayerType.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdLog.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdMallocAllocator.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdMemoryUtil.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psdminiz.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdNamespace.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdNativeFile.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdNativeFile_Linux.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdNativeFile_Mac.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdParseColorModeDataSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdParseDocument.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdParseImageDataSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdParseImageResourcesSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdParseLayerMaskSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdPch.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdPlanarImage.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdPlatform.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdSection.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\Psdstdint.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdStringUtil.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdSyncFileReader.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdSyncFileUtil.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdSyncFileWriter.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdThumbnail.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdTypes.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdUnionCast.h">
+      <Filter>include_psd</Filter>
+    </ClInclude>
+    <ClInclude Include="include\psdsdk\PsdVectorMask.h">
+      <Filter>include_psd</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
       <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\adjustment.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\bevel_emboss.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\bitmap.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\blend.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\boundary.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\brightness_contrast.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\channel_image.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\channel_mixer.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\color.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\color_balance.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\color_mode.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\color_overlay.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\curves.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\descriptor.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\drop_shadow.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\effects.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\file_header.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\fixed.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\gaussian_blur.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\gradient_blend.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\gradient_fill.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\gradient_map.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\gradient_overlay.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\hue_saturation.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\image_data.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\image_resource.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\inner_glow.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\inner_shadow.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\invert.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\layer_mask.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\levels.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\outer_glow.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\path.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\pattern.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\pattern_fill.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\pattern_overlay.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\photo_filter.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\posterize.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\psd.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\psd_system.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\psd_zip.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\rect.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\satin.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\selective_color.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\solid_color.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\stream.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\stroke.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\threshold.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\thumbnail.c">
-      <Filter>src_psd</Filter>
-    </ClCompile>
-    <ClCompile Include="src_psd\type_tool.c">
-      <Filter>src_psd</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

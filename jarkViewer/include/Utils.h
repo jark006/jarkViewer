@@ -41,7 +41,7 @@ using std::endl;
 #include "webp/demux.h"
 #include "png.h"
 #include "pngstruct.h"
-#include "libpsd.h"
+#include "psdsdk.h"
 
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()

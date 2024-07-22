@@ -3,6 +3,8 @@
 #include "exifParse.h"
 #include "LRU.h"
 
+using namespace psd;
+
 class ImageDatabase{
 public:
 
@@ -649,29 +651,333 @@ public:
     }
 
 
+    static const unsigned int CHANNEL_NOT_FOUND = UINT_MAX;
+
+    template <typename T, typename DataHolder>
+    static void* ExpandChannelToCanvas(Allocator* allocator, const DataHolder* layer, const void* data, unsigned int canvasWidth, unsigned int canvasHeight)
+    {
+        T* canvasData = static_cast<T*>(allocator->Allocate(sizeof(T) * canvasWidth * canvasHeight, 16u));
+        memset(canvasData, 0u, sizeof(T) * canvasWidth * canvasHeight);
+
+        imageUtil::CopyLayerData(static_cast<const T*>(data), canvasData, layer->left, layer->top, layer->right, layer->bottom, canvasWidth, canvasHeight);
+
+        return canvasData;
+    }
+
+
+    static void* ExpandChannelToCanvas(const Document* document, Allocator* allocator, Layer* layer, Channel* channel)
+    {
+        if (document->bitsPerChannel == 8)
+            return ExpandChannelToCanvas<uint8_t>(allocator, layer, channel->data, document->width, document->height);
+        else if (document->bitsPerChannel == 16)
+            return ExpandChannelToCanvas<uint16_t>(allocator, layer, channel->data, document->width, document->height);
+        else if (document->bitsPerChannel == 32)
+            return ExpandChannelToCanvas<float32_t>(allocator, layer, channel->data, document->width, document->height);
+
+        return nullptr;
+    }
+
+
+    template <typename T>
+    static void* ExpandMaskToCanvas(const Document* document, Allocator* allocator, T* mask)
+    {
+        if (document->bitsPerChannel == 8)
+            return ExpandChannelToCanvas<uint8_t>(allocator, mask, mask->data, document->width, document->height);
+        else if (document->bitsPerChannel == 16)
+            return ExpandChannelToCanvas<uint16_t>(allocator, mask, mask->data, document->width, document->height);
+        else if (document->bitsPerChannel == 32)
+            return ExpandChannelToCanvas<float32_t>(allocator, mask, mask->data, document->width, document->height);
+
+        return nullptr;
+    }
+
+
+    static unsigned int FindChannel(Layer* layer, int16_t channelType)
+    {
+        for (unsigned int i = 0; i < layer->channelCount; ++i)
+        {
+            Channel* channel = &layer->channels[i];
+            if (channel->data && channel->type == channelType)
+                return i;
+        }
+
+        return CHANNEL_NOT_FOUND;
+    }
+
+    template <typename T>
+    struct TmpValue;
+
+    // uint8_t的特化
+    template <>
+    struct TmpValue<uint8_t> {
+        static constexpr uint8_t alphaMax = 255;
+    };
+
+    // uint16_t的特化
+    template <>
+    struct TmpValue<uint16_t> {
+        static constexpr uint16_t alphaMax = 65535;
+    };
+
+    // float的特化
+    template <>
+    struct TmpValue<float> {
+        static constexpr float alphaMax = 1.0f;
+    };
+
+    template <typename T>
+    static T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, unsigned int width, unsigned int height)
+    {
+        T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
+
+        const T* r = static_cast<const T*>(srcR);
+        const T* g = static_cast<const T*>(srcG);
+        const T* b = static_cast<const T*>(srcB);
+        imageUtil::InterleaveRGB(b, g, r, TmpValue<T>::alphaMax, image, width, height); // RGB -> BGR
+
+        return image;
+    }
+
+
+    template <typename T>
+    static T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, const void* srcA, unsigned int width, unsigned int height)
+    {
+        T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
+
+        const T* r = static_cast<const T*>(srcR);
+        const T* g = static_cast<const T*>(srcG);
+        const T* b = static_cast<const T*>(srcB);
+        const T* a = static_cast<const T*>(srcA);
+        imageUtil::InterleaveRGBA(b, g, r, a, image, width, height); // RGB -> BGR
+
+        return image;
+    }
+
+
+    // https://github.com/MolecularMatters/psd_sdk
     static cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf, int fileSize) {
-        psd_context* context = nullptr;
-        psd_status status = psd_image_load_from_memory(&context, (psd_char*)buf.data(), buf.size());
+        cv::Mat img;
 
-        if (status != psd_status_done) {
-            Utils::log("Failed to load PSD file: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+        MallocAllocator allocator;
+        NativeFile file(&allocator);
+
+        if (!file.OpenRead(path.c_str())) {
+            Utils::log("Cannot open file {}", Utils::wstringToUtf8(path));
+            return img;
         }
 
-        if (context->width == 0 || context->height == 0) {
-            Utils::log("PSD error {} width:{} height:{}", Utils::wstringToUtf8(path), context->width, context->height);
-            return cv::Mat();
+        Document* document = CreateDocument(&file, &allocator);
+        if (!document) {
+            Utils::log("Cannot create document {}", Utils::wstringToUtf8(path));
+            file.Close();
+            return img;
         }
 
-        const auto* imageData = context->merged_image_data;
-        if (!imageData) {
-            psd_image_free(context);
-            Utils::log("Failed to get image data from PSD file {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+        // the sample only supports RGB colormode
+        if (document->colorMode != colorMode::RGB)
+        {
+            Utils::log("Document is not in RGB color mode {}", Utils::wstringToUtf8(path));
+            DestroyDocument(document, &allocator);
+            file.Close();
+            return img;
         }
 
-        auto img = cv::Mat(context->height, context->width, CV_8UC4, (void*)imageData).clone();
-        psd_image_free(context);
+        // extract all layers and masks.
+        bool hasTransparencyMask = false;
+        LayerMaskSection* layerMaskSection = ParseLayerMaskSection(document, &file, &allocator);
+        if (layerMaskSection)
+        {
+            hasTransparencyMask = layerMaskSection->hasTransparencyMask;
+
+            // extract all layers one by one. this should be done in parallel for maximum efficiency.
+            for (unsigned int i = 0; i < layerMaskSection->layerCount; ++i)
+            {
+                Layer* layer = &layerMaskSection->layers[i];
+                ExtractLayer(document, &file, &allocator, layer);
+
+                // check availability of R, G, B, and A channels.
+                // we need to determine the indices of channels individually, because there is no guarantee that R is the first channel,
+                // G is the second, B is the third, and so on.
+                const unsigned int indexR = FindChannel(layer, channelType::R);
+                const unsigned int indexG = FindChannel(layer, channelType::G);
+                const unsigned int indexB = FindChannel(layer, channelType::B);
+                const unsigned int indexA = FindChannel(layer, channelType::TRANSPARENCY_MASK);
+
+                // note that channel data is only as big as the layer it belongs to, e.g. it can be smaller or bigger than the canvas,
+                // depending on where it is positioned. therefore, we use the provided utility functions to expand/shrink the channel data
+                // to the canvas size. of course, you can work with the channel data directly if you need to.
+                void* canvasData[4] = {};
+                unsigned int channelCount = 0u;
+                if ((indexR != CHANNEL_NOT_FOUND) && (indexG != CHANNEL_NOT_FOUND) && (indexB != CHANNEL_NOT_FOUND))
+                {
+                    // RGB channels were found.
+                    canvasData[0] = ExpandChannelToCanvas(document, &allocator, layer, &layer->channels[indexR]);
+                    canvasData[1] = ExpandChannelToCanvas(document, &allocator, layer, &layer->channels[indexG]);
+                    canvasData[2] = ExpandChannelToCanvas(document, &allocator, layer, &layer->channels[indexB]);
+                    channelCount = 3u;
+
+                    if (indexA != CHANNEL_NOT_FOUND)
+                    {
+                        // A channel was also found.
+                        canvasData[3] = ExpandChannelToCanvas(document, &allocator, layer, &layer->channels[indexA]);
+                        channelCount = 4u;
+                    }
+                }
+
+                // interleave the different pieces of planar canvas data into one RGB or RGBA image, depending on what channels
+                // we found, and what color mode the document is stored in.
+                uint8_t* image8 = nullptr;
+                uint16_t* image16 = nullptr;
+                float32_t* image32 = nullptr;
+                if (channelCount == 3u)
+                {
+                    if (document->bitsPerChannel == 8)
+                    {
+                        image8 = CreateInterleavedImage<uint8_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 16)
+                    {
+                        image16 = CreateInterleavedImage<uint16_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 32)
+                    {
+                        image32 = CreateInterleavedImage<float32_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], document->width, document->height);
+                    }
+                }
+                else if (channelCount == 4u)
+                {
+                    if (document->bitsPerChannel == 8)
+                    {
+                        image8 = CreateInterleavedImage<uint8_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], canvasData[3], document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 16)
+                    {
+                        image16 = CreateInterleavedImage<uint16_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], canvasData[3], document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 32)
+                    {
+                        image32 = CreateInterleavedImage<float32_t>(&allocator, canvasData[0], canvasData[1], canvasData[2], canvasData[3], document->width, document->height);
+                    }
+                }
+
+                allocator.Free(canvasData[0]);
+                allocator.Free(canvasData[1]);
+                allocator.Free(canvasData[2]);
+                allocator.Free(canvasData[3]);
+
+                // get the layer name.
+                // Unicode data is preferred because it is not truncated by Photoshop, but unfortunately it is optional.
+                // fall back to the ASCII name in case no Unicode name was found.
+                std::wstringstream layerName;
+                if (layer->utf16Name)
+                {
+                    //In Windows wchar_t is utf16
+                    PSD_STATIC_ASSERT(sizeof(wchar_t) == sizeof(uint16_t));
+                    layerName << reinterpret_cast<wchar_t*>(layer->utf16Name);
+                }
+                else
+                {
+                    layerName << layer->name.c_str();
+                }
+            }
+
+            DestroyLayerMaskSection(layerMaskSection, &allocator);
+        }
+
+        // extract the image data section, if available. the image data section stores the final, merged image, as well as additional
+        // alpha channels. this is only available when saving the document with "Maximize Compatibility" turned on.
+        if (document->imageDataSection.length != 0)
+        {
+            ImageDataSection* imageData = ParseImageDataSection(document, &file, &allocator);
+            if (imageData)
+            {
+                // interleave the planar image data into one RGB or RGBA image.
+                // store the rest of the (alpha) channels and the transparency mask separately.
+                const unsigned int imageCount = imageData->imageCount;
+
+                // note that an image can have more than 3 channels, but still no transparency mask in case all extra channels
+                // are actual alpha channels.
+                bool isRgb = false;
+                if (imageCount == 3)
+                {
+                    // imageData->images[0], imageData->images[1] and imageData->images[2] contain the R, G, and B channels of the merged image.
+                    // they are always the size of the canvas/document, so we can interleave them using imageUtil::InterleaveRGB directly.
+                    isRgb = true;
+                }
+                else if (imageCount >= 4)
+                {
+                    // check if we really have a transparency mask that belongs to the "main" merged image.
+                    if (hasTransparencyMask)
+                    {
+                        // we have 4 or more images/channels, and a transparency mask.
+                        // this means that images 0-3 are RGBA, respectively.
+                        isRgb = false;
+                    }
+                    else
+                    {
+                        // we have 4 or more images stored in the document, but none of them is the transparency mask.
+                        // this means we are dealing with RGB (!) data, and several additional alpha channels.
+                        isRgb = true;
+                    }
+                }
+
+                uint8_t* image8 = nullptr;
+                uint16_t* image16 = nullptr;
+                float32_t* image32 = nullptr;
+                if (isRgb)
+                {
+                    // RGB
+                    if (document->bitsPerChannel == 8)
+                    {
+                        image8 = CreateInterleavedImage<uint8_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 16)
+                    {
+                        image16 = CreateInterleavedImage<uint16_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 32)
+                    {
+                        image32 = CreateInterleavedImage<float32_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, document->width, document->height);
+                    }
+                }
+                else
+                {
+                    // RGBA
+                    if (document->bitsPerChannel == 8)
+                    {
+                        image8 = CreateInterleavedImage<uint8_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, imageData->images[3].data, document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 16)
+                    {
+                        image16 = CreateInterleavedImage<uint16_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, imageData->images[3].data, document->width, document->height);
+                    }
+                    else if (document->bitsPerChannel == 32)
+                    {
+                        image32 = CreateInterleavedImage<float32_t>(&allocator, imageData->images[0].data, imageData->images[1].data, imageData->images[2].data, imageData->images[3].data, document->width, document->height);
+                    }
+                }
+
+                if (document->bitsPerChannel == 8) {
+                    img = cv::Mat(document->height, document->width, CV_8UC4, image8).clone();
+                }
+                else if (document->bitsPerChannel == 16) {
+                    cv::Mat(document->height, document->width, CV_16UC4, image16).convertTo(img, CV_8UC4, 1.0/256);
+                }
+                else if (document->bitsPerChannel == 32) {
+                    cv::Mat(document->height, document->width, CV_32FC4, image32).convertTo(img, CV_8UC4, 255.0);
+                }
+
+                allocator.Free(image8);
+                allocator.Free(image16);
+                allocator.Free(image32);
+
+                DestroyImageDataSection(imageData, &allocator);
+            }
+        }
+
+        // don't forget to destroy the document, and close the file.
+        DestroyDocument(document, &allocator);
+        file.Close();
 
         return img;
     }
@@ -992,7 +1298,7 @@ public:
 
             // 将帧数据复制到完整尺寸的Mat中
             for (png_uint_32 y = 0; y < frame_height; ++y) {
-                std::memcpy(full_frame.ptr(frame_y_offset + y) + frame_x_offset * 4, row_pointers[y], frame_width * 4);
+                std::memcpy(full_frame.ptr(frame_y_offset + y) + frame_x_offset * 4, row_pointers[y], 4ULL * frame_width);
             }
 
             // 释放行指针

@@ -90,7 +90,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <StackReserveSize>8388608</StackReserveSize>
     </Link>
@@ -127,7 +127,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <StackReserveSize>8388608</StackReserveSize>
@@ -143,78 +143,82 @@
     <ClInclude Include="include\exifParse.h" />
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
-    <ClInclude Include="include\libpsd.h" />
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\png.h" />
+    <ClInclude Include="include\psdsdk.h" />
+    <ClInclude Include="include\psdsdk\Psd.h" />
+    <ClInclude Include="include\psdsdk\PsdAllocator.h" />
+    <ClInclude Include="include\psdsdk\PsdAlphaChannel.h" />
+    <ClInclude Include="include\psdsdk\PsdAssert.h" />
+    <ClInclude Include="include\psdsdk\PsdBitUtil.h" />
+    <ClInclude Include="include\psdsdk\PsdBlendMode.h" />
+    <ClInclude Include="include\psdsdk\PsdChannel.h" />
+    <ClInclude Include="include\psdsdk\PsdChannelType.h" />
+    <ClInclude Include="include\psdsdk\PsdColorMode.h" />
+    <ClInclude Include="include\psdsdk\PsdColorModeDataSection.h" />
+    <ClInclude Include="include\psdsdk\PsdCompilerMacros.h" />
+    <ClInclude Include="include\psdsdk\PsdCompressionType.h" />
+    <ClInclude Include="include\psdsdk\PsdDecompressRle.h" />
+    <ClInclude Include="include\psdsdk\PsdDocument.h" />
+    <ClInclude Include="include\psdsdk\PsdDocumentation.h" />
+    <ClInclude Include="include\psdsdk\PsdEndianConversion.h" />
+    <ClInclude Include="include\psdsdk\PsdExport.h" />
+    <ClInclude Include="include\psdsdk\PsdExportChannel.h" />
+    <ClInclude Include="include\psdsdk\PsdExportColorMode.h" />
+    <ClInclude Include="include\psdsdk\PsdExportDocument.h" />
+    <ClInclude Include="include\psdsdk\PsdExportLayer.h" />
+    <ClInclude Include="include\psdsdk\PsdExportMetaDataAttribute.h" />
+    <ClInclude Include="include\psdsdk\PsdFile.h" />
+    <ClInclude Include="include\psdsdk\PsdFixedSizeString.h" />
+    <ClInclude Include="include\psdsdk\PsdImageDataSection.h" />
+    <ClInclude Include="include\psdsdk\PsdImageResourcesSection.h" />
+    <ClInclude Include="include\psdsdk\PsdImageResourceType.h" />
+    <ClInclude Include="include\psdsdk\PsdInterleave.h" />
+    <ClInclude Include="include\psdsdk\Psdinttypes.h" />
+    <ClInclude Include="include\psdsdk\Psdispod.h" />
+    <ClInclude Include="include\psdsdk\Psdisunsigned.h" />
+    <ClInclude Include="include\psdsdk\PsdKey.h" />
+    <ClInclude Include="include\psdsdk\PsdLayer.h" />
+    <ClInclude Include="include\psdsdk\PsdLayerCanvasCopy.h" />
+    <ClInclude Include="include\psdsdk\PsdLayerMask.h" />
+    <ClInclude Include="include\psdsdk\PsdLayerMaskSection.h" />
+    <ClInclude Include="include\psdsdk\PsdLayerType.h" />
+    <ClInclude Include="include\psdsdk\PsdLog.h" />
+    <ClInclude Include="include\psdsdk\PsdMallocAllocator.h" />
+    <ClInclude Include="include\psdsdk\PsdMemoryUtil.h" />
+    <ClInclude Include="include\psdsdk\Psdminiz.h" />
+    <ClInclude Include="include\psdsdk\PsdNamespace.h" />
+    <ClInclude Include="include\psdsdk\PsdNativeFile.h" />
+    <ClInclude Include="include\psdsdk\PsdNativeFile_Linux.h" />
+    <ClInclude Include="include\psdsdk\PsdNativeFile_Mac.h" />
+    <ClInclude Include="include\psdsdk\PsdParseColorModeDataSection.h" />
+    <ClInclude Include="include\psdsdk\PsdParseDocument.h" />
+    <ClInclude Include="include\psdsdk\PsdParseImageDataSection.h" />
+    <ClInclude Include="include\psdsdk\PsdParseImageResourcesSection.h" />
+    <ClInclude Include="include\psdsdk\PsdParseLayerMaskSection.h" />
+    <ClInclude Include="include\psdsdk\PsdPch.h" />
+    <ClInclude Include="include\psdsdk\PsdPlanarImage.h" />
+    <ClInclude Include="include\psdsdk\PsdPlatform.h" />
+    <ClInclude Include="include\psdsdk\PsdSection.h" />
+    <ClInclude Include="include\psdsdk\Psdstdint.h" />
+    <ClInclude Include="include\psdsdk\PsdStringUtil.h" />
+    <ClInclude Include="include\psdsdk\PsdSyncFileReader.h" />
+    <ClInclude Include="include\psdsdk\PsdSyncFileUtil.h" />
+    <ClInclude Include="include\psdsdk\PsdSyncFileWriter.h" />
+    <ClInclude Include="include\psdsdk\PsdThumbnail.h" />
+    <ClInclude Include="include\psdsdk\PsdTypes.h" />
+    <ClInclude Include="include\psdsdk\PsdUnionCast.h" />
+    <ClInclude Include="include\psdsdk\PsdVectorMask.h" />
     <ClInclude Include="include\stbText.h" />
     <ClInclude Include="include\thread_pool.h" />
     <ClInclude Include="include\Utils.h" />
     <ClInclude Include="include\x265.h" />
     <ClInclude Include="include\x265_config.h" />
     <ClInclude Include="Resource.h" />
-    <ClInclude Include="src_psd\psd_bitmap.h" />
-    <ClInclude Include="src_psd\psd_blend.h" />
-    <ClInclude Include="src_psd\psd_descriptor.h" />
-    <ClInclude Include="src_psd\psd_fixed.h" />
-    <ClInclude Include="src_psd\psd_gradient.h" />
-    <ClInclude Include="src_psd\psd_math.h" />
-    <ClInclude Include="src_psd\psd_rect.h" />
-    <ClInclude Include="src_psd\psd_stream.h" />
-    <ClInclude Include="src_psd\psd_system.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp" />
-    <ClCompile Include="src_psd\adjustment.c" />
-    <ClCompile Include="src_psd\bevel_emboss.c" />
-    <ClCompile Include="src_psd\bitmap.c" />
-    <ClCompile Include="src_psd\blend.c" />
-    <ClCompile Include="src_psd\boundary.c" />
-    <ClCompile Include="src_psd\brightness_contrast.c" />
-    <ClCompile Include="src_psd\channel_image.c" />
-    <ClCompile Include="src_psd\channel_mixer.c" />
-    <ClCompile Include="src_psd\color.c" />
-    <ClCompile Include="src_psd\color_balance.c" />
-    <ClCompile Include="src_psd\color_mode.c" />
-    <ClCompile Include="src_psd\color_overlay.c" />
-    <ClCompile Include="src_psd\curves.c" />
-    <ClCompile Include="src_psd\descriptor.c" />
-    <ClCompile Include="src_psd\drop_shadow.c" />
-    <ClCompile Include="src_psd\effects.c" />
-    <ClCompile Include="src_psd\file_header.c" />
-    <ClCompile Include="src_psd\fixed.c" />
-    <ClCompile Include="src_psd\gaussian_blur.c" />
-    <ClCompile Include="src_psd\gradient_blend.c" />
-    <ClCompile Include="src_psd\gradient_fill.c" />
-    <ClCompile Include="src_psd\gradient_map.c" />
-    <ClCompile Include="src_psd\gradient_overlay.c" />
-    <ClCompile Include="src_psd\hue_saturation.c" />
-    <ClCompile Include="src_psd\image_data.c" />
-    <ClCompile Include="src_psd\image_resource.c" />
-    <ClCompile Include="src_psd\inner_glow.c" />
-    <ClCompile Include="src_psd\inner_shadow.c" />
-    <ClCompile Include="src_psd\invert.c" />
-    <ClCompile Include="src_psd\layer_mask.c" />
-    <ClCompile Include="src_psd\levels.c" />
-    <ClCompile Include="src_psd\outer_glow.c" />
-    <ClCompile Include="src_psd\path.c" />
-    <ClCompile Include="src_psd\pattern.c" />
-    <ClCompile Include="src_psd\pattern_fill.c" />
-    <ClCompile Include="src_psd\pattern_overlay.c" />
-    <ClCompile Include="src_psd\photo_filter.c" />
-    <ClCompile Include="src_psd\posterize.c" />
-    <ClCompile Include="src_psd\psd.c" />
-    <ClCompile Include="src_psd\psd_system.c" />
-    <ClCompile Include="src_psd\psd_zip.c" />
-    <ClCompile Include="src_psd\rect.c" />
-    <ClCompile Include="src_psd\satin.c" />
-    <ClCompile Include="src_psd\selective_color.c" />
-    <ClCompile Include="src_psd\solid_color.c" />
-    <ClCompile Include="src_psd\stream.c" />
-    <ClCompile Include="src_psd\stroke.c" />
-    <ClCompile Include="src_psd\threshold.c" />
-    <ClCompile Include="src_psd\thumbnail.c" />
-    <ClCompile Include="src_psd\type_tool.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc" />

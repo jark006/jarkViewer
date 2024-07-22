@@ -10,6 +10,7 @@ TODO
 2. exif 的旋转信息
 3. avif crop 无法解码 kimono.crop.avif
 4. 重构程序结构
+5. tga格式
 */
 
 const int BG_GRID_WIDTH = 8;
@@ -21,7 +22,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer V1.4";
+const wstring appName = L"JarkViewer V1.5";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
@@ -157,8 +158,8 @@ static void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) {
     auto ptr = (uint32_t*)canvas.ptr();
     for (int y = yStart; y < yEnd; y++)
         for (int x = xStart; x < xEnd; x++) {
-            const int srcX = (int)((x - deltaW) * ZOOM_BASE / zoomCur);
-            const int srcY = (int)((y - deltaH) * ZOOM_BASE / zoomCur);
+            const int srcX = (int)(((int64_t)x - deltaW) * ZOOM_BASE / zoomCur);
+            const int srcY = (int)(((int64_t)y - deltaH) * ZOOM_BASE / zoomCur);
             if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
                 ptr[y * winSize.width + x] = getSrcPx(srcImg, srcX, srcY, x, y);
         }
