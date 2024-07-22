@@ -23,3 +23,6 @@ vcpkg install libraw[core,dng-lossy,openmp]:x64-windows-static
 vcpkg install opencv4[core,ade,contrib,default-features,dnn,eigen,ffmpeg,freetype,gdcm,gstreamer,halide,ipp,jasper,jpeg,lapack,nonfree,openexr,opengl,openjpeg,openmp,openvino,ovis,png,python,qt,quirc,sfm,tbb,tiff,vtk,vulkan,webp,world]:x64-windows-static
 ```
 
+# Preview
+
+![](preview.jpg)
