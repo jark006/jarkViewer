@@ -6,9 +6,9 @@
 class ExifParse{
 public:
     static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
-        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n文件头部32字节: {}",
+        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n文件头部16字节: {}",
             Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height,
-            Utils::bin2Hex(buf, fileSize >= 32 ? 32 : fileSize));
+            Utils::bin2Hex(buf, fileSize >= 16 ? 16 : fileSize));
     }
 
     static std::string exifDataToString(const Exiv2::ExifData& exifData) {
@@ -155,11 +155,9 @@ public:
             isInit = true;
             Exiv2::enableBMFF();
         }
-
-
-        auto res = std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
-            Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
-
+        
+        auto res = getSimpleInfo(path, width, height, buf, fileSize);
+        
         try {
             auto image = Exiv2::ImageFactory::open(buf, fileSize);
             image->readMetadata();

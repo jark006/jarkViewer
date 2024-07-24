@@ -5,7 +5,7 @@
 
 using namespace psd;
 
-class ImageDatabase{
+class ImageDatabase:public LRU<wstring, Frames> {
 public:
 
     static inline const unordered_set<wstring> supportExt{
@@ -18,14 +18,14 @@ public:
 
     static inline const unordered_set<wstring> supportRaw {
         L".crw", L".cr2", L".cr3", // Canon
-        L".nef", // Nikon
         L".arw", L".srf", L".sr2", // Sony
+        L".raw", L".dng", // Leica
+        L".nef", // Nikon
         L".pef", // Pentax
         L".orf", // Olympus
         L".rw2", // Panasonic
         L".raf", // Fujifilm
         L".kdc", // Kodak
-        L".raw", L".dng", // Leica
         L".x3f", // Sigma
         L".mrw", // Minolta
         L".3fr"  // Hasselblad
@@ -57,15 +57,11 @@ public:
         return homeMat;
     }
 
-    auto& operator()() {
-        return database;
-    }
-
     // HEIC ONLY, AVIF not support
     // https://github.com/strukturag/libheif
     // vcpkg install libheif:x64-windows-static
     // vcpkg install libheif[hevc]:x64-windows-static
-    static cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
 
         auto exifStr = std::format("路径: {}\n大小: {}",
             Utils::wstringToUtf8(path), Utils::size2Str(fileSize));
@@ -138,7 +134,7 @@ public:
 
     // vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
     // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
-    static cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
         avifImage* image = avifImageCreateEmpty();
         if (image == nullptr) {
             Utils::log("avifImageCreateEmpty failure: {}", Utils::wstringToUtf8(path));
@@ -207,7 +203,7 @@ public:
         return ret;
     }
 
-    static cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf, int fileSize) {
         if (buf.empty() || fileSize <= 0) {
             Utils::log("Buf is empty: {} {}", Utils::wstringToUtf8(path), fileSize);
             return cv::Mat();
@@ -251,7 +247,7 @@ public:
         return bgrImage;
     }
 
-    static const std::string jxlStatusCode2String(JxlDecoderStatus status) {
+    const std::string jxlStatusCode2String(JxlDecoderStatus status) {
         switch (status) {
         case JXL_DEC_SUCCESS:
             return "Success: Function call finished successfully or decoding is finished.";
@@ -288,7 +284,7 @@ public:
         }
     }
 
-    static cv::Mat loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
 
         uint32_t xsize = 0, ysize = 0;
         cv::Mat mat;
@@ -450,7 +446,7 @@ public:
         uint32_t clrImportant;
     };
 
-    static cv::Mat readDibFromMemory(const uint8_t* data, size_t size) {
+    cv::Mat readDibFromMemory(const uint8_t* data, size_t size) {
         // 确保有足够的数据用于DIB头
         if (size < sizeof(DibHeader)) {
             Utils::log("Insufficient data for DIB header. {}", size);
@@ -473,10 +469,12 @@ public:
         }
 
         // 确保有足够的数据用于调色板和像素数据
-        if (size < ((size_t)header.headerSize + paletteSize + header.imageSize)) {
-            Utils::log("Insufficient data for image.");
-            return cv::Mat();
-        }
+        //const size_t requireSize = (size_t)header.headerSize + paletteSize + header.imageSize; // header.imageSize偶尔大于size
+        //if (size < requireSize) {
+        //    Utils::log("Insufficient data for image.");
+        //    Utils::log("requireSize {} givenSize {}", requireSize, size);
+        //    return cv::Mat();
+        //}
 
         // 读取调色板（如果存在）
         std::vector<cv::Vec4b> palette;
@@ -493,7 +491,7 @@ public:
         int imageHeight = hasAlphaMask ? header.height / 2 : header.height;
 
         // 创建cv::Mat对象
-        cv::Mat image(imageHeight, header.width, header.bitCount <= 8 ? CV_8UC3 : CV_8UC4);
+        cv::Mat image(imageHeight, header.width, CV_8UC4);
 
         // 根据位深度处理像素数据
         switch (header.bitCount) {
@@ -505,7 +503,7 @@ public:
                     int byteIndex = (imageHeight - y - 1) * byteWidth + x / 8;
                     int bitIndex = x % 8;
                     int colorIndex = (pixelData[byteIndex] >> (7 - bitIndex)) & 0x01;
-                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2], 255);
                 }
             }
             break;
@@ -518,7 +516,7 @@ public:
                     int byteIndex = (imageHeight - y - 1) * byteWidth + x / 2;
                     int nibbleIndex = x % 2;
                     int colorIndex = (pixelData[byteIndex] >> (4 * (1 - nibbleIndex))) & 0x0F;
-                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2], 255);
                 }
             }
             break;
@@ -529,7 +527,7 @@ public:
                 for (int x = 0; x < header.width; ++x) {
                     int byteIndex = (imageHeight - y - 1) * header.width + x;
                     int colorIndex = pixelData[byteIndex];
-                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2]);
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(palette[colorIndex][0], palette[colorIndex][1], palette[colorIndex][2], 255);
                 }
             }
             break;
@@ -543,9 +541,26 @@ public:
                     uint8_t r = (pixel >> 10) & 0x1F;
                     uint8_t g = (pixel >> 5) & 0x1F;
                     uint8_t b = pixel & 0x1F;
-                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(b << 3, g << 3, r << 3);
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(b << 3, g << 3, r << 3, 255);
                 }
             }
+            break;
+        }
+        case 24: {
+            for (int y = 0; y < imageHeight; ++y) {
+                for (int x = 0; x < header.width; ++x) {
+                    int byteIndex = ((imageHeight - y - 1) * header.width + x) * 3;
+                    uint8_t r = pixelData[byteIndex];
+                    uint8_t g = pixelData[byteIndex + 1];
+                    uint8_t b = pixelData[byteIndex + 2];
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(b, g, r, 255);
+                }
+            }
+            break;
+        }
+        case 32: {
+            memcpy(image.ptr(), pixelData, 4ULL * imageHeight * header.width);
+            cv::flip(image, image, 0); // 上下翻转
             break;
         }
         default:
@@ -583,10 +598,11 @@ public:
         return image;
     }
 
-    static cv::Mat loadICO(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
+    std::tuple<cv::Mat, string> loadICO(const wstring& path, const vector<uchar>& buf, int fileSize) {
         if (buf.size() < 6) {
             Utils::log("Invalid ICO file: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return { cv::Mat(),"" };
         }
 
         uint16_t numImages = *reinterpret_cast<const uint16_t*>(&buf[4]);
@@ -594,67 +610,101 @@ public:
 
         if (numImages > 255) {
             Utils::log("numImages Error: {} {}", Utils::wstringToUtf8(path), numImages);
-            return cv::Mat();
+            return { cv::Mat(),"" };
         }
 
         size_t offset = 6;
         for (int i = 0; i < numImages; ++i) {
             if (offset + sizeof(IconDirEntry) > buf.size()) {
                 Utils::log("Invalid ICO file structure: {}", Utils::wstringToUtf8(path));
-                return cv::Mat();
+                return { cv::Mat(),"" };
             }
 
             entries.push_back(*reinterpret_cast<const IconDirEntry*>(&buf[offset]));
             offset += sizeof(IconDirEntry);
         }
 
-        auto maxResEntry = std::max_element(entries.begin(), entries.end(),
-            [](const IconDirEntry& a, const IconDirEntry& b) {
-                if (a.width == 0)return false;
-                if (b.width == 0)return true;
-                return a.width < b.width;
-            });
+        vector<cv::Mat> imgs;
+        for (const auto& entry : entries) {
+            int width = entry.width == 0 ? 256 : entry.width;
+            int height = entry.height == 0 ? 256 : entry.height;
 
-        if (maxResEntry == entries.end()) {
-            Utils::log("No valid image entries found: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            const size_t endOffset = size_t(entry.dataOffset) + entry.dataSize;
+            if (endOffset > buf.size()) {
+                Utils::log("Invalid image data offset or size: {}", Utils::wstringToUtf8(path));
+                Utils::log("endOffset {} buf.size(): {}", endOffset, buf.size());
+                Utils::log("entry.dataOffset {}", entry.dataOffset);
+                Utils::log("entry.dataSize: {}", entry.dataSize);
+                continue;
+            }
+
+            cv::Mat rawData(1, entry.dataSize, CV_8UC1, (uint8_t*)(buf.data() + entry.dataOffset));
+
+            // PNG BMP
+            if (memcmp(rawData.ptr(), "\x89PNG", 4) == 0 || memcmp(rawData.ptr(), "BM", 2) == 0) {
+                imgs.push_back(cv::imdecode(rawData, cv::IMREAD_UNCHANGED));
+                continue;
+            }
+
+            DibHeader* dibHeader = (DibHeader*)(buf.data() + entry.dataOffset);
+            if (dibHeader->headerSize != 0x28)
+                continue;
+
+            imgs.push_back(readDibFromMemory((uint8_t*)(buf.data() + entry.dataOffset), entry.dataSize));
         }
 
-        int width = maxResEntry->width == 0 ? 256 : maxResEntry->width;
-        int height = maxResEntry->height == 0 ? 256 : maxResEntry->height;
+        int totalWidth = 0;
+        int maxHeight = 0;
+        for (auto& img : imgs) {
+            if (img.rows == 0 || img.cols == 0)
+                continue;
 
-        if (((size_t)maxResEntry->dataOffset + maxResEntry->dataSize) > buf.size()) {
-            Utils::log("Invalid image data offset or size: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            if (img.channels() == 1) {
+                cv::cvtColor(img, img, cv::COLOR_GRAY2BGRA);
+            }
+            else if (img.channels() == 3) {
+                cv::cvtColor(img, img, cv::COLOR_BGR2BGRA);
+            }
+            else if (img.channels() == 4) {
+                // Already BGRA
+            }
+            else {
+                Utils::log("Unsupported image format");
+                img = getDefaultMat();
+            }
+
+            totalWidth += img.cols;
+            maxHeight = std::max(maxHeight, img.rows);
         }
 
-        cv::Mat rawData(1, maxResEntry->dataSize, CV_8UC1, (uint8_t*)(buf.data() + maxResEntry->dataOffset));
+        if (totalWidth == 0)
+            return { cv::Mat(),"" };
 
-        // PNG BMP
-        if (memcmp(rawData.ptr(), "\x89PNG", 4) == 0 || memcmp(rawData.ptr(), "BM", 2) == 0)
-            return cv::imdecode(rawData, cv::IMREAD_UNCHANGED);
+        cv::Mat result(maxHeight, totalWidth, CV_8UC4, cv::Scalar(0, 0, 0, 0));
 
-        DibHeader* dibHeader = (DibHeader*)(buf.data() + maxResEntry->dataOffset);
-        if (dibHeader->headerSize != 0x28)
-            return cv::Mat();
+        string resolutionStr = "\n分辨率:";
+        int imageCnt = 0;
+        int currentX = 0;
+        for (const auto& img : imgs) {
+            if (img.rows == 0 || img.cols == 0)
+                continue;
 
-        size_t byteSize = (size_t)width * height * maxResEntry->bitsPerPixel / 8;
-        if (maxResEntry->bitsPerPixel >= 24 && maxResEntry->dataSize >= byteSize + dibHeader->headerSize) {
-            auto imgOrg = cv::Mat(height, width, maxResEntry->bitsPerPixel == 24 ? CV_8UC3 : CV_8UC4,
-                (uint8_t*)(buf.data() + maxResEntry->dataOffset + dibHeader->headerSize));
-            cv::Mat flippedImage;
-            cv::flip(imgOrg, flippedImage, 0); // 上下翻转
-            return flippedImage;
+            img.copyTo(result(cv::Rect(currentX, 0, img.cols, img.rows)));
+            currentX += img.cols;
+
+            resolutionStr += std::format(" {}x{}", img.cols, img.rows);
+            imageCnt++;
         }
+        resolutionStr += std::format("\n子图数量: {}", imageCnt);
 
-        return readDibFromMemory((uint8_t*)(buf.data() + maxResEntry->dataOffset), maxResEntry->dataSize);
+        return { result,ExifParse::getSimpleInfo(path, result.cols, result.rows, buf.data(), buf.size()) + resolutionStr };
     }
 
 
     static const unsigned int CHANNEL_NOT_FOUND = UINT_MAX;
 
     template <typename T, typename DataHolder>
-    static void* ExpandChannelToCanvas(Allocator* allocator, const DataHolder* layer, const void* data, unsigned int canvasWidth, unsigned int canvasHeight)
+    void* ExpandChannelToCanvas(Allocator* allocator, const DataHolder* layer, const void* data, unsigned int canvasWidth, unsigned int canvasHeight)
     {
         T* canvasData = static_cast<T*>(allocator->Allocate(sizeof(T) * canvasWidth * canvasHeight, 16u));
         memset(canvasData, 0u, sizeof(T) * canvasWidth * canvasHeight);
@@ -665,7 +715,7 @@ public:
     }
 
 
-    static void* ExpandChannelToCanvas(const Document* document, Allocator* allocator, Layer* layer, Channel* channel)
+    void* ExpandChannelToCanvas(const Document* document, Allocator* allocator, Layer* layer, Channel* channel)
     {
         if (document->bitsPerChannel == 8)
             return ExpandChannelToCanvas<uint8_t>(allocator, layer, channel->data, document->width, document->height);
@@ -679,7 +729,7 @@ public:
 
 
     template <typename T>
-    static void* ExpandMaskToCanvas(const Document* document, Allocator* allocator, T* mask)
+    void* ExpandMaskToCanvas(const Document* document, Allocator* allocator, T* mask)
     {
         if (document->bitsPerChannel == 8)
             return ExpandChannelToCanvas<uint8_t>(allocator, mask, mask->data, document->width, document->height);
@@ -692,7 +742,7 @@ public:
     }
 
 
-    static unsigned int FindChannel(Layer* layer, int16_t channelType)
+    unsigned int FindChannel(Layer* layer, int16_t channelType)
     {
         for (unsigned int i = 0; i < layer->channelCount; ++i)
         {
@@ -726,7 +776,7 @@ public:
     };
 
     template <typename T>
-    static T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, unsigned int width, unsigned int height)
+    T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, unsigned int width, unsigned int height)
     {
         T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
 
@@ -740,7 +790,7 @@ public:
 
 
     template <typename T>
-    static T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, const void* srcA, unsigned int width, unsigned int height)
+    T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, const void* srcA, unsigned int width, unsigned int height)
     {
         T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
 
@@ -755,7 +805,7 @@ public:
 
 
     // https://github.com/MolecularMatters/psd_sdk
-    static cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf, int fileSize) {
         cv::Mat img;
 
         MallocAllocator allocator;
@@ -982,7 +1032,7 @@ public:
         return img;
     }
 
-    static cv::Mat loadTGA(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadTGA(const wstring& path, const vector<uchar>& buf, int fileSize) {
         int width, height, channels;
 
         // 使用stb_image从内存缓冲区加载图像
@@ -1005,24 +1055,19 @@ public:
             return cv::Mat();
         }
 
-        // 创建OpenCV Mat
-        cv::Mat result(height, width, cv_type, img);
+        auto result = cv::Mat(height, width, cv_type, img).clone();
+
+        stbi_image_free(img);
 
         // 如果是RGB或RGBA,需要转换颜色顺序
         if (channels == 3 || channels == 4) {
             cv::cvtColor(result, result, cv::COLOR_RGB2BGR);
         }
 
-        // 复制数据,因为我们需要释放stb_image分配的内存
-        cv::Mat final_result = result.clone();
-
-        // 释放stb_image分配的内存
-        stbi_image_free(img);
-
-        return final_result;
+        return result;
     }
 
-    static cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf, int fileSize){
+    cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf, int fileSize){
         const int maxEdge = 1024;
 
         auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
@@ -1056,7 +1101,7 @@ public:
         return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
     }
 
-    static vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
         vector<cv::Mat> imgs;
 
         if (!cv::imdecodemulti(buf, cv::IMREAD_UNCHANGED, imgs)) {
@@ -1065,7 +1110,7 @@ public:
         return imgs;
     }
 
-    static cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
         auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
 
         if (img.empty()) {
@@ -1098,7 +1143,7 @@ public:
     }
 
 
-    static std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf, size_t size) {
+    std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf, size_t size) {
 
         auto InternalRead_Mem = [](GifFileType* gif, GifByteType* buf, int len) -> int {
             if (len == 0)
@@ -1185,7 +1230,7 @@ public:
     }
 
 
-    static std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+    std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
         std::vector<ImageNode> frames;
 
         WebPData webp_data{};
@@ -1261,15 +1306,7 @@ public:
         int    offset;
     };
 
-    static void pngReadCallback(png_structp png_ptr, png_bytep data, png_size_t length) {
-        PngSource* isource = (PngSource*)png_get_io_ptr(png_ptr);
-        if ((isource->offset + length) <= isource->size) {
-            memcpy(data, isource->data + isource->offset, length);
-            isource->offset += (int)length;
-        }
-    }
-
-    static std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+    std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf, size_t size) {
         std::vector<ImageNode> frames;
 
         if (size < 8 || png_sig_cmp(buf.data(), 0, 8)) {
@@ -1297,7 +1334,13 @@ public:
         }
 
         PngSource pngSource{ buf.data(), size, 0 };
-        png_set_read_fn(png, &pngSource, pngReadCallback);
+        png_set_read_fn(png, &pngSource, [](png_structp png_ptr, png_bytep data, png_size_t length) {
+            PngSource* isource = (PngSource*)png_get_io_ptr(png_ptr);
+            if ((isource->offset + length) <= isource->size) {
+                memcpy(data, isource->data + isource->offset, length);
+                isource->offset += (int)length;
+            }
+            });
 
         // 读取PNG信息
         png_read_info(png, info);
@@ -1393,7 +1436,7 @@ public:
         return frames;
     }
 
-    static Frames loadImage(const wstring& path) {
+    Frames loader(const wstring& path) {
         if (path.length() < 4) {
             Utils::log("path.length() < 4: {}", Utils::wstringToUtf8(path));
             return { {{getDefaultMat(), 0}}, "" };
@@ -1468,11 +1511,7 @@ public:
             }
         }
         else if (ext == L".ico" || ext == L".icon") {
-            img = loadICO(path, buf, fileSize);
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
-            if (img.empty()) {
-                img = getDefaultMat();
-            }
+            std::tie(img, ret.exifStr) = loadICO(path, buf, fileSize);
         }
         else if (ext == L".psd") {
             img = loadPSD(path, buf, fileSize);
@@ -1497,9 +1536,9 @@ public:
         if (img.channels() == 1)
             cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
 
-        const size_t idx = ret.exifStr.find("方向: ");
+        const size_t idx = ret.exifStr.find("\n方向: ");
         if (idx != string::npos) {
-            int exifOrientation = ret.exifStr[idx + 8] - '0';
+            int exifOrientation = ret.exifStr[idx + 9] - '0';
 
             switch (exifOrientation) {
             case 2: // 水平翻转
@@ -1532,8 +1571,4 @@ public:
 
         return ret;
     }
-
-private:
-
-    LRU<wstring, Frames> database{ &ImageDatabase::loadImage };
 };

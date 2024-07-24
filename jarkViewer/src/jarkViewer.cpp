@@ -18,7 +18,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer v1.7";
+const wstring appName = L"JarkViewer v1.8";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
@@ -164,6 +164,8 @@ static void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) {
 static int myMain(const wstring filePath, HINSTANCE hInstance) {
     namespace fs = std::filesystem;
 
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE); //不要缩放
+
     test();
 
     ImageDatabase imgDB;
@@ -210,13 +212,12 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
         if (filePath.empty()) { //直接打开软件，没有传入参数
             imgFileList.emplace_back(appName);
             curFileIdx = (int)imgFileList.size() - 1;
-            imgDB().put(appName, {{{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开"});
-
+            imgDB.put(appName, {{{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开"});
         }
         else { // 打开的文件不支持，默认加到尾部
             imgFileList.emplace_back(fullPath.wstring());
             curFileIdx = (int)imgFileList.size() - 1;
-            imgDB().put(fullPath.wstring(), {{{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除"});
+            imgDB.put(fullPath.wstring(), {{{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除"});
         }
     }
 
@@ -258,7 +259,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
                 curFrameDelay = 0;
             }
 
-            const auto& frames = imgDB().get(imgFileList[curFileIdx]);
+            const auto& frames = imgDB.get(imgFileList[curFileIdx]);
             const auto& [srcImg, delay] = frames.imgList[curFrameIdx];
 
             curFrameIdxMax = (int)frames.imgList.size()-1;

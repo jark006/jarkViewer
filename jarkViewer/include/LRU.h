@@ -1,22 +1,19 @@
 #pragma once
 #include <unordered_map>
 #include <list>
-#include <functional>
 
 template<typename keyType, typename valueType>
 class LRU {
 private:
     using ListIterator = typename std::list<std::pair<keyType, valueType>>::iterator;
-    using LoaderFunction = std::function<valueType(const keyType&)>;
-
     std::unordered_map<keyType, ListIterator> cache_map;
     std::list<std::pair<keyType, valueType>> cache_list;
-    LoaderFunction loader;
     size_t CAPACITY = 20;
 
 public:
     LRU() = default;
-    LRU(LoaderFunction loader_func) : loader(loader_func) {}
+
+    virtual valueType loader(const keyType&) = 0;
 
     valueType& get(const keyType& key) {
         auto it = cache_map.find(key);
