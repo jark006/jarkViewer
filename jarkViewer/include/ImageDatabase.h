@@ -1118,7 +1118,10 @@ public:
             return cv::Mat();
         }
 
-        if (img.channels() != 1 && img.channels() != 3 && img.channels() != 4) {
+        if (img.channels() == 1)
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+
+        if (img.channels() != 3 && img.channels() != 4) {
             Utils::log("cvMat unsupport channel: {}", img.channels());
             return cv::Mat();
         }
@@ -1436,6 +1439,37 @@ public:
         return frames;
     }
 
+    void handleExifOrientation(int orientation, cv::Mat& img) {
+        if (img.empty())
+            return;
+
+        switch (orientation) {
+        case 2: // 水平翻转
+            cv::flip(img, img, 1);
+            break;
+        case 3: // 旋转180度
+            cv::rotate(img, img, cv::ROTATE_180);
+            break;
+        case 4: // 垂直翻转
+            cv::flip(img, img, 0);
+            break;
+        case 5: // 顺时针旋转90度后垂直翻转
+            cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+            cv::flip(img, img, 0);
+            break;
+        case 6: // 顺时针旋转90度
+            cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case 7: // 顺时针旋转90度后水平翻转
+            cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+            cv::flip(img, img, 1);
+            break;
+        case 8: // 逆时针旋转90度
+            cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+        }
+    }
+
     Frames loader(const wstring& path) {
         if (path.length() < 4) {
             Utils::log("path.length() < 4: {}", Utils::wstringToUtf8(path));
@@ -1474,7 +1508,7 @@ public:
             ret.imgList = loadWebp(path, buf, fileSize);
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
@@ -1484,7 +1518,7 @@ public:
             ret.imgList = loadApng(path, buf, fileSize); //若是静态图像则不解码，返回空
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
@@ -1527,45 +1561,17 @@ public:
         if (img.empty())
             img = loadMat(path, buf, fileSize);
 
-        if (ret.exifStr.empty())
-            ret.exifStr = ExifParse::getExif(path, img.cols, img.rows, buf.data(), fileSize);
+        if (ret.exifStr.empty()) {
+            auto exifTmp = ExifParse::getExif(path, buf.data(), fileSize);
+            const size_t idx = exifTmp.find("\n方向: ");
+            if (idx != string::npos) {
+                handleExifOrientation(exifTmp[idx + 9] - '0', img);
+            }
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize) + exifTmp;
+        }
 
         if (img.empty())
             img = getDefaultMat();
-
-        if (img.channels() == 1)
-            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
-
-        const size_t idx = ret.exifStr.find("\n方向: ");
-        if (idx != string::npos) {
-            int exifOrientation = ret.exifStr[idx + 9] - '0';
-
-            switch (exifOrientation) {
-            case 2: // 水平翻转
-                cv::flip(img, img, 1);
-                break;
-            case 3: // 旋转180度
-                cv::rotate(img, img, cv::ROTATE_180);
-                break;
-            case 4: // 垂直翻转
-                cv::flip(img, img, 0);
-                break;
-            case 5: // 顺时针旋转90度后垂直翻转
-                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
-                cv::flip(img, img, 0);
-                break;
-            case 6: // 顺时针旋转90度
-                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
-                break;
-            case 7: // 顺时针旋转90度后水平翻转
-                cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
-                cv::flip(img, img, 1);
-                break;
-            case 8: // 逆时针旋转90度
-                cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
-                break;
-            }
-        }
 
         ret.imgList.emplace_back(img, 0);
 

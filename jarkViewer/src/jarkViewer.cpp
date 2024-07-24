@@ -165,6 +165,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
     namespace fs = std::filesystem;
 
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE); //不要缩放
+    Exiv2::enableBMFF();
 
     test();
 

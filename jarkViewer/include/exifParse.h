@@ -149,15 +149,7 @@ public:
         return oss.str()+ossEnd.str();
     }
 
-    static std::string getExif(const std::wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
-        static bool isInit = false;
-        if (!isInit) {
-            isInit = true;
-            Exiv2::enableBMFF();
-        }
-        
-        auto res = getSimpleInfo(path, width, height, buf, fileSize);
-        
+    static std::string getExif(const std::wstring& path, const uint8_t* buf, int fileSize) {        
         try {
             auto image = Exiv2::ImageFactory::open(buf, fileSize);
             image->readMetadata();
@@ -165,16 +157,16 @@ public:
             Exiv2::ExifData& exifData = image->exifData();
             if (exifData.empty()) {
                 Utils::log("No EXIF data {}", Utils::wstringToUtf8(path));
-                return res;
+                return "";
             }
 
-            res += exifDataToString(exifData);
+            return exifDataToString(exifData);
         }
         catch (Exiv2::Error& e) {
             Utils::log("Caught Exiv2 exception {} {}", Utils::wstringToUtf8(path), e.what());
-            return res;
+            return "";
         }
-        return res;
+        return "";
     }
 
 private:
