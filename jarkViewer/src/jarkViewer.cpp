@@ -18,7 +18,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer v1.8";
+const wstring appName = L"JarkViewer v1.9";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
