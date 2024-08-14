@@ -61,15 +61,18 @@ static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, i
         return ret.u32;
     }
     case 4: {
-        intUnion srcPx = srcImg.at<intUnion>(srcY, srcX);
+        auto srcPtr = (intUnion*)srcImg.ptr();
+        int srcW = srcImg.cols;
+
+        intUnion srcPx = srcPtr[srcW * srcY + srcX];
         intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
             GRID_DARK : GRID_LIGHT;
 
         intUnion px;
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) {
-            intUnion srcPx1 = srcImg.at<intUnion>(srcY - 1, srcX - 1);
-            intUnion srcPx2 = srcImg.at<intUnion>(srcY - 1, srcX);
-            intUnion srcPx3 = srcImg.at<intUnion>(srcY, srcX - 1);
+            intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
+            intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
+            intUnion srcPx3 = srcPtr[srcW * (srcY)+srcX - 1];
             for (int i = 0; i < 4; i++)
                 px[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) / 4;
         }

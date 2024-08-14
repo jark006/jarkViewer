@@ -13,7 +13,8 @@ public:
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif"
+        L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
+        L".jxr",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -235,16 +236,14 @@ public:
             return cv::Mat();
         }
 
-        cv::Mat img(image->height, image->width, CV_8UC3, image->data);
-
-        cv::Mat bgrImage;
-        cv::cvtColor(img, bgrImage, cv::COLOR_RGB2BGR);
+        cv::Mat retImg;
+        cv::cvtColor(cv::Mat(image->height, image->width, CV_8UC3, image->data), retImg, cv::COLOR_RGB2BGRA);
 
         // Clean up
         LibRaw::dcraw_clear_mem(image);
         rawProcessor->recycle();
 
-        return bgrImage;
+        return retImg;
     }
 
     const std::string jxlStatusCode2String(JxlDecoderStatus status) {
@@ -1059,10 +1058,8 @@ public:
 
         stbi_image_free(img);
 
-        // 如果是RGB或RGBA,需要转换颜色顺序
-        if (channels == 3 || channels == 4) {
-            cv::cvtColor(result, result, cv::COLOR_RGB2BGR);
-        }
+        cv::cvtColor(result, result, channels == 1 ? cv::COLOR_GRAY2BGRA :
+            (channels == 3 ? cv::COLOR_RGB2BGRA : cv::COLOR_RGBA2BGRA));
 
         return result;
     }
@@ -1099,6 +1096,130 @@ public:
         }
 
         return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
+    }
+
+    cv::Mat loadJXR(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        HRESULT hr = CoInitialize(NULL);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to initialize COM library." << std::endl;
+            return cv::Mat();
+        }
+
+        IWICImagingFactory* pFactory = NULL;
+        hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_IWICImagingFactory, (LPVOID*)&pFactory);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to create WIC Imaging Factory." << std::endl;
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        IStream* pStream = NULL;
+        hr = CreateStreamOnHGlobal(NULL, TRUE, &pStream);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to create stream." << std::endl;
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        ULONG bytesWritten;
+        hr = pStream->Write(buf.data(), (ULONG)buf.size(), &bytesWritten);
+        if (FAILED(hr) || bytesWritten != buf.size()) {
+            std::cerr << "Failed to write to stream." << std::endl;
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        LARGE_INTEGER li = { 0 };
+        hr = pStream->Seek(li, STREAM_SEEK_SET, NULL);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to seek stream." << std::endl;
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        IWICBitmapDecoder* pDecoder = NULL;
+        hr = pFactory->CreateDecoderFromStream(pStream, NULL, WICDecodeMetadataCacheOnDemand, &pDecoder);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to create decoder from stream." << std::endl;
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        IWICBitmapFrameDecode* pFrame = NULL;
+        hr = pDecoder->GetFrame(0, &pFrame);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to get frame from decoder." << std::endl;
+            pDecoder->Release();
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        UINT width, height;
+        hr = pFrame->GetSize(&width, &height);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to get image size." << std::endl;
+            pFrame->Release();
+            pDecoder->Release();
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        IWICFormatConverter* pConverter = NULL;
+        hr = pFactory->CreateFormatConverter(&pConverter);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to create format converter." << std::endl;
+            pFrame->Release();
+            pDecoder->Release();
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to initialize format converter." << std::endl;
+            pConverter->Release();
+            pFrame->Release();
+            pDecoder->Release();
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        cv::Mat mat(height, width, CV_8UC4);
+        hr = pConverter->CopyPixels(NULL, width * 4, width * height * 4, mat.data);
+        if (FAILED(hr)) {
+            std::cerr << "Failed to copy pixels." << std::endl;
+            pConverter->Release();
+            pFrame->Release();
+            pDecoder->Release();
+            pStream->Release();
+            pFactory->Release();
+            CoUninitialize();
+            return cv::Mat();
+        }
+
+        pConverter->Release();
+        pFrame->Release();
+        pDecoder->Release();
+        pStream->Release();
+        pFactory->Release();
+        CoUninitialize();
+
+        return mat;
     }
 
     vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
@@ -1199,8 +1320,11 @@ public:
         for (int i = 0; i < gif->ImageCount; ++i) {
             SavedImage& image = gif->SavedImages[i];
             GraphicsControlBlock gcb;
-            if (DGifSavedExtensionToGCB(gif, i, &gcb) != GIF_OK) {
-                continue;
+            auto retCode = DGifSavedExtensionToGCB(gif, i, &gcb);
+            if (retCode != GIF_OK) {
+                //continue;
+                gcb.TransparentColor = -1;
+                gcb.DelayTime = 10;
             }
             auto colorMap = image.ImageDesc.ColorMap != nullptr ? image.ImageDesc.ColorMap : gif->SColorMap;
             auto ptr = gifRaster.get();
@@ -1222,13 +1346,17 @@ public:
                 }
             }
 
-            cv::Mat frame(gif->SHeight, gif->SWidth, CV_8UC4, gifRaster.get());
-            cv::Mat cloneFrame;
-            frame.copyTo(cloneFrame);
-            frames.emplace_back(cloneFrame, gcb.DelayTime * 10);
+            frames.emplace_back(cv::Mat(gif->SHeight, gif->SWidth, CV_8UC4, gifRaster.get()).clone(),
+                gcb.DelayTime * 10);
         }
 
         DGifCloseFile(gif, nullptr);
+
+        if (frames.empty()) {
+            Utils::log("Gif decode 0 frames: {}", Utils::wstringToUtf8(path));
+            frames.push_back({ getDefaultMat(), 0 });
+        }
+
         return frames;
     }
 
@@ -1533,6 +1661,9 @@ public:
         }
         else if (ext == L".jxl") {
             img = loadJXL(path, buf, fileSize);
+        }
+        else if (ext == L".jxr") {
+            img = loadJXR(path, buf, fileSize);
         }
         else if (ext == L".tga") {
             img = loadTGA(path, buf, fileSize);

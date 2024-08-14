@@ -28,6 +28,9 @@ using std::endl;
 #include <shellscalingapi.h>
 #pragma comment(lib, "Shcore.lib")
 
+#include <wincodec.h>
+#pragma comment(lib, "windowscodecs.lib")
+
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
 #include<opencv2/highgui.hpp>
@@ -304,10 +307,10 @@ namespace Utils {
         return rc;
     }
 
-    string size2Str(const int fileSize) {
+    string size2Str(const size_t fileSize) {
         if (fileSize < 1024) return std::format("{} Bytes", fileSize);
-        if (fileSize < 1024 * 1024) return std::format("{:.1f} KiB", fileSize / 1024.0);
-        if (fileSize < 1024 * 1024 * 1024) return std::format("{:.1f} MiB", fileSize / (1024.0 * 1024));
+        if (fileSize < 1024ULL * 1024) return std::format("{:.1f} KiB", fileSize / 1024.0);
+        if (fileSize < 1024ULL * 1024 * 1024) return std::format("{:.1f} MiB", fileSize / (1024.0 * 1024));
         return std::format("{:.1f} GiB", fileSize / (1024.0 * 1024 * 1024));
     }
 
