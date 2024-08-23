@@ -5,10 +5,53 @@
 
 class ExifParse{
 public:
-    static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, int fileSize) {
+    static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
         return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n文件头部16字节: {}",
             Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height,
             Utils::bin2Hex(buf, fileSize >= 16 ? 16 : fileSize));
+    }
+
+    static string handleMathDiv(const string& str) {
+        if (str.empty())return "";
+
+        int divIdx = -1;
+        bool isNegative = (str[0] == '-');
+        for (int i = isNegative ? 1 : 0; i < str.length(); i++) {
+            int c = str[i];
+            if ('0' <= c && c <= '9') {
+                continue;
+            }
+            else if (c == '/') {
+                if (divIdx == -1) {
+                    divIdx = i;
+                    continue;
+                }
+                else {
+                    divIdx = -1;
+                    break;
+                }
+            }
+            else {
+                divIdx = -1;
+                break;
+            }
+        }
+
+        if (divIdx > 0) {
+            int a = std::stoi(str.substr(0, divIdx));
+            int b = std::stoi(str.substr((size_t)divIdx + 1));
+
+            if (isNegative)
+                a = 0 - a;
+
+            auto resStr = std::format("{:.2f}", (double)a / b);
+
+            if (resStr.ends_with(".00"))
+                resStr = resStr.substr(0, resStr.size() - 3);
+
+            return resStr;
+        }
+        return "";
     }
 
     static std::string exifDataToString(const Exiv2::ExifData& exifData) {
@@ -23,7 +66,7 @@ public:
                 toEnd = true;
                 string tag = "Exif.Image" + tagName.substr(14);
                 translatedTagName = exifTagsMap.contains(tag) ?
-                    ("子图" + tagName.substr(13, 2) + exifTagsMap.at(tag)) : 
+                    ("子图" + tagName.substr(13, 2) + exifTagsMap.at(tag)) :
                     ("子图" + tagName.substr(13));
             }
             else if (tagName.starts_with("Exif.Thumbnail")) {
@@ -40,7 +83,7 @@ public:
             else if (tagName.starts_with("Exif.CanonCs")) {
                 toEnd = true;
                 string tag = "Exif.Image" + tagName.substr(12);
-                if(!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
+                if (!exifTagsMap.contains(tag))tag = "Exif.Photo" + tagName.substr(12);
                 translatedTagName = exifTagsMap.contains(tag) ?
                     ("佳能Cs." + exifTagsMap.at(tag)) :
                     ("佳能Cs." + tagName.substr(13));
@@ -139,7 +182,44 @@ public:
                 tagValue = tag.toString();
             }
 
-            auto tmp ="\n" +translatedTagName + ": " +(tagValue.length() < 100 ? tagValue :
+            if (tagName == "Exif.GPSInfo.GPSLatitudeRef" || tagName == "Exif.GPSInfo.GPSLongitudeRef") {
+                if (tagValue.length() > 0) {
+                    switch (tagValue[0])
+                    {
+                    case 'N':tagValue = "北纬 " + tagValue; break;
+                    case 'S':tagValue = "南纬 " + tagValue; break;
+                    case 'E':tagValue = "东经 " + tagValue; break;
+                    case 'W':tagValue = "西经 " + tagValue; break;
+                    }
+                }
+            }
+
+            if (tagName == "Exif.GPSInfo.GPSLatitude" || tagName == "Exif.GPSInfo.GPSLongitude") {
+                auto firstSpaceIdx = tagValue.find_first_of(' ');
+                auto secondSpaceIdx = tagValue.find_last_of(' ');
+                if (firstSpaceIdx != string::npos && secondSpaceIdx != string::npos && firstSpaceIdx < secondSpaceIdx) {
+                    auto n1 = handleMathDiv(tagValue.substr(0, firstSpaceIdx));
+                    auto n2 = handleMathDiv(tagValue.substr(firstSpaceIdx + 1, secondSpaceIdx-firstSpaceIdx-1));
+                    auto n3 = handleMathDiv(tagValue.substr(secondSpaceIdx + 1));
+                    tagValue = std::format("{}°{}' {}'' ({})", n1, n2, n3, tagValue);
+                }
+            }
+            else if (tagName == "Exif.GPSInfo.GPSTimeStamp") {
+                auto firstSpaceIdx = tagValue.find_first_of(' ');
+                auto secondSpaceIdx = tagValue.find_last_of(' ');
+                if (firstSpaceIdx != string::npos && secondSpaceIdx != string::npos && firstSpaceIdx < secondSpaceIdx) {
+                    auto n1 = handleMathDiv(tagValue.substr(0, firstSpaceIdx));
+                    auto n2 = handleMathDiv(tagValue.substr(firstSpaceIdx + 1, secondSpaceIdx - firstSpaceIdx - 1));
+                    auto n3 = handleMathDiv(tagValue.substr(secondSpaceIdx + 1));
+                    tagValue = std::format("{}:{}:{} ({})", n1, n2, n3, tagValue);
+                }
+            }else if (2 < tagValue.length() && tagValue.length() < 100) {
+                auto res = handleMathDiv(tagValue);
+                if(!res.empty())
+                    tagValue = std::format("{} ({})", res, tagValue);
+            }
+
+            auto tmp = "\n" + translatedTagName + ": " + (tagValue.length() < 100 ? tagValue :
                 tagValue.substr(0, 100) + std::format(" ...] length:{}", tagValue.length()));
 
             if (toEnd)ossEnd << tmp;
