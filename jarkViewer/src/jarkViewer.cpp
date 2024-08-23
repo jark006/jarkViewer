@@ -9,7 +9,7 @@ TODO
 1. 重构程序结构(当前快速拖动会画面撕裂), 换UI框架
 */
 
-const int BG_GRID_WIDTH = 8;
+const int BG_GRID_WIDTH = 16;
 const uint32_t BG_COLOR = 0x46;
 const uint32_t GRID_DARK = 0xFF282828;
 const uint32_t GRID_LIGHT = 0xFF3C3C3C;
@@ -45,7 +45,7 @@ static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, i
     case 3: {
         cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
-        intUnion ret=255;
+        intUnion ret = 255;
         if (zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
             cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
             cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
@@ -84,14 +84,14 @@ static uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, i
         else if (px[3] == 255) return intUnion(px[0], px[1], px[2], 255).u32;;
 
         const int alpha = px[3];
-        intUnion ret= alpha;
+        intUnion ret = alpha;
         for (int i = 0; i < 3; i++)
             ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
         return ret.u32;
     }
     }
 
-    return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? 
+    return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
         GRID_DARK : GRID_LIGHT;
 }
 
@@ -216,12 +216,12 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
         if (filePath.empty()) { //直接打开软件，没有传入参数
             imgFileList.emplace_back(appName);
             curFileIdx = (int)imgFileList.size() - 1;
-            imgDB.put(appName, {{{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开"});
+            imgDB.put(appName, { {{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
         }
         else { // 打开的文件不支持，默认加到尾部
             imgFileList.emplace_back(fullPath.wstring());
             curFileIdx = (int)imgFileList.size() - 1;
-            imgDB.put(fullPath.wstring(), {{{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除"});
+            imgDB.put(fullPath.wstring(), { {{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除" });
         }
     }
 
@@ -266,7 +266,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             const auto& frames = imgDB.get(imgFileList[curFileIdx]);
             const auto& [srcImg, delay] = frames.imgList[curFrameIdx];
 
-            curFrameIdxMax = (int)frames.imgList.size()-1;
+            curFrameIdxMax = (int)frames.imgList.size() - 1;
             if (curFrameIdxMax > 0) { // Animation
                 curFrameDelay = (delay <= 0 ? 10 : delay);
             }
@@ -275,7 +275,7 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
 
             if (showExif) {
                 const int padding = 10;
-                RECT r{ padding, padding, winSize.width/4 - padding, winSize.height - padding };
+                RECT r{ padding, padding, winSize.width / 4 - padding, winSize.height - padding };
                 stb.putAlignLeft(mainCanvas, r, frames.exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
             }
 
@@ -347,7 +347,7 @@ static int wmain(int argc, wchar_t* argv[]) {
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 
-    if(argc == 1)
+    if (argc == 1)
         return myMain(L"", nullptr);
 
     wstring filePath(*argv[1] == L'\"' ? argv[1] + 1 : argv[1]);
@@ -379,7 +379,7 @@ void onMouseHandle(int event, int x, int y, int flags, void* param) {
     static bool fullScreen = false;
     static auto lastTimestamp = system_clock::now();
 
-    switch (event){
+    switch (event) {
     case cv::EVENT_MOUSEMOVE: {
         mouse = { x, y };
         if (winSize.width >= 500)
