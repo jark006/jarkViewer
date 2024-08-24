@@ -6,9 +6,8 @@
 class ExifParse{
 public:
     static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
-        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n文件头部16字节: {}",
-            Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height,
-            Utils::bin2Hex(buf, fileSize >= 16 ? 16 : fileSize));
+        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n\n[[ 按空格复制图像全部信息 ]]\n",
+            Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
     }
 
     static string handleMathDiv(const string& str) {
@@ -54,7 +53,12 @@ public:
         return "";
     }
 
-    static std::string exifDataToString(const Exiv2::ExifData& exifData) {
+    static std::string exifDataToString(const std::wstring& path, const Exiv2::ExifData& exifData) {
+        if (exifData.empty()) {
+            Utils::log("No EXIF data {}", Utils::wstringToUtf8(path));
+            return "";
+        }
+
         std::ostringstream oss;
         std::ostringstream ossEnd;
 
@@ -213,9 +217,10 @@ public:
                     auto n3 = handleMathDiv(tagValue.substr(secondSpaceIdx + 1));
                     tagValue = std::format("{}:{}:{} ({})", n1, n2, n3, tagValue);
                 }
-            }else if (2 < tagValue.length() && tagValue.length() < 100) {
+            }
+            else if (2 < tagValue.length() && tagValue.length() < 100) {
                 auto res = handleMathDiv(tagValue);
-                if(!res.empty())
+                if (!res.empty())
                     tagValue = std::format("{} ({})", res, tagValue);
             }
 
@@ -229,21 +234,73 @@ public:
         return oss.str()+ossEnd.str();
     }
 
-    static std::string getExif(const std::wstring& path, const uint8_t* buf, int fileSize) {        
+    static std::string xmpDataToString(const std::wstring& path, const Exiv2::XmpData& xmpData) {
+        if (xmpData.empty()) {
+            Utils::log("No XMP data {}", Utils::wstringToUtf8(path));
+            return "";
+        }
+
+        string xmpStr = "\n\nXmp Data:";
+        for (const auto& tag : xmpData) {
+            xmpStr += "\n"+tag.key() + ": " + tag.value().toString();
+        }
+        return xmpStr;
+    }
+
+    static std::string iptcDataToString(const std::wstring& path, const Exiv2::IptcData& IptcData) {
+        if (IptcData.empty()) {
+            Utils::log("No Iptc data {}", Utils::wstringToUtf8(path));
+            return "";
+        }
+
+        string itpcStr = "\n\nIptc Data:";
+        for (const auto& tag : IptcData) {
+            itpcStr += "\n" + tag.key() + ": " + tag.value().toString();
+        }
+        return itpcStr;
+    }
+
+    static string AI_Prompt(const std::wstring& path, const uint8_t* buf) {
+        int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
+        if (length > 16 * 1024) {
+            return "";
+        }
+
+        string prompt((const char*)buf + 0x29, length); // format: Windows-1252  ISO/IEC 8859-1（Latin-1）
+
+        prompt = Utils::wstringToUtf8(Utils::latin1ToWstring(prompt));
+
+        auto idx = prompt.find("parameters");
+        if (idx != string::npos) {
+            prompt.replace(idx, 11, "正提示词: ");
+        }
+
+        idx = prompt.find("Negative prompt");
+        if (idx != string::npos) {
+            prompt.replace(idx, 15, "反提示词");
+        }
+
+        return "\nAI生图提示词 Prompt:\n" + prompt;
+    }
+
+    static std::string getExif(const std::wstring& path, const uint8_t* buf, int fileSize) {
         try {
             auto image = Exiv2::ImageFactory::open(buf, fileSize);
             image->readMetadata();
 
-            Exiv2::ExifData& exifData = image->exifData();
-            if (exifData.empty()) {
-                Utils::log("No EXIF data {}", Utils::wstringToUtf8(path));
-                return "";
+            auto& exifData = image->exifData();
+            auto& xmpData = image->xmpData();
+            auto& iptcData = image->iptcData();
+
+            string prompt;
+            if (!strncmp((const char*)buf + 0x25, "tEXtparameters", 14)) {
+                prompt = AI_Prompt(path, buf);
             }
 
-            return exifDataToString(exifData);
+            return exifDataToString(path, exifData) + xmpDataToString(path, xmpData) + iptcDataToString(path, iptcData) + prompt;
         }
         catch (Exiv2::Error& e) {
-            Utils::log("Caught Exiv2 exception {} {}", Utils::wstringToUtf8(path), e.what());
+            Utils::log("Caught Exiv2 exception {}\n{}", Utils::wstringToUtf8(path), e.what());
             return "";
         }
         return "";

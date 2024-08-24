@@ -18,7 +18,7 @@ const int fpsMax = 120;
 const auto target_duration = std::chrono::microseconds(1000000 / fpsMax);
 auto last_end = std::chrono::high_resolution_clock::now();
 
-const wstring appName = L"JarkViewer v1.9";
+const wstring appName = L"JarkViewer v1.10";
 const string windowName = "mainWindows";
 
 const vector<int64_t> ZOOM_LIST = {
@@ -313,15 +313,17 @@ static int myMain(const wstring filePath, HINSTANCE hInstance) {
             }
         }
 
-        if (curFrameIdx < 0) {
-            if (cv::waitKey(5) == 27) //ESC
-                break;
+        auto keyValue = cv::waitKey(5);
+        if (keyValue == 27) { //ESC
+            break;
         }
-        else {
-            static int delayRemain = 0;
+        else if (keyValue == ' ') { // 按空格复制图像信息到剪贴板
+            const auto& frames = imgDB.get(imgFileList[curFileIdx]);
+            Utils::copyToClipboard(Utils::utf8ToWstring(frames.exifStr));
+        }
 
-            if (cv::waitKey(5) == 27) //ESC
-                break;
+        if (curFrameIdxMax > 0) {
+            static int delayRemain = 0;
 
             delayRemain -= 17;
             if (delayRemain <= 0) {

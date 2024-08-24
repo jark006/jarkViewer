@@ -191,6 +191,7 @@ namespace Utils {
 
     template<typename... Args>
     static void log(const string_view fmt, Args&&... args) {
+#ifndef NDEBUG
         static const bool TO_LOG_FILE = false;
         static FILE* fp = nullptr;
 
@@ -211,6 +212,9 @@ namespace Utils {
         else {
             cout << str;
         }
+#else
+        return;
+#endif
     }
 
     string bin2Hex(const void* bytes, const size_t len) {
@@ -270,6 +274,18 @@ namespace Utils {
 
         std::string ret(byteLen, 0);
         WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
+        return ret;
+    }
+
+    std::wstring latin1ToWstring(const std::string& str) {
+        if (str.empty())return L"";
+
+        int wcharLen = MultiByteToWideChar(1252, 0, str.c_str(), (int)str.length(), nullptr, 0);
+        if (wcharLen == 0) return L"";
+
+        std::wstring ret(wcharLen, 0);
+        MultiByteToWideChar(1252, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
+
         return ret;
     }
 
@@ -352,5 +368,34 @@ namespace Utils {
             SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_BIG, (LPARAM)hIcon);
             SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         }
+    }
+
+    static bool copyToClipboard(const std::wstring& text) {
+        if (!OpenClipboard(nullptr)) {
+            return false;
+        }
+
+        EmptyClipboard();
+
+        HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(wchar_t));
+        if (!hGlob) {
+            CloseClipboard();
+            return false;
+        }
+
+        auto desPtr = GlobalLock(hGlob);
+        if(desPtr)
+            memcpy(desPtr, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
+
+        GlobalUnlock(hGlob);
+
+        if (!SetClipboardData(CF_UNICODETEXT, hGlob)) {
+            CloseClipboard();
+            GlobalFree(hGlob);
+            return false;
+        }
+
+        CloseClipboard();
+        return true;
     }
 }
