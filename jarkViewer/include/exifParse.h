@@ -203,7 +203,7 @@ public:
                 auto secondSpaceIdx = tagValue.find_last_of(' ');
                 if (firstSpaceIdx != string::npos && secondSpaceIdx != string::npos && firstSpaceIdx < secondSpaceIdx) {
                     auto n1 = handleMathDiv(tagValue.substr(0, firstSpaceIdx));
-                    auto n2 = handleMathDiv(tagValue.substr(firstSpaceIdx + 1, secondSpaceIdx-firstSpaceIdx-1));
+                    auto n2 = handleMathDiv(tagValue.substr(firstSpaceIdx + 1, secondSpaceIdx - firstSpaceIdx - 1));
                     auto n3 = handleMathDiv(tagValue.substr(secondSpaceIdx + 1));
                     tagValue = std::format("{}°{}' {}'' ({})", n1, n2, n3, tagValue);
                 }
@@ -218,14 +218,27 @@ public:
                     tagValue = std::format("{}:{}:{} ({})", n1, n2, n3, tagValue);
                 }
             }
+            else if (tagName == "Exif.Photo.UserComment") { // 可能包含AI生图prompt信息
+                auto a = tag.value().clone();
+                vector<uint8_t> buf(a->size());
+                a->copy(buf.data(), Exiv2::ByteOrder::bigEndian);
+                if (!memcmp(buf.data(), "UNICODE\0", 8)) {
+                    wstring str((wchar_t*)(buf.data() + 8), (buf.size() - 8) / 2);
+                    tagValue = Utils::wstringToUtf8(str);
+                }
+            }
             else if (2 < tagValue.length() && tagValue.length() < 100) {
                 auto res = handleMathDiv(tagValue);
                 if (!res.empty())
                     tagValue = std::format("{} ({})", res, tagValue);
             }
 
-            auto tmp = "\n" + translatedTagName + ": " + (tagValue.length() < 100 ? tagValue :
-                tagValue.substr(0, 100) + std::format(" ...] length:{}", tagValue.length()));
+            string tmp;
+            if (tagName == "Exif.Photo.UserComment")
+                tmp = "\n" + translatedTagName + ": " + tagValue;
+            else
+                tmp = "\n" + translatedTagName + ": " + (tagValue.length() < 100 ? tagValue :
+                    tagValue.substr(0, 100) + std::format(" ...] length:{}", tagValue.length()));
 
             if (toEnd)ossEnd << tmp;
             else oss << tmp;
@@ -261,26 +274,65 @@ public:
     }
 
     static string AI_Prompt(const std::wstring& path, const uint8_t* buf) {
-        int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
-        if (length > 16 * 1024) {
-            return "";
+        if (!strncmp((const char*)buf + 0x25, "tEXtparameters", 14)) {
+            int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
+            if (length > 16 * 1024) {
+                return "";
+            }
+
+            string prompt((const char*)buf + 0x29, length); // format: Windows-1252  ISO/IEC 8859-1（Latin-1）
+
+            prompt = Utils::wstringToUtf8(Utils::latin1ToWstring(prompt));
+
+            auto idx = prompt.find("parameters");
+            if (idx != string::npos) {
+                prompt.replace(idx, 11, "正提示词: ");
+            }
+
+            idx = prompt.find("Negative prompt");
+            if (idx != string::npos) {
+                prompt.replace(idx, 15, "反提示词");
+            }
+
+            return "\nAI生图提示词 Prompt:\n" + prompt;
+        }
+        else if (!strncmp((const char*)buf + 0x25, "iTXtparameters", 14)) {
+            int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
+            if (length > 16 * 1024) {
+                return "";
+            }
+
+            string prompt((const char*)buf + 0x38, length - 15); // format: Windows-1252  ISO/IEC 8859-1（Latin-1）
+
+            prompt = Utils::wstringToUtf8(Utils::latin1ToWstring(prompt));
+
+            auto idx = prompt.find("parameters");
+            if (idx != string::npos) {
+                prompt.replace(idx, 11, "正提示词: ");
+            }
+
+            idx = prompt.find("Negative prompt");
+            if (idx != string::npos) {
+                prompt.replace(idx, 15, "反提示词");
+            }
+
+            return "\nAI生图提示词 Prompt:\n" + prompt;
+        }
+        else if (!strncmp((const char*)buf + 0x25, "tEXtprompt", 10)) {
+
+            int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
+            if (length > 16 * 1024) {
+                return "";
+            }
+
+            string prompt((const char*)buf + 0x29 + 7, length - 7); // format: Windows-1252  ISO/IEC 8859-1（Latin-1）
+
+            prompt = Utils::wstringToUtf8(Utils::latin1ToWstring(prompt));
+
+            return "\nAI生图提示词 Prompt:\n" + prompt;
         }
 
-        string prompt((const char*)buf + 0x29, length); // format: Windows-1252  ISO/IEC 8859-1（Latin-1）
-
-        prompt = Utils::wstringToUtf8(Utils::latin1ToWstring(prompt));
-
-        auto idx = prompt.find("parameters");
-        if (idx != string::npos) {
-            prompt.replace(idx, 11, "正提示词: ");
-        }
-
-        idx = prompt.find("Negative prompt");
-        if (idx != string::npos) {
-            prompt.replace(idx, 15, "反提示词");
-        }
-
-        return "\nAI生图提示词 Prompt:\n" + prompt;
+        return "";
     }
 
     static std::string getExif(const std::wstring& path, const uint8_t* buf, int fileSize) {
@@ -292,10 +344,7 @@ public:
             auto& xmpData = image->xmpData();
             auto& iptcData = image->iptcData();
 
-            string prompt;
-            if (!strncmp((const char*)buf + 0x25, "tEXtparameters", 14)) {
-                prompt = AI_Prompt(path, buf);
-            }
+            string prompt = AI_Prompt(path, buf);
 
             return exifDataToString(path, exifData) + xmpDataToString(path, xmpData) + iptcDataToString(path, iptcData) + prompt;
         }
