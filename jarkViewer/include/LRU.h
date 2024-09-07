@@ -26,6 +26,17 @@ public:
         return cache_list.begin()->second;
     }
 
+    valueType* getPtr(const keyType& key) {
+        auto it = cache_map.find(key);
+        if (it != cache_map.end()) {
+            cache_list.splice(cache_list.begin(), cache_list, it->second);
+            return &(it->second->second);
+        }
+
+        put(key, loader(key));
+        return &(cache_list.begin()->second);
+    }
+
     void put(const keyType& key, valueType&& value) {
         auto it = cache_map.find(key);
         if (it != cache_map.end()) {

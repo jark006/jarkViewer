@@ -86,7 +86,7 @@
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
@@ -140,6 +140,8 @@
   <ItemGroup>
     <ClInclude Include="include\avif\avif.h" />
     <ClInclude Include="include\channel.h" />
+    <ClInclude Include="include\D2D1App.h" />
+    <ClInclude Include="include\D2D1Timer.h" />
     <ClInclude Include="include\exifParse.h" />
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
@@ -218,6 +220,7 @@
     <ClInclude Include="Resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\D2D1App.cpp" />
     <ClCompile Include="src\jarkViewer.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -252,9 +252,18 @@
     <ClInclude Include="include\psdsdk\PsdVectorMask.h">
       <Filter>include_psd</Filter>
     </ClInclude>
+    <ClInclude Include="include\D2D1App.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\D2D1Timer.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\D2D1App.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

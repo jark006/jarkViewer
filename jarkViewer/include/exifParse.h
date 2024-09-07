@@ -6,7 +6,7 @@
 class ExifParse{
 public:
     static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
-        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}\n\n[[ 按空格复制图像全部信息 ]]\n",
+        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
             Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
     }
 
@@ -37,8 +37,8 @@ public:
         }
 
         if (divIdx > 0) {
-            int a = std::stoi(str.substr(0, divIdx));
-            int b = std::stoi(str.substr((size_t)divIdx + 1));
+            auto a = std::stoll(str.substr(0, divIdx));
+            auto b = std::stoll(str.substr((size_t)divIdx + 1));
 
             if (isNegative)
                 a = 0 - a;
@@ -225,6 +225,16 @@ public:
                 if (!memcmp(buf.data(), "UNICODE\0", 8)) {
                     wstring str((wchar_t*)(buf.data() + 8), (buf.size() - 8) / 2);
                     tagValue = Utils::wstringToUtf8(str);
+                    auto idx = tagValue.find("\nNegative prompt");
+                    if (idx != string::npos) {
+                        tagValue.replace(idx, 16, "\n\n反提示词");
+                        tagValue = "\n\n正提示词: " + tagValue;
+                    }
+
+                    idx = tagValue.find("\nSteps:");
+                    if (idx != string::npos) {
+                        tagValue.replace(idx, 7, "\n\n参数: Steps:");
+                    }
                 }
             }
             else if (2 < tagValue.length() && tagValue.length() < 100) {
@@ -286,12 +296,20 @@ public:
 
             auto idx = prompt.find("parameters");
             if (idx != string::npos) {
-                prompt.replace(idx, 11, "正提示词: ");
+                prompt.replace(idx, 11, "\n正提示词: ");
+            }
+            else {
+                prompt = "\n正提示词: " + prompt;
             }
 
             idx = prompt.find("Negative prompt");
             if (idx != string::npos) {
-                prompt.replace(idx, 15, "反提示词");
+                prompt.replace(idx, 16, "\n反提示词");
+            }
+
+            idx = prompt.find("\nSteps:");
+            if (idx != string::npos) {
+                prompt.replace(idx, 7, "\n\n参数: Steps:");
             }
 
             return "\nAI生图提示词 Prompt:\n" + prompt;
@@ -308,12 +326,20 @@ public:
 
             auto idx = prompt.find("parameters");
             if (idx != string::npos) {
-                prompt.replace(idx, 11, "正提示词: ");
+                prompt.replace(idx, 11, "\n正提示词: ");
+            }
+            else {
+                prompt = "\n正提示词: " + prompt;
             }
 
-            idx = prompt.find("Negative prompt");
+            idx = prompt.find("\nNegative prompt");
             if (idx != string::npos) {
-                prompt.replace(idx, 15, "反提示词");
+                prompt.replace(idx, 16, "\n\n反提示词");
+            }
+
+            idx = prompt.find("\nSteps:");
+            if (idx != string::npos) {
+                prompt.replace(idx, 7, "\n\n参数: Steps:");
             }
 
             return "\nAI生图提示词 Prompt:\n" + prompt;
@@ -340,13 +366,15 @@ public:
             auto image = Exiv2::ImageFactory::open(buf, fileSize);
             image->readMetadata();
 
-            auto& exifData = image->exifData();
-            auto& xmpData = image->xmpData();
-            auto& iptcData = image->iptcData();
-
+            auto exifStr = exifDataToString(path, image->exifData());
+            auto xmpStr = xmpDataToString(path, image->xmpData());
+            auto iptcStr = iptcDataToString(path, image->iptcData());
             string prompt = AI_Prompt(path, buf);
 
-            return exifDataToString(path, exifData) + xmpDataToString(path, xmpData) + iptcDataToString(path, iptcData) + prompt;
+            if ((exifStr.length() + xmpStr.length() + iptcStr.length() + prompt.length()) > 0)
+                return  "\n\n【按空格复制图像全部信息】\n" + exifStr + xmpStr + iptcStr + prompt;
+            else
+                return "";
         }
         catch (Exiv2::Error& e) {
             Utils::log("Caught Exiv2 exception {}\n{}", Utils::wstringToUtf8(path), e.what());

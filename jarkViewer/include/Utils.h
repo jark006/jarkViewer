@@ -25,11 +25,21 @@ using std::endl;
 #include "resource.h"
 #include "psapi.h"
 
-#include <shellscalingapi.h>
-#pragma comment(lib, "Shcore.lib")
-
+#include <dxgi1_4.h>
+#include <D3D11.h>
+#include <d2d1_3.h>
+#include <d2d1_3helper.h>
+#include <dwrite_2.h>
 #include <wincodec.h>
-#pragma comment(lib, "windowscodecs.lib")
+
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dwrite.lib" )
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "d2d1.lib" )
+#pragma comment(lib, "windowscodecs.lib" )
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "Winmm.lib")
 
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
@@ -50,8 +60,6 @@ using std::endl;
 #include "psdsdk.h"
 #include "lunasvg.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
 #define END_TIME_COUNT auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count();\
@@ -162,9 +170,9 @@ struct Action {
 };
 
 struct WinSize {
-    int width = 0;
-    int height = 0;
-    WinSize() {}
+    int width = 600;
+    int height = 400;
+    WinSize(){}
     WinSize(int w, int h) :width(w), height(h) {}
 
     bool operator==(const WinSize size) const {
@@ -187,7 +195,8 @@ struct MatPack {
     }
 };
 
-namespace Utils {
+class Utils {
+public:
 
     template<typename... Args>
     static void log(const string_view fmt, Args&&... args) {
@@ -217,7 +226,11 @@ namespace Utils {
 #endif
     }
 
-    string bin2Hex(const void* bytes, const size_t len) {
+    static bool is_power_of_two(int64_t num) {
+        return (num <= 0) ? 0 : ((num & (num - 1)) == 0);
+    }
+
+    static string bin2Hex(const void* bytes, const size_t len) {
         auto charList = "0123456789ABCDEF";
         if (len == 0) return "";
         string res(len * 3 - 1, ' ');
@@ -229,7 +242,7 @@ namespace Utils {
         return res;
     }
 
-    std::wstring ansiToWstring(const std::string& str) {
+    static std::wstring ansiToWstring(const std::string& str) {
         if (str.empty())return L"";
 
         int wcharLen = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.length(), nullptr, 0);
@@ -241,7 +254,7 @@ namespace Utils {
         return ret;
     }
 
-    std::string wstringToAnsi(const std::wstring& wstr) {
+    static std::string wstringToAnsi(const std::wstring& wstr) {
         if (wstr.empty())return "";
 
         int byteLen = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
@@ -253,7 +266,7 @@ namespace Utils {
     }
 
     //UTF8 to UTF16
-    std::wstring utf8ToWstring(const std::string& str) {
+    static std::wstring utf8ToWstring(const std::string& str) {
         if (str.empty())return L"";
 
         int wcharLen = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
@@ -266,7 +279,7 @@ namespace Utils {
     }
 
     //UTF16 to UTF8
-    std::string wstringToUtf8(const std::wstring& wstr) {
+    static std::string wstringToUtf8(const std::wstring& wstr) {
         if (wstr.empty())return "";
 
         int byteLen = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
@@ -277,7 +290,7 @@ namespace Utils {
         return ret;
     }
 
-    std::wstring latin1ToWstring(const std::string& str) {
+    static std::wstring latin1ToWstring(const std::string& str) {
         if (str.empty())return L"";
 
         int wcharLen = MultiByteToWideChar(1252, 0, str.c_str(), (int)str.length(), nullptr, 0);
@@ -289,15 +302,15 @@ namespace Utils {
         return ret;
     }
 
-    std::string utf8ToAnsi(const std::string& str) {
+    static std::string utf8ToAnsi(const std::string& str) {
         return wstringToAnsi(utf8ToWstring(str));
     }
 
-    std::string ansiToUtf8(const std::string& str) {
+    static std::string ansiToUtf8(const std::string& str) {
         return wstringToUtf8(ansiToWstring(str));
     }
 
-    rcFileInfo GetResource(unsigned int idi, const wchar_t* type) {
+    static rcFileInfo GetResource(unsigned int idi, const wchar_t* type) {
         rcFileInfo rc;
 
         HMODULE ghmodule = GetModuleHandle(NULL);
@@ -323,14 +336,14 @@ namespace Utils {
         return rc;
     }
 
-    string size2Str(const size_t fileSize) {
+    static string size2Str(const size_t fileSize) {
         if (fileSize < 1024) return std::format("{} Bytes", fileSize);
         if (fileSize < 1024ULL * 1024) return std::format("{:.1f} KiB", fileSize / 1024.0);
         if (fileSize < 1024ULL * 1024 * 1024) return std::format("{:.1f} MiB", fileSize / (1024.0 * 1024));
         return std::format("{:.1f} GiB", fileSize / (1024.0 * 1024 * 1024));
     }
 
-    string timeStamp2Str(time_t timeStamp) {
+    static string timeStamp2Str(time_t timeStamp) {
         timeStamp += 8ULL * 3600; // UTC+8
         std::tm* ptm = std::gmtime(&timeStamp);
         std::stringstream ss;
@@ -398,4 +411,141 @@ namespace Utils {
         CloseClipboard();
         return true;
     }
-}
+
+    template<class Interface>
+    static inline void SafeRelease(Interface*& pInterfaceToRelease) {
+        if (pInterfaceToRelease == nullptr)
+            return;
+
+        pInterfaceToRelease->Release();
+        pInterfaceToRelease = nullptr;
+    }
+
+
+    // 从文件读取位图
+    static HRESULT LoadBitmapFromFile(
+        ID2D1DeviceContext* IN pRenderTarget,
+        IWICImagingFactory2* IN pIWICFactory,
+        PCWSTR IN uri,
+        UINT OPTIONAL width,
+        UINT OPTIONAL height,
+        ID2D1Bitmap1** OUT ppBitmap)
+    {
+        IWICBitmapDecoder* pDecoder = nullptr;
+        IWICBitmapFrameDecode* pSource = nullptr;
+        IWICStream* pStream = nullptr;
+        IWICFormatConverter* pConverter = nullptr;
+        IWICBitmapScaler* pScaler = nullptr;
+
+        HRESULT hr = pIWICFactory->CreateDecoderFromFilename(
+            uri,
+            nullptr,
+            GENERIC_READ,
+            WICDecodeMetadataCacheOnLoad,
+            &pDecoder);
+
+        if (SUCCEEDED(hr))
+        {
+            hr = pDecoder->GetFrame(0, &pSource);
+        }
+        if (SUCCEEDED(hr))
+        {
+            hr = pIWICFactory->CreateFormatConverter(&pConverter);
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            if (width != 0 || height != 0)
+            {
+                UINT originalWidth, originalHeight;
+                hr = pSource->GetSize(&originalWidth, &originalHeight);
+                if (SUCCEEDED(hr))
+                {
+                    if (width == 0)
+                    {
+                        FLOAT scalar = static_cast<FLOAT>(height) / static_cast<FLOAT>(originalHeight);
+                        width = static_cast<UINT>(scalar * static_cast<FLOAT>(originalWidth));
+                    }
+                    else if (height == 0)
+                    {
+                        FLOAT scalar = static_cast<FLOAT>(width) / static_cast<FLOAT>(originalWidth);
+                        height = static_cast<UINT>(scalar * static_cast<FLOAT>(originalHeight));
+                    }
+
+                    hr = pIWICFactory->CreateBitmapScaler(&pScaler);
+                    if (SUCCEEDED(hr))
+                    {
+                        hr = pScaler->Initialize(
+                            pSource,
+                            width,
+                            height,
+                            WICBitmapInterpolationModeCubic);
+                    }
+                    if (SUCCEEDED(hr))
+                    {
+                        hr = pConverter->Initialize(
+                            pScaler,
+                            GUID_WICPixelFormat32bppPBGRA,
+                            WICBitmapDitherTypeNone,
+                            nullptr,
+                            0.f,
+                            WICBitmapPaletteTypeMedianCut);
+                    }
+                }
+            }
+            else
+            {
+                hr = pConverter->Initialize(
+                    pSource,
+                    GUID_WICPixelFormat32bppPBGRA,
+                    WICBitmapDitherTypeNone,
+                    nullptr,
+                    0.f,
+                    WICBitmapPaletteTypeMedianCut);
+            }
+        }
+        if (SUCCEEDED(hr))
+        {
+            hr = pRenderTarget->CreateBitmapFromWicBitmap(
+                pConverter,
+                nullptr,
+                ppBitmap);
+        }
+
+        SafeRelease(pDecoder);
+        SafeRelease(pSource);
+        SafeRelease(pStream);
+        SafeRelease(pConverter);
+        SafeRelease(pScaler);
+
+        return hr;
+    }
+
+    // 创建路径几何图形
+    static ID2D1PathGeometry* GetPathGeometry(ID2D1Factory4* pD2DFactory, D2D1_POINT_2F* points, UINT pointsCount)
+    {
+        ID2D1PathGeometry* geometry = NULL;
+        HRESULT hr = pD2DFactory->CreatePathGeometry(&geometry);
+
+        if (SUCCEEDED(hr))
+        {
+            ID2D1GeometrySink* pSink = NULL;
+            hr = geometry->Open(&pSink); // 获取Sink对象
+
+            if (SUCCEEDED(hr))
+            {
+                pSink->BeginFigure(points[0], D2D1_FIGURE_BEGIN_FILLED);
+
+                pSink->AddLines(points, pointsCount);
+
+                pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            }
+
+            pSink->Close(); // 关闭Sink对象
+
+            return geometry;
+        }
+
+        return NULL;
+    }
+};
