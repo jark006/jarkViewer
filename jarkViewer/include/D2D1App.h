@@ -50,6 +50,8 @@ protected:
 	virtual void OnMouseUp(WPARAM btnState, int x, int y) { }
 	virtual void OnMouseMove(WPARAM btnState, int x, int y) { }
 	virtual void OnMouseWheel(UINT nFlags, short zDelta, int x, int y) { }
+	virtual void OnKeyDown(WPARAM keyValue) { }
+	virtual void OnKeyUp(WPARAM keyValue) { }
 	// 消息处理：重设尺寸
 	virtual void OnResize(UINT width, UINT height);
 	// 消息处理：窗口销毁

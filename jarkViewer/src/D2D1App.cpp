@@ -59,7 +59,6 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance, int nCmdShow)
 		CreateDeviceIndependentResources();
 		CreateDeviceResources();
 
-		//ShowWindow(m_hWnd, nCmdShow);
 		ShowWindow(m_hWnd, SW_MAXIMIZE);
 		UpdateWindow(m_hWnd);
 	}
@@ -400,6 +399,14 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			case WM_MOUSEWHEEL:
 				pD2DApp->OnMouseWheel(LOWORD(wParam), HIWORD(wParam), LOWORD(lParam), HIWORD(lParam));
+				break;
+
+			case WM_KEYDOWN:
+				pD2DApp->OnKeyDown(wParam);
+				break;
+
+			case WM_KEYUP:
+				pD2DApp->OnKeyUp(wParam);
 				break;
 
 			case WM_DESTROY:
