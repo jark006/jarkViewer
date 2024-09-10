@@ -132,6 +132,10 @@ struct Cood {
         return temp;
     }
 
+    bool operator==(const Cood& t) const {
+        return (this->x == t.x) && (this->y == t.y);
+    }
+
     void operator=(int n) {
         this->x = n;
         this->y = n;
@@ -547,5 +551,45 @@ public:
         }
 
         return NULL;
+    }
+
+    static void ToggleFullScreen(HWND hwnd) {
+        static RECT preRect{};
+        static DWORD preStyle = 0;
+        static DWORD preExStyle = 0;
+
+        static bool isFullScreen = false;
+
+        if (isFullScreen) {
+            // 退出全屏模式，恢复之前的窗口状态
+            SetWindowLong(hwnd, GWL_STYLE, preStyle);
+            SetWindowLong(hwnd, GWL_EXSTYLE, preExStyle);
+            SetWindowPos(hwnd, NULL, preRect.left, preRect.top,
+                preRect.right - preRect.left,
+                preRect.bottom - preRect.top,
+                SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
+        else {
+            // 保存当前窗口状态
+            GetWindowRect(hwnd, &preRect);
+            preStyle = GetWindowLong(hwnd, GWL_STYLE);
+            preExStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+            // 切换到全屏模式
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO monitorInfo = { sizeof(monitorInfo) };
+            GetMonitorInfo(monitor, &monitorInfo);
+
+            SetWindowLong(hwnd, GWL_STYLE, preStyle & ~(WS_CAPTION | WS_THICKFRAME));
+            SetWindowLong(hwnd, GWL_EXSTYLE, preExStyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
+
+            SetWindowPos(hwnd, HWND_TOP,
+                monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+                monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
+
+        isFullScreen = !isFullScreen;
     }
 };
