@@ -12,7 +12,6 @@
 
 class stbText {
 public:
-    //const uint32_t IDR_TTF_DEFAULT = IDR_XIHEI_TTF;
     const uint32_t IDR_TTF_DEFAULT = IDR_MSYHMONO_TTF;
 
     stbText(const char* filePath) {

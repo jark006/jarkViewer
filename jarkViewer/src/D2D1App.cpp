@@ -1,10 +1,5 @@
 #include "D2D1App.h"
 
-
-//
-// D2D1App Implement
-//
-
 D2D1App::D2D1App() 
 {
 	m_parameters.DirtyRectsCount = 0;
@@ -283,39 +278,8 @@ void D2D1App::DiscardDeviceResources()
 	Utils::SafeRelease(m_pD3DDeviceContext);
 }
 
-
-void D2D1App::CalculateFrameStats()
-{
-	// 计算每秒平均帧数的代码，还计算了绘制一帧的平均时间
-	// 这些统计信息会显示在窗口标题栏中
-	static int frameCnt = 0;
-	static float timeElapsed = 0.0f;
-
-	frameCnt++;
-
-	// 计算一秒时间内的平均值
-	if ((m_timer.TotalTime() - timeElapsed) >= 1.0f)
-	{
-		float fps = (float)frameCnt; // fps = frameCnt / 1
-		float mspf = 1000.0f / fps;
-
-		std::wostringstream outs;
-		outs.precision(12);
-		outs << m_wndCaption.c_str() << L" | "
-			<< L"FPS: " << fps << L" | "
-			<< L"Frame Time: " << mspf << L" (ms)";
-		SetWindowTextW(m_hWnd, outs.str().c_str());
-
-		// 为了计算下一个平均值重置一些值
-		frameCnt = 0;
-		timeElapsed += 1.0f;
-	}
-}
-
 void D2D1App::Run()
 {
-	//m_timer.Reset();
-
     while (m_fRunning)
     {
 		// 如果接收到Window消息，则处理这些消息
@@ -328,10 +292,7 @@ void D2D1App::Run()
 		// 否则，则运行动画/游戏
 		else
 		{
-			//m_timer.Tick();
-			//UpdateScene(m_timer.DeltaTime());
 			DrawScene();
-			//CalculateFrameStats();
 		}
     }
 }

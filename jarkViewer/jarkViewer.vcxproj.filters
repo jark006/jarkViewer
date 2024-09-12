@@ -255,9 +255,6 @@
     <ClInclude Include="include\D2D1App.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\D2D1Timer.h">
-      <Filter>include</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
@@ -287,7 +284,6 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <Font Include="file\LXGWNeoXiHei.ttf" />
     <Font Include="file\MSYHMONO.ttf" />
   </ItemGroup>
 </Project>

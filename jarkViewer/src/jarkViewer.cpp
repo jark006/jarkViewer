@@ -10,20 +10,14 @@
 #include <wrl.h>
 
 
-const wstring appName = L"JarkViewer v1.12";
-
-
-const vector<int64_t> ZOOM_LIST = {
-    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 
-    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
-};
-const int64_t ZOOM_BASE = ZOOM_LIST[ZOOM_LIST.size()/2]; // 100%缩放
-
-
+const wstring appName = L"JarkViewer v1.12" ;
 
 
 
 struct CurImageParameter {
+    static const vector<int64_t> ZOOM_LIST;
+    static const int64_t ZOOM_BASE = (1 << 16); // 100%缩放
+
     int64_t zoomTarget;     // 设定的缩放比例
     int64_t zoomCur;        // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
     int curFrameIdx;        // 小于0则单张静态图像，否则为动画当前帧索引
@@ -80,6 +74,11 @@ struct CurImageParameter {
             zoomCur = ZOOM_BASE;
         }
     }
+};
+
+const vector<int64_t> CurImageParameter::ZOOM_LIST = {
+    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
+    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
 };
 
 class OperateQueue {
@@ -352,7 +351,7 @@ public:
             cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
             intUnion ret = 255;
-            if (curPar.zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+            if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
                 cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
                 cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
                 cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
@@ -375,7 +374,7 @@ public:
                 GRID_DARK : GRID_LIGHT;
 
             intUnion px;
-            if (curPar.zoomCur < ZOOM_BASE && srcY > 0 && srcX > 0) {
+            if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) {
                 intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
                 intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
                 intUnion srcPx3 = srcPtr[srcW * (srcY)+srcX - 1];
@@ -413,13 +412,13 @@ public:
         if (srcH <= 0 || srcW <= 0)
             return;
 
-        const int deltaW = curPar.slideCur.x + (int)((canvasW - srcW * curPar.zoomCur / ZOOM_BASE) / 2);
-        const int deltaH = curPar.slideCur.y + (int)((canvasH - srcH * curPar.zoomCur / ZOOM_BASE) / 2);
+        const int deltaW = curPar.slideCur.x + (int)((canvasW - srcW * curPar.zoomCur / curPar.ZOOM_BASE) / 2);
+        const int deltaH = curPar.slideCur.y + (int)((canvasH - srcH * curPar.zoomCur / curPar.ZOOM_BASE) / 2);
 
         int xStart = deltaW < 0 ? 0 : deltaW;
         int yStart = deltaH < 0 ? 0 : deltaH;
-        int xEnd = (int)(srcW * curPar.zoomCur / ZOOM_BASE + deltaW);
-        int yEnd = (int)(srcH * curPar.zoomCur / ZOOM_BASE + deltaH);
+        int xEnd = (int)(srcW * curPar.zoomCur / curPar.ZOOM_BASE + deltaW);
+        int yEnd = (int)(srcH * curPar.zoomCur / curPar.ZOOM_BASE + deltaH);
         if (xEnd > canvasW) xEnd = canvasW;
         if (yEnd > canvasH) yEnd = canvasH;
 
@@ -428,8 +427,8 @@ public:
         auto ptr = (uint32_t*)canvas.ptr();
         for (int y = yStart; y < yEnd; y++)
             for (int x = xStart; x < xEnd; x++) {
-                const int srcX = (int)(((int64_t)x - deltaW) * ZOOM_BASE / curPar.zoomCur);
-                const int srcY = (int)(((int64_t)y - deltaH) * ZOOM_BASE / curPar.zoomCur);
+                const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
+                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
                 if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
                     ptr[y * canvasW + x] = getSrcPx(srcImg, srcX, srcY, x, y);
             }
@@ -572,7 +571,7 @@ public:
 
         wstring str = std::format(L" [{}/{}] {}% ",
             curFileIdx + 1, imgFileList.size(),
-            curPar.zoomCur * 100ULL / ZOOM_BASE)
+            curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
             + imgFileList[curFileIdx];
         SetWindowTextW(m_hWnd, str.c_str());
 

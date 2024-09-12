@@ -8,10 +8,8 @@
 #pragma once
 
 #include "Utils.h"
-#include "D2D1Timer.h"
 
 
-// D2D1App
 class D2D1App
 {
 public:
@@ -42,8 +40,6 @@ protected:
 	void CreateWindowSizeDependentResources();
 	// 丢弃设备有关资源
 	void DiscardDeviceResources();
-	// 计算帧数信息
-	void CalculateFrameStats();
 
 	// 消息处理：鼠标
 	virtual void OnMouseDown(WPARAM btnState, int x, int y) { }
@@ -66,9 +62,6 @@ protected:
 	std::wstring						m_wndCaption = L"D2D1App";
 	// 是否运行
 	BOOL								m_fRunning = TRUE;
-	// 用于记录deltatime和游戏时间
-	D2D1Timer							m_timer;
-
 	// D3D 设备
 	ID3D11Device*						m_pD3DDevice;
 	// D3D 设备上下文

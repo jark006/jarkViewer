@@ -6,7 +6,6 @@
 #define IDI_SMALL                       108
 #define IDC_JARKVIEWER                  109
 #define IDR_MAINFRAME                   128
-#define IDR_XIHEI_TTF                   133
 #define IDR_ACCELERATOR1                134
 #define IDB_PNG                         136
 #define IDB_PNG1                        137
