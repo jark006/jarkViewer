@@ -14,7 +14,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr",
+        L".jxr", 
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -113,17 +113,8 @@ public:
         auto width = heif_image_handle_get_width(handle);
         auto height = heif_image_handle_get_height(handle);
 
-        cv::Mat matImg(height, width, CV_8UC4);
-
-        auto srcPtr = (uint32_t*)data;
-        auto dstPtr = (uint32_t*)matImg.ptr();
-        auto pixelCount = (size_t)width * height;
-        for (size_t i = 0; i < pixelCount; ++i) { // ARGB -> ABGR
-            uint32_t pixel = srcPtr[i];
-            uint32_t r = (pixel >> 16) & 0xFF;
-            uint32_t b = pixel & 0xFF;
-            dstPtr[i] = (b << 16) | (pixel & 0xff00ff00) | r;
-        }
+        cv::Mat matImg;
+        cv::cvtColor(cv::Mat(height, width, CV_8UC4, (uint8_t*)data, stride), matImg, cv::COLOR_RGBA2BGRA);
 
         // clean up resources
         heif_context_free(ctx);
@@ -1031,7 +1022,7 @@ public:
         return img;
     }
 
-    cv::Mat loadTGA(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadTGA_HDR(const wstring& path, const vector<uchar>& buf, int fileSize) {
         int width, height, channels;
 
         // 使用stb_image从内存缓冲区加载图像
@@ -1665,8 +1656,8 @@ public:
         else if (ext == L".jxr") {
             img = loadJXR(path, buf, fileSize);
         }
-        else if (ext == L".tga") {
-            img = loadTGA(path, buf, fileSize);
+        else if (ext == L".tga" || ext == L".hdr") {
+            img = loadTGA_HDR(path, buf, fileSize);
         }
         else if (ext == L".svg") {
             img = loadSVG(path, buf, fileSize);
