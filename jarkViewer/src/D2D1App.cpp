@@ -319,7 +319,7 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         ::SetWindowLongPtrW(
             hwnd,
             GWLP_USERDATA,
-            PtrToUlong(pD2DApp)
+			(LONG_PTR)pD2DApp
             );
 
         result = 1;
