@@ -10,7 +10,7 @@
 #include <wrl.h>
 
 
-const wstring appName = L"JarkViewer v1.13";
+const wstring appName = L"JarkViewer v1.14";
 
 
 
