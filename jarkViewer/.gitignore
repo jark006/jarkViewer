@@ -3,3 +3,4 @@ lib/*.lib
 libopencv/*.lib
 libexiv2/*.lib
 libpng/*.lib
+libwebp2/*.lib

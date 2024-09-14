@@ -46,20 +46,6 @@ using std::endl;
 #include<opencv2/highgui.hpp>
 #include<opencv2/highgui/highgui_c.h>
 
-#include "libraw/libraw.h"
-#include "libheif/heif.h"
-#include "avif/avif.h"
-#include "jxl/decode_cxx.h"
-#include "jxl/resizable_parallel_runner_cxx.h"
-#include "jxl/types.h"
-#include "gif_lib.h"
-#include "webp/decode.h"
-#include "webp/demux.h"
-#include "png.h"
-#include "pngstruct.h"
-#include "psdsdk.h"
-#include "lunasvg.h"
-
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
 #define END_TIME_COUNT auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count();\

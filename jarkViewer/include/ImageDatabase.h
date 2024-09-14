@@ -3,7 +3,23 @@
 #include "exifParse.h"
 #include "LRU.h"
 
+#include "libraw/libraw.h"
+#include "libheif/heif.h"
+#include "avif/avif.h"
+#include "jxl/decode_cxx.h"
+#include "jxl/resizable_parallel_runner_cxx.h"
+#include "jxl/types.h"
+#include "gif_lib.h"
+#include "webp/decode.h"
+#include "webp/demux.h"
+#include "png.h"
+#include "pngstruct.h"
+#include "psdsdk.h"
+#include "lunasvg.h"
+
 using namespace psd;
+
+// .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
 
 class ImageDatabase:public LRU<wstring, Frames> {
 public:
@@ -274,9 +290,9 @@ public:
         }
     }
 
-    cv::Mat loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
 
-        uint32_t xsize = 0, ysize = 0;
+    std::vector<ImageNode> loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        std::vector<ImageNode> frames;
         cv::Mat mat;
 
         // Multi-threaded parallel runner.
@@ -289,7 +305,7 @@ public:
             Utils::log("JxlDecoderSubscribeEvents failed\n{}\n{}",
                 Utils::wstringToUtf8(path),
                 jxlStatusCode2String(status));
-            return mat;
+            return frames;
         }
 
         status = JxlDecoderSetParallelRunner(dec.get(), JxlResizableParallelRunner, runner.get());
@@ -297,7 +313,7 @@ public:
             Utils::log("JxlDecoderSetParallelRunner failed\n{}\n{}",
                 Utils::wstringToUtf8(path),
                 jxlStatusCode2String(status));
-            return mat;
+            return frames;
         }
 
         JxlBasicInfo info;
@@ -306,6 +322,7 @@ public:
         JxlDecoderSetInput(dec.get(), buf.data(), fileSize);
         JxlDecoderCloseInput(dec.get());
 
+        int duration_ms = 0;
         for (;;) {
             status = JxlDecoderProcessInput(dec.get());
 
@@ -313,23 +330,23 @@ public:
                 Utils::log("Decoder error\n{}\n{}",
                     Utils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return mat;
+                return frames;
             }
             else if (status == JXL_DEC_NEED_MORE_INPUT) {
                 Utils::log("Error, already provided all input\n{}\n{}",
                     Utils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return mat;
+                return frames;
             }
             else if (status == JXL_DEC_BASIC_INFO) {
                 if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), &info)) {
                     Utils::log("JxlDecoderGetBasicInfo failed\n{}\n{}",
                         Utils::wstringToUtf8(path),
                         jxlStatusCode2String(status));
-                    return mat;
+                    return frames;
                 }
-                xsize = info.xsize;
-                ysize = info.ysize;
+
+                duration_ms = info.animation.tps_numerator == 0 ? 0 : (info.animation.tps_denominator * 1000 / info.animation.tps_numerator);
                 JxlResizableParallelRunnerSetThreads(
                     runner.get(),
                     JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize));
@@ -363,49 +380,41 @@ public:
                     Utils::log("JxlDecoderImageOutBufferSize failed\n{}\n{}",
                         Utils::wstringToUtf8(path),
                         jxlStatusCode2String(status));
-                    return mat;
+                    return frames;
                 }
-                auto byteSizeRequire = 4ULL * xsize * ysize;
+                auto byteSizeRequire = 4ULL * info.xsize * info.ysize;
                 if (buffer_size != byteSizeRequire) {
                     Utils::log("Invalid out buffer size {} {}\n{}\n{}",
                         buffer_size, byteSizeRequire,
                         Utils::wstringToUtf8(path),
                         jxlStatusCode2String(status));
-                    return mat;
+                    return frames;
                 }
-                mat = cv::Mat(ysize, xsize, CV_8UC4);
+                mat = cv::Mat(info.ysize, info.xsize, CV_8UC4);
                 status = JxlDecoderSetImageOutBuffer(dec.get(), &format, mat.ptr(), byteSizeRequire);
                 if (JXL_DEC_SUCCESS != status) {
                     Utils::log("JxlDecoderSetImageOutBuffer failed\n{}\n{}",
                         Utils::wstringToUtf8(path),
                         jxlStatusCode2String(status));
-                    return mat;
+                    return frames;
                 }
             }
             else if (status == JXL_DEC_FULL_IMAGE) {
-                // Nothing to do. Do not yet return. If the image is an animation, more
-                // full frames may be decoded. This example only keeps the last one.
+                cv::cvtColor(mat, mat, cv::COLOR_BGRA2RGBA);
+                frames.push_back({ mat, duration_ms });
             }
             else if (status == JXL_DEC_SUCCESS) {
                 // All decoding successfully finished.
                 // It's not required to call JxlDecoderReleaseInput(dec.get()) here since
                 // the decoder will be destroyed.
 
-                auto srcPtr = (uint32_t* const)mat.ptr();
-                auto pixelCount = (size_t)xsize * ysize;
-                for (size_t i = 0; i < pixelCount; ++i) { // ARGB -> ABGR
-                    uint32_t& pixel = srcPtr[i];
-                    uint32_t r = (pixel >> 16) & 0xFF;
-                    uint32_t b = pixel & 0xFF;
-                    pixel = (b << 16) | (pixel & 0xff00ff00) | r;
-                }
-                return mat;
+                return frames;
             }
             else {
                 Utils::log("Unknown decoder status\n{}\n{}",
                     Utils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return mat;
+                return frames;
             }
         }
     }
@@ -1623,6 +1632,14 @@ public:
             return ret;
         }
 
+        if (ext == L".jxl") { //静态或动画
+            ret.imgList = loadJXL(path, buf, fileSize);
+            if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
+                ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols,
+                    ret.imgList.front().img.rows, buf.data(), fileSize);
+            return ret;
+        }
+
         if (ext == L".webp") { //静态或动画
             ret.imgList = loadWebp(path, buf, fileSize);
             if (!ret.imgList.empty()) {
@@ -1649,9 +1666,6 @@ public:
         }
         else if (ext == L".avif" || ext == L".avifs") {
             img = loadAvif(path, buf, fileSize);
-        }
-        else if (ext == L".jxl") {
-            img = loadJXL(path, buf, fileSize);
         }
         else if (ext == L".jxr") {
             img = loadJXR(path, buf, fileSize);

@@ -9,6 +9,12 @@
 #include "D2D1App.h"
 #include <wrl.h>
 
+/* TODO
+1. svg内嵌base64 image
+2. webp2 .wp2
+3. eps
+
+*/
 
 const wstring appName = L"JarkViewer v1.14";
 
@@ -612,6 +618,7 @@ public:
 
 };
 
+void test();
 
 int WINAPI wWinMain(
     HINSTANCE hInstance,
@@ -619,18 +626,20 @@ int WINAPI wWinMain(
     LPWSTR lpCmdLine,
     int nCmdShow)
 {
+#ifndef NDEBUG
+    AllocConsole();
+    FILE* stream;
+    freopen_s(&stream, "CON", "w", stdout);//重定向输入流
+#endif
+
+    test();
+
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
     Exiv2::enableBMFF();
 
     ::HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
     if (!SUCCEEDED(::CoInitialize(nullptr)))
         return 0;
-
-#ifndef NDEBUG
-    AllocConsole();
-    FILE* stream;
-    freopen_s(&stream, "CON", "w", stdout);//重定向输入流
-#endif
 
     D2D1Template app;
     if (SUCCEEDED(app.Initialize(hInstance, nCmdShow, lpCmdLine)))
@@ -640,5 +649,9 @@ int WINAPI wWinMain(
     return 0;
 }
 
+void test() {
+    return;
 
 
+    exit(0);
+}
