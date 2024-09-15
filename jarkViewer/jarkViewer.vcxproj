@@ -47,13 +47,13 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LibraryPath>$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
     <CopyCppRuntimeToOutputDir>false</CopyCppRuntimeToOutputDir>
   </PropertyGroup>
@@ -92,7 +92,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;lunasvg.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;lunasvg.lib;webp2.lib;imageio.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <StackReserveSize>8388608</StackReserveSize>
     </Link>
@@ -130,7 +130,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;lunasvg.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf.lib;ippiw.lib;ippicvmt.lib;libjpeg-turbo.lib;libopenjp2.lib;libpng.lib;libprotobuf.lib;libtiff.lib;libwebp.lib;opencv_world4100.lib;zlib.lib;ittnotify.lib;heif.lib;libde265.lib;x265-static.lib;avif.lib;yuv.lib;dav1d.lib;aom.lib;gif.lib;raw.lib;OpenGL32.Lib;GlU32.Lib;freeglut.lib;lcms2.lib;jasper.lib;brotlicommon.lib;brotlidec.lib;brotlienc.lib;charset.lib;exiv2.lib;iconv.lib;inih.lib;INIReader.lib;intl.lib;libexpatMT.lib;Psapi.lib;jxl.lib;jxl_cms.lib;jxl_threads.lib;hwy.lib;libpng16.lib;FreeImage.lib;FreeImagePlus.lib;pixman-1.lib;fontconfig.lib;Psd_MT.lib;lunasvg.lib;webp2.lib;imageio.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <StackReserveSize>8388608</StackReserveSize>

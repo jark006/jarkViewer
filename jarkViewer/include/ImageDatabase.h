@@ -16,6 +16,8 @@
 #include "pngstruct.h"
 #include "psdsdk.h"
 #include "lunasvg.h"
+#include "src/wp2/base.h"
+#include "src/wp2/decode.h"
 
 using namespace psd;
 
@@ -30,7 +32,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", 
+        L".jxr", L".wp2", L".pfm", 
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -401,7 +403,7 @@ public:
             }
             else if (status == JXL_DEC_FULL_IMAGE) {
                 cv::cvtColor(mat, mat, cv::COLOR_BGRA2RGBA);
-                frames.push_back({ mat, duration_ms });
+                frames.push_back({ mat.clone(), duration_ms });
             }
             else if (status == JXL_DEC_SUCCESS) {
                 // All decoding successfully finished.
@@ -631,7 +633,7 @@ public:
             const size_t endOffset = size_t(entry.dataOffset) + entry.dataSize;
             if (endOffset > buf.size()) {
                 Utils::log("Invalid image data offset or size: {}", Utils::wstringToUtf8(path));
-                Utils::log("endOffset {} buf.size(): {}", endOffset, buf.size());
+                Utils::log("endOffset {} fileBuf.size(): {}", endOffset, buf.size());
                 Utils::log("entry.dataOffset {}", entry.dataOffset);
                 Utils::log("entry.dataSize: {}", entry.dataSize);
                 continue;
@@ -1430,6 +1432,228 @@ public:
         return frames;
     }
 
+    std::string statusExplain(WP2Status status) {
+        switch (status) {
+        case WP2_STATUS_OK:
+            return "Operation completed successfully.";
+        case WP2_STATUS_VERSION_MISMATCH:
+            return "Version mismatch.";
+        case WP2_STATUS_OUT_OF_MEMORY:
+            return "Memory error allocating objects.";
+        case WP2_STATUS_INVALID_PARAMETER:
+            return "A parameter value is invalid.";
+        case WP2_STATUS_NULL_PARAMETER:
+            return "A pointer parameter is NULL.";
+        case WP2_STATUS_BAD_DIMENSION:
+            return "Picture has invalid width/height.";
+        case WP2_STATUS_USER_ABORT:
+            return "Abort request by user.";
+        case WP2_STATUS_UNSUPPORTED_FEATURE:
+            return "Unsupported feature.";
+        case WP2_STATUS_BITSTREAM_ERROR:
+            return "Bitstream has syntactic error.";
+        case WP2_STATUS_NOT_ENOUGH_DATA:
+            return "Premature EOF during decoding.";
+        case WP2_STATUS_BAD_READ:
+            return "Error while reading bytes.";
+        case WP2_STATUS_NEURAL_DECODE_FAILURE:
+            return "Neural decoder failed.";
+        case WP2_STATUS_BITSTREAM_OUT_OF_MEMORY:
+            return "Memory error while flushing bits.";
+        case WP2_STATUS_INVALID_CONFIGURATION:
+            return "Encoding configuration is invalid.";
+        case WP2_STATUS_BAD_WRITE:
+            return "Error while flushing bytes.";
+        case WP2_STATUS_FILE_TOO_BIG:
+            return "File is bigger than 4G.";
+        case WP2_STATUS_INVALID_COLORSPACE:
+            return "Encoder called with bad colorspace.";
+        case WP2_STATUS_NEURAL_ENCODE_FAILURE:
+            return "Neural encoder failed.";
+        default:
+            return "Unknown status.";
+        }
+    }
+
+    static uint32_t swap_endian(uint32_t value) {
+        return (value >> 24) |
+            ((value >> 8) & 0x0000FF00) |
+            ((value << 8) & 0x00FF0000) |
+            (value << 24);
+    }
+
+    // 网络找的不少wp2图像无法解码，使用 libwebp2 的 cwp2.exe 工具编码的 .wp2 图片可以正常解码
+    std::vector<ImageNode> loadWP2(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+        std::vector<ImageNode> frames;
+
+        WP2::ArrayDecoder decoder(buf.data(), buf.size());
+        uint32_t duration_ms = 0;
+
+        while (decoder.ReadFrame(&duration_ms)) {
+            auto& output_buffer = decoder.GetPixels();
+            cv::Mat img; // Need BGRA or BGR
+
+            switch (output_buffer.format())
+            {
+            case WP2_Argb_32:
+            case WP2_ARGB_32:
+            case WP2_XRGB_32: {// A-RGB -> BGR-A 大小端互转
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC4, (void*)output_buffer.GetRow(0), output_buffer.stride());
+                auto srcPtr = (uint32_t*)img.ptr();
+                auto pixelCount = (size_t)img.cols * img.rows;
+                for (size_t i = 0; i < pixelCount; ++i) {
+                    srcPtr[i] = swap_endian(srcPtr[i]);
+                }
+            }break;
+
+            case WP2_rgbA_32:
+            case WP2_RGBA_32:
+            case WP2_RGBX_32: {
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC4, (void*)output_buffer.GetRow(0), output_buffer.stride());
+                cv::cvtColor(img, img, cv::COLOR_RGBA2BGRA);
+            }break;
+
+            case WP2_bgrA_32:
+            case WP2_BGRA_32:
+            case WP2_BGRX_32: {
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC4, (void*)output_buffer.GetRow(0), output_buffer.stride());
+            }break;
+
+            case WP2_RGB_24: {
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC3, (void*)output_buffer.GetRow(0), output_buffer.stride());
+                cv::cvtColor(img, img, cv::COLOR_RGB2BGR);
+            }break;
+
+            case WP2_BGR_24: {
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC3, (void*)output_buffer.GetRow(0), output_buffer.stride());
+            }break;
+
+            case WP2_Argb_38: { // HDR format: 8 bits for A, 10 bits per RGB.
+                img = cv::Mat(output_buffer.height(), output_buffer.width(), CV_8UC4); // 8-bit BGRA
+
+                for (uint32_t y = 0; y < output_buffer.height(); ++y) {
+                    const uint8_t* src_row = (const uint8_t*)output_buffer.GetRow(y);
+                    cv::Vec4b* dst_row = img.ptr<cv::Vec4b>(y);
+
+                    for (uint32_t x = 0; x < output_buffer.width(); ++x) {
+                        // src_row contains 5 bytes per pixel: A (8 bits), R (10 bits), G (10 bits), B (10 bits)
+                        const uint8_t A = src_row[0];           // 8 bits for alpha
+                        const uint16_t R = ((src_row[1] << 2) | (src_row[2] >> 6)); // 10 bits for red
+                        const uint16_t G = ((src_row[2] & 0x3F) << 4) | (src_row[3] >> 4); // 10 bits for green
+                        const uint16_t B = ((src_row[3] & 0x0F) << 6) | (src_row[4] >> 2); // 10 bits for blue
+
+                        // Map 10-bit values (0-1023) to 8-bit values (0-255)
+                        dst_row[x] = cv::Vec4b(
+                            B >> 2,  // Blue (10 -> 8 bits)
+                            G >> 2,  // Green (10 -> 8 bits)
+                            R >> 2,  // Red (10 -> 8 bits)
+                            A        // Alpha (already 8 bits)
+                        );
+
+                        src_row += 5; // Move to next pixel (5 bytes per pixel in WP2_Argb_38)
+                    }
+                }
+            } break;
+            }
+
+            if (!img.empty())
+                frames.push_back({ img.clone(), (int)duration_ms });
+        }
+
+#ifndef NDEBUG
+        auto status = decoder.GetStatus();
+        if (status != WP2_STATUS_OK) {
+            Utils::log("ERROR: {}\n{}", Utils::wstringToUtf8(path), statusExplain(status));
+        }
+#endif
+
+        return frames;
+    }
+
+    // 辅助函数，用于从 PFM 头信息中提取尺寸和比例因子
+    bool parsePFMHeader(const vector<uchar>& buf, int& width, int& height, float& scaleFactor, bool& isColor, size_t& dataOffset) {
+        string header(reinterpret_cast<const char*>(buf.data()), 2);
+
+        // 判断是否是RGB（PF）或灰度（Pf）
+        if (header == "PF") {
+            isColor = true;
+        }
+        else if (header == "Pf") {
+            isColor = false;
+        }
+        else {
+            std::cerr << "Invalid PFM format!" << endl;
+            return false;
+        }
+
+        // 查找下一行的宽度和高度
+        size_t maxOffset = buf.size() > 100 ? 100 : buf.size();
+        size_t offset = 2;
+
+        while ((buf[offset] == '\n' || buf[offset] == ' ') && offset < maxOffset) offset++;
+        string dimLine;
+        while (buf[offset] != '\n' && offset < maxOffset) dimLine += buf[offset++];
+
+        switch (sscanf(dimLine.c_str(), "%d %d", &width, &height)) {
+        case 1: {
+            offset++;
+            string dimLine;
+            while (buf[offset] != '\n' && offset < maxOffset) dimLine += buf[offset++];
+            sscanf(dimLine.c_str(), "%d", &height);
+        }break;
+
+        case 2:break;
+
+        default: {
+            Utils::log("parsePFMHeader fail!");
+            return false;
+        }
+        }
+
+        // 查找比例因子
+        string scaleLine;
+        offset++;
+        while (buf[offset] != '\n' && offset < maxOffset) scaleLine += buf[offset++];
+
+        scaleFactor = std::stof(scaleLine);
+        dataOffset = offset+1;
+
+        return true;
+    }
+
+    cv::Mat loadPFM(const wstring& path, const vector<uchar>& buf, int fileSize) {
+        int width, height;
+        float scaleFactor;
+        bool isColor;
+        size_t dataOffset;
+
+        // 解析 PFM 头信息
+        if (!parsePFMHeader(buf, width, height, scaleFactor, isColor, dataOffset)) {
+            std::cerr << "Failed to parse PFM header!" << endl;
+            return cv::Mat();
+        }
+
+        // 创建 OpenCV Mat，格式为 CV_32FC3（或 CV_32FC1 对于灰度图）
+        cv::Mat image(height, width, isColor ? CV_32FC3 : CV_32FC1, (void*)(buf.data() + dataOffset));
+
+        // 如果比例因子为负数，图像需要垂直翻转
+        if (scaleFactor < 0) {
+            cv::flip(image, image, 0);
+            scaleFactor = -scaleFactor;
+        }
+
+        // 将图像从浮点数格式缩放到范围 [0, 255]
+        image *= 255.0f / scaleFactor;
+
+        // 将图像转换为 8 位格式
+        image.convertTo(image, CV_8UC3);
+
+        // 转换到 BGR 格式（如果是彩色图像）
+        cv::cvtColor(image, image, isColor ? cv::COLOR_RGB2BGR : cv::COLOR_GRAY2BGR);
+
+        return image;
+    }
+
 
     struct PngSource {
         const uint8_t* data;
@@ -1613,8 +1837,8 @@ public:
         fseek(f, 0, SEEK_END);
         auto fileSize = ftell(f);
         fseek(f, 0, SEEK_SET);
-        vector<uchar> buf(fileSize, 0);
-        fread(buf.data(), 1, fileSize, f);
+        vector<uint8_t> fileBuf(fileSize, 0);
+        fread(fileBuf.data(), 1, fileSize, f);
         fclose(f);
 
         auto dotPos = path.rfind(L'.');
@@ -1624,37 +1848,67 @@ public:
 
         Frames ret;
 
-        if (ext == L".gif") {
-            ret.imgList = loadGif(path, buf, fileSize);
-            if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
-                ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols,
-                    ret.imgList.front().img.rows, buf.data(), fileSize);
+        if (ext == L".gif") { //静态或动画
+            ret.imgList = loadGif(path, fileBuf, fileSize);
+            if (ret.imgList.empty()) {
+                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+            }
+            else {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
+            }
             return ret;
         }
 
         if (ext == L".jxl") { //静态或动画
-            ret.imgList = loadJXL(path, buf, fileSize);
-            if (!ret.imgList.empty() && ret.imgList.front().delay >= 0)
-                ret.exifStr = ExifParse::getSimpleInfo(path, ret.imgList.front().img.cols,
-                    ret.imgList.front().img.rows, buf.data(), fileSize);
+            ret.imgList = loadJXL(path, fileBuf, fileSize);
+            if (ret.imgList.empty()) {
+                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+            }
+            else {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
+                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+            }
+            return ret;
+        }
+
+        if (ext == L".wp2") { // webp2 静态或动画
+            ret.imgList = loadWP2(path, fileBuf, fileSize);
+            if (ret.imgList.empty()) {
+                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+            }
+            else {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
+                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+            }
             return ret;
         }
 
         if (ext == L".webp") { //静态或动画
-            ret.imgList = loadWebp(path, buf, fileSize);
+            ret.imgList = loadWebp(path, fileBuf, fileSize);
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
+                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
         }
 
         if (ext == L".png" || ext == L".apng") {
-            ret.imgList = loadApng(path, buf, fileSize); //若是静态图像则不解码，返回空
+            ret.imgList = loadApng(path, fileBuf, fileSize); //若是静态图像则不解码，返回空
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
+                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
@@ -1662,48 +1916,58 @@ public:
 
         cv::Mat img;
         if (ext == L".heic" || ext == L".heif") {
-            img = loadHeic(path, buf, fileSize);
+            img = loadHeic(path, fileBuf, fileSize);
         }
         else if (ext == L".avif" || ext == L".avifs") {
-            img = loadAvif(path, buf, fileSize);
+            img = loadAvif(path, fileBuf, fileSize);
         }
         else if (ext == L".jxr") {
-            img = loadJXR(path, buf, fileSize);
+            img = loadJXR(path, fileBuf, fileSize);
         }
         else if (ext == L".tga" || ext == L".hdr") {
-            img = loadTGA_HDR(path, buf, fileSize);
+            img = loadTGA_HDR(path, fileBuf, fileSize);
         }
         else if (ext == L".svg") {
-            img = loadSVG(path, buf, fileSize);
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize);
+            img = loadSVG(path, fileBuf, fileSize);
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
             if (img.empty()) {
                 img = getDefaultMat();
             }
         }
         else if (ext == L".ico" || ext == L".icon") {
-            std::tie(img, ret.exifStr) = loadICO(path, buf, fileSize);
+            std::tie(img, ret.exifStr) = loadICO(path, fileBuf, fileSize);
         }
         else if (ext == L".psd") {
-            img = loadPSD(path, buf, fileSize);
+            img = loadPSD(path, fileBuf, fileSize);
             if (img.empty())
                 img = getDefaultMat();
         }
+        else if (ext == L".pfm") {
+            img = loadPFM(path, fileBuf, fileSize);
+            if (img.empty()) {
+                img = getDefaultMat();
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize);
+            }
+            else {
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
+            }
+        }
         else if (supportRaw.contains(ext)) {
-            img = loadRaw(path, buf, fileSize);
+            img = loadRaw(path, fileBuf, fileSize);
             if (img.empty())
                 img = getDefaultMat();
         }
 
         if (img.empty())
-            img = loadMat(path, buf, fileSize);
+            img = loadMat(path, fileBuf, fileSize);
 
         if (ret.exifStr.empty()) {
-            auto exifTmp = ExifParse::getExif(path, buf.data(), fileSize);
+            auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileSize);
             const size_t idx = exifTmp.find("\n方向: ");
             if (idx != string::npos) {
                 handleExifOrientation(exifTmp[idx + 9] - '0', img);
             }
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, buf.data(), fileSize) + exifTmp;
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize) + exifTmp;
         }
 
         if (img.empty())

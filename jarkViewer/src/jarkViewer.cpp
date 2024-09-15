@@ -571,7 +571,8 @@ public:
         drawCanvas(srcImg, mainCanvas);
         if (showExif) {
             const int padding = 10;
-            RECT r{ padding, padding, mainCanvas.cols / 4 - padding, mainCanvas.rows - padding };
+            const int rightEdge = (mainCanvas.cols - 2 * padding) / 4 + padding;
+            RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, mainCanvas.rows - padding };
             stb.putAlignLeft(mainCanvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
 
@@ -630,11 +631,15 @@ int WINAPI wWinMain(
     AllocConsole();
     FILE* stream;
     freopen_s(&stream, "CON", "w", stdout);//重定向输入流
+
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
 #endif
+
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
     test();
 
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
     Exiv2::enableBMFF();
 
     ::HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
@@ -652,6 +657,8 @@ int WINAPI wWinMain(
 void test() {
     return;
 
+    std::ifstream file("D:\\Downloads\\test\\22.wp2", std::ios::binary);
+    auto buf = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
 
     exit(0);
 }
