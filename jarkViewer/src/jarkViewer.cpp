@@ -11,12 +11,11 @@
 
 /* TODO
 1. svg内嵌base64 image
-2. webp2 .wp2
 3. eps
 
 */
 
-const wstring appName = L"JarkViewer v1.14";
+const wstring appName = L"JarkViewer v1.15";
 
 
 
