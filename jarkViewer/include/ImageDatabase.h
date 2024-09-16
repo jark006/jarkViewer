@@ -80,10 +80,10 @@ public:
     // https://github.com/strukturag/libheif
     // vcpkg install libheif:x64-windows-static
     // vcpkg install libheif[hevc]:x64-windows-static
-    cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf) {
 
         auto exifStr = std::format("路径: {}\n大小: {}",
-            Utils::wstringToUtf8(path), Utils::size2Str(fileSize));
+            Utils::wstringToUtf8(path), Utils::size2Str(buf.size()));
 
         auto filetype_check = heif_check_filetype(buf.data(), 12);
         if (filetype_check == heif_filetype_no) {
@@ -97,7 +97,7 @@ public:
         }
 
         heif_context* ctx = heif_context_alloc();
-        auto err = heif_context_read_from_memory_without_copy(ctx, buf.data(), fileSize, nullptr);
+        auto err = heif_context_read_from_memory_without_copy(ctx, buf.data(), buf.size(), nullptr);
         if (err.code) {
             Utils::log("heif_context_read_from_memory_without_copy error: {} {}", Utils::wstringToUtf8(path), err.message);
             return cv::Mat();
@@ -144,7 +144,7 @@ public:
 
     // vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
     // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
-    cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf) {
         avifImage* image = avifImageCreateEmpty();
         if (image == nullptr) {
             Utils::log("avifImageCreateEmpty failure: {}", Utils::wstringToUtf8(path));
@@ -158,7 +158,7 @@ public:
             return cv::Mat();
         }
 
-        avifResult result = avifDecoderReadMemory(decoder, image, buf.data(), fileSize);
+        avifResult result = avifDecoderReadMemory(decoder, image, buf.data(), buf.size());
         if (result != AVIF_RESULT_OK) {
             Utils::log("avifDecoderReadMemory failure: {} {}", Utils::wstringToUtf8(path), avifResultToString(result));
             avifImageDestroy(image);
@@ -213,15 +213,15 @@ public:
         return ret;
     }
 
-    cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf, int fileSize) {
-        if (buf.empty() || fileSize <= 0) {
-            Utils::log("Buf is empty: {} {}", Utils::wstringToUtf8(path), fileSize);
+    cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf) {
+        if (buf.empty()) {
+            Utils::log("Buf is empty: {}", Utils::wstringToUtf8(path));
             return cv::Mat();
         }
 
         auto rawProcessor = std::make_unique<LibRaw>();
 
-        int ret = rawProcessor->open_buffer(buf.data(), fileSize);
+        int ret = rawProcessor->open_buffer(buf.data(), buf.size());
         if (ret != LIBRAW_SUCCESS) {
             Utils::log("Cannot open RAW file: {} {}", Utils::wstringToUtf8(path), libraw_strerror(ret));
             return cv::Mat();
@@ -293,7 +293,7 @@ public:
     }
 
 
-    std::vector<ImageNode> loadJXL(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    std::vector<ImageNode> loadJXL(const wstring& path, const vector<uchar>& buf) {
         std::vector<ImageNode> frames;
         cv::Mat mat;
 
@@ -321,7 +321,7 @@ public:
         JxlBasicInfo info;
         JxlPixelFormat format = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
 
-        JxlDecoderSetInput(dec.get(), buf.data(), fileSize);
+        JxlDecoderSetInput(dec.get(), buf.data(), buf.size());
         JxlDecoderCloseInput(dec.get());
 
         int duration_ms = 0;
@@ -600,7 +600,7 @@ public:
     }
 
     // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
-    std::tuple<cv::Mat, string> loadICO(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    std::tuple<cv::Mat, string> loadICO(const wstring& path, const vector<uchar>& buf) {
         if (buf.size() < 6) {
             Utils::log("Invalid ICO file: {}", Utils::wstringToUtf8(path));
             return { cv::Mat(),"" };
@@ -806,7 +806,7 @@ public:
 
 
     // https://github.com/MolecularMatters/psd_sdk
-    cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf) {
         cv::Mat img;
 
         MallocAllocator allocator;
@@ -1033,7 +1033,7 @@ public:
         return img;
     }
 
-    cv::Mat loadTGA_HDR(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadTGA_HDR(const wstring& path, const vector<uchar>& buf) {
         int width, height, channels;
 
         // 使用stb_image从内存缓冲区加载图像
@@ -1066,7 +1066,7 @@ public:
         return result;
     }
 
-    cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf, int fileSize){
+    cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf){
         const int maxEdge = 1024;
 
         auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
@@ -1100,7 +1100,7 @@ public:
         return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
     }
 
-    cv::Mat loadJXR(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadJXR(const wstring& path, const vector<uchar>& buf) {
         HRESULT hr = CoInitialize(NULL);
         if (FAILED(hr)) {
             std::cerr << "Failed to initialize COM library." << std::endl;
@@ -1224,7 +1224,7 @@ public:
         return mat;
     }
 
-    vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf) {
         vector<cv::Mat> imgs;
 
         if (!cv::imdecodemulti(buf, cv::IMREAD_UNCHANGED, imgs)) {
@@ -1233,7 +1233,7 @@ public:
         return imgs;
     }
 
-    cv::Mat loadMat(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadMat(const wstring& path, const vector<uchar>& buf) {
         auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
 
         if (img.empty()) {
@@ -1269,7 +1269,7 @@ public:
     }
 
 
-    std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf, size_t size) {
+    std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf) {
 
         auto InternalRead_Mem = [](GifFileType* gif, GifByteType* buf, int len) -> int {
             if (len == 0)
@@ -1293,13 +1293,10 @@ public:
 
         std::vector<ImageNode> frames;
 
-        GifData data;
-        memset(&data, 0, sizeof(data));
-        data.m_lpBuffer = buf.data();
-        data.m_nBufferSize = size;
+        GifData gifData{ buf.data(), buf.size(), 0 };
 
         int error;
-        GifFileType* gif = DGifOpen((void*)&data, InternalRead_Mem, &error);
+        GifFileType* gif = DGifOpen((void*)&gifData, InternalRead_Mem, &error);
 
         if (gif == nullptr) {
             Utils::log("DGifOpen: Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(error));
@@ -1324,7 +1321,6 @@ public:
             GraphicsControlBlock gcb;
             auto retCode = DGifSavedExtensionToGCB(gif, i, &gcb);
             if (retCode != GIF_OK) {
-                //continue;
                 gcb.TransparentColor = -1;
                 gcb.DelayTime = 10;
             }
@@ -1363,13 +1359,10 @@ public:
     }
 
 
-    std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+    std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf) {
         std::vector<ImageNode> frames;
 
-        WebPData webp_data{};
-        webp_data.bytes = buf.data();
-        webp_data.size = size;
-
+        WebPData webp_data{ buf.data(), buf.size() };
         WebPDemuxer* demux = WebPDemux(&webp_data);
         if (!demux) {
             Utils::log("Failed to create WebP demuxer: {}", Utils::wstringToUtf8(path));
@@ -1381,8 +1374,8 @@ public:
         uint32_t canvas_height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
 
         WebPIterator iter;
-        cv::Mat lastFrame(canvas_height, canvas_width, CV_8UC4, cv::Scalar(0, 0, 0, 0)); // Initialize the global canvas with transparency
-        cv::Mat canvas(canvas_height, canvas_width, CV_8UC4, cv::Scalar(0, 0, 0, 0)); // Initialize the global canvas with transparency
+        cv::Mat lastFrame(canvas_height, canvas_width, CV_8UC4, cv::Vec4b(0, 0, 0, 0)); // Initialize the global canvas with transparency
+        cv::Mat canvas(canvas_height, canvas_width, CV_8UC4, cv::Vec4b(0, 0, 0, 0)); // Initialize the global canvas with transparency
 
         if (WebPDemuxGetFrame(demux, 1, &iter)) {
             do {
@@ -1482,8 +1475,9 @@ public:
             (value << 24);
     }
 
+    // https://chromium.googlesource.com/codecs/libwebp2  commit 96720e6410284ebebff2007d4d87d7557361b952  Date:   Mon Sep 9 18:11:04 2024 +0000
     // 网络找的不少wp2图像无法解码，使用 libwebp2 的 cwp2.exe 工具编码的 .wp2 图片可以正常解码
-    std::vector<ImageNode> loadWP2(const wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+    std::vector<ImageNode> loadWP2(const wstring& path, const std::vector<uint8_t>& buf) {
         std::vector<ImageNode> frames;
 
         WP2::ArrayDecoder decoder(buf.data(), buf.size());
@@ -1621,7 +1615,7 @@ public:
         return true;
     }
 
-    cv::Mat loadPFM(const wstring& path, const vector<uchar>& buf, int fileSize) {
+    cv::Mat loadPFM(const wstring& path, const vector<uchar>& buf) {
         int width, height;
         float scaleFactor;
         bool isColor;
@@ -1661,10 +1655,10 @@ public:
         int    offset;
     };
 
-    std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf, size_t size) {
+    std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf) {
         std::vector<ImageNode> frames;
 
-        if (size < 8 || png_sig_cmp(buf.data(), 0, 8)) {
+        if (buf.size() < 8 || png_sig_cmp(buf.data(), 0, 8)) {
             Utils::log("FInvalid PNG signature in file: {}", Utils::wstringToUtf8(path));
             return frames;
         }
@@ -1688,7 +1682,7 @@ public:
             return frames;
         }
 
-        PngSource pngSource{ buf.data(), size, 0 };
+        PngSource pngSource{ buf.data(), buf.size(), 0 };
         png_set_read_fn(png, &pngSource, [](png_structp png_ptr, png_bytep data, png_size_t length) {
             PngSource* isource = (PngSource*)png_get_io_ptr(png_ptr);
             if ((isource->offset + length) <= isource->size) {
@@ -1849,7 +1843,7 @@ public:
         Frames ret;
 
         if (ext == L".gif") { //静态或动画
-            ret.imgList = loadGif(path, fileBuf, fileSize);
+            ret.imgList = loadGif(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getDefaultMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
@@ -1863,7 +1857,7 @@ public:
         }
 
         if (ext == L".jxl") { //静态或动画
-            ret.imgList = loadJXL(path, fileBuf, fileSize);
+            ret.imgList = loadJXL(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getDefaultMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
@@ -1878,7 +1872,7 @@ public:
         }
 
         if (ext == L".wp2") { // webp2 静态或动画
-            ret.imgList = loadWP2(path, fileBuf, fileSize);
+            ret.imgList = loadWP2(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getDefaultMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
@@ -1893,7 +1887,7 @@ public:
         }
 
         if (ext == L".webp") { //静态或动画
-            ret.imgList = loadWebp(path, fileBuf, fileSize);
+            ret.imgList = loadWebp(path, fileBuf);
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
                 ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
@@ -1904,7 +1898,7 @@ public:
         }
 
         if (ext == L".png" || ext == L".apng") {
-            ret.imgList = loadApng(path, fileBuf, fileSize); //若是静态图像则不解码，返回空
+            ret.imgList = loadApng(path, fileBuf); //若是静态图像则不解码，返回空
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
                 ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
@@ -1916,34 +1910,34 @@ public:
 
         cv::Mat img;
         if (ext == L".heic" || ext == L".heif") {
-            img = loadHeic(path, fileBuf, fileSize);
+            img = loadHeic(path, fileBuf);
         }
         else if (ext == L".avif" || ext == L".avifs") {
-            img = loadAvif(path, fileBuf, fileSize);
+            img = loadAvif(path, fileBuf);
         }
         else if (ext == L".jxr") {
-            img = loadJXR(path, fileBuf, fileSize);
+            img = loadJXR(path, fileBuf);
         }
         else if (ext == L".tga" || ext == L".hdr") {
-            img = loadTGA_HDR(path, fileBuf, fileSize);
+            img = loadTGA_HDR(path, fileBuf);
         }
         else if (ext == L".svg") {
-            img = loadSVG(path, fileBuf, fileSize);
+            img = loadSVG(path, fileBuf);
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
             if (img.empty()) {
                 img = getDefaultMat();
             }
         }
         else if (ext == L".ico" || ext == L".icon") {
-            std::tie(img, ret.exifStr) = loadICO(path, fileBuf, fileSize);
+            std::tie(img, ret.exifStr) = loadICO(path, fileBuf);
         }
         else if (ext == L".psd") {
-            img = loadPSD(path, fileBuf, fileSize);
+            img = loadPSD(path, fileBuf);
             if (img.empty())
                 img = getDefaultMat();
         }
         else if (ext == L".pfm") {
-            img = loadPFM(path, fileBuf, fileSize);
+            img = loadPFM(path, fileBuf);
             if (img.empty()) {
                 img = getDefaultMat();
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize);
@@ -1953,13 +1947,13 @@ public:
             }
         }
         else if (supportRaw.contains(ext)) {
-            img = loadRaw(path, fileBuf, fileSize);
+            img = loadRaw(path, fileBuf);
             if (img.empty())
                 img = getDefaultMat();
         }
 
         if (img.empty())
-            img = loadMat(path, fileBuf, fileSize);
+            img = loadMat(path, fileBuf);
 
         if (ret.exifStr.empty()) {
             auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileSize);

@@ -10,8 +10,8 @@
 #include <wrl.h>
 
 /* TODO
-1. svg内嵌base64 image
-3. eps
+1. svg: lunasvg库不支持某些特性，部分svg无法解码 考虑 https://github.com/GNOME/librsvg
+2. eps
 
 */
 
@@ -83,7 +83,7 @@ struct CurImageParameter {
 
 const vector<int64_t> CurImageParameter::ZOOM_LIST = {
     1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
-    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
+    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22, 
 };
 
 class OperateQueue {
@@ -109,7 +109,7 @@ public:
     }
 };
 
-class D2D1Template : public D2D1App {
+class JarkViewerApp : public D2D1App {
 public:
     const int BG_GRID_WIDTH = 16;
     const uint32_t BG_COLOR = 0x46;
@@ -137,11 +137,11 @@ public:
 
     CurImageParameter curPar;
 
-    D2D1Template() {
+    JarkViewerApp() {
         m_wndCaption = appName;
     }
 
-    ~D2D1Template() {
+    ~JarkViewerApp() {
         Utils::SafeRelease(m_pBrush);
         Utils::SafeRelease(m_pTextFormat);
     }
@@ -479,12 +479,6 @@ public:
             curPar.Init(winWidth, winHeight);
         } break;
 
-        case ActionENUM::toggleFullScreen: {
-            // todo
-            D2D1_SIZE_U displaySize = m_pD2DDeviceContext->GetPixelSize();
-            mainCanvas = cv::Mat(displaySize.height, displaySize.width, CV_8UC4);
-        } break;
-
         case ActionENUM::preImg: {
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
@@ -541,31 +535,38 @@ public:
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         curPar.curFrameDelay = (delay <= 0 ? 10 : delay);
-        
-        const int progressMax = 8;
-        static int progressCnt = progressMax;
-        static int64_t zoomInit = 0;
-        static Cood hasDropInit{};
-        //if (curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) { // 简单缩放动画
-        //    if (progressCnt >= (progressMax - 1)) {
-        //        progressCnt = 0;
-        //        zoomInit = curPar.zoomCur;
-        //        hasDropInit = curPar.slideCur;
-        //    }
-        //    else {
-        //        progressCnt += ((progressMax - progressCnt) / 2);
-        //        if (progressCnt >= (progressMax - 1)) {
-        //            curPar.zoomCur = curPar.zoomTarget;
-        //            curPar.slideCur = curPar.slideTarget;
-        //        }
-        //        else {
-        //            curPar.zoomCur = zoomInit + (curPar.zoomTarget - zoomInit) * progressCnt / progressMax;
-        //            curPar.slideCur = hasDropInit + (curPar.slideTarget - hasDropInit) * progressCnt / progressMax;
-        //        }
-        //    }
-        //}
-        curPar.zoomCur = curPar.zoomTarget;
-        curPar.slideCur = curPar.slideTarget;
+
+        if (curPar.zoomCur != curPar.zoomTarget) { // 简单缩放动画
+            const int progressMax = 1 << 4;
+            static int progressCnt = progressMax;
+            static int64_t zoomInit = 0;
+            static int64_t zoomTargetInit = 0;
+            static Cood hasSlideInit{};
+
+            //未开始进行动画 或 动画未完成就有新缩放操作
+            if (progressCnt >= progressMax || zoomTargetInit != curPar.zoomTarget) {
+                progressCnt = 1;
+                zoomInit = curPar.zoomCur;
+                zoomTargetInit = curPar.zoomTarget;
+                hasSlideInit = curPar.slideCur;
+            }
+            else {
+                auto addDelta = ((progressMax - progressCnt) / 2);
+                if (addDelta <= 0) {
+                    progressCnt = progressMax;
+                    curPar.zoomCur = curPar.zoomTarget;
+                    curPar.slideCur = curPar.slideTarget;
+                }
+                else {
+                    progressCnt += addDelta;
+                    curPar.zoomCur = zoomInit + (curPar.zoomTarget - zoomInit) * progressCnt / progressMax;
+                    curPar.slideCur = hasSlideInit + (curPar.slideTarget - hasSlideInit) * progressCnt / progressMax;
+                }
+            }
+        }
+        else {
+            curPar.slideCur = curPar.slideTarget;
+        }
 
         drawCanvas(srcImg, mainCanvas);
         if (showExif) {
@@ -645,7 +646,7 @@ int WINAPI wWinMain(
     if (!SUCCEEDED(::CoInitialize(nullptr)))
         return 0;
 
-    D2D1Template app;
+    JarkViewerApp app;
     if (SUCCEEDED(app.Initialize(hInstance, nCmdShow, lpCmdLine)))
         app.Run();
 

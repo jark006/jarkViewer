@@ -23,19 +23,38 @@
 #ifndef LUNASVG_H
 #define LUNASVG_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <cstdint>
+#include <map>
 
-#if defined(_MSC_VER) && defined(LUNASVG_SHARED)
-#ifdef LUNASVG_EXPORT
-#define LUNASVG_API __declspec(dllexport)
+#if !1 && (defined(_WIN32) || defined(__CYGWIN__))
+#define LUNASVG_EXPORT __declspec(dllexport)
+#define LUNASVG_IMPORT __declspec(dllimport)
+#elif defined(__GNUC__) && (__GNUC__ >= 4)
+#define LUNASVG_EXPORT __attribute__((__visibility__("default")))
+#define LUNASVG_IMPORT
 #else
-#define LUNASVG_API __declspec(dllimport)
+#define LUNASVG_EXPORT
+#define LUNASVG_IMPORT
 #endif
+
+#ifdef LUNASVG_BUILD
+#define LUNASVG_API LUNASVG_EXPORT
 #else
-#define LUNASVG_API
+#define LUNASVG_API LUNASVG_IMPORT
 #endif
+
+#define LUNASVG_VERSION_MAJOR 2
+#define LUNASVG_VERSION_MINOR 4
+#define LUNASVG_VERSION_MICRO 1
+
+#define LUNASVG_VERSION_ENCODE(major, minor, micro) (((major) * 10000) + ((minor) * 100) + ((micro) * 1))
+#define LUNASVG_VERSION LUNASVG_VERSION_ENCODE(LUNASVG_VERSION_MAJOR, LUNASVG_VERSION_MINOR, LUNASVG_VERSION_MICRO)
+
+#define LUNASVG_VERSION_XSTRINGIZE(major, minor, micro) #major"."#minor"."#micro
+#define LUNASVG_VERSION_STRINGIZE(major, minor, micro) LUNASVG_VERSION_XSTRINGIZE(major, minor, micro)
+#define LUNASVG_VERSION_STRING LUNASVG_VERSION_STRINGIZE(LUNASVG_VERSION_MAJOR, LUNASVG_VERSION_MINOR, LUNASVG_VERSION_MICRO)
 
 namespace lunasvg {
 
@@ -125,7 +144,100 @@ private:
     std::shared_ptr<Impl> m_impl;
 };
 
+class Element;
+
+class LUNASVG_API DomElement {
+public:
+    /**
+     * @brief DomElement
+     */
+    DomElement() = default;
+
+    /**
+     * @brief DomElement
+     * @param element
+     */
+    DomElement(Element* element);
+
+    /**
+     * @brief setAttribute
+     * @param name
+     * @param value
+     */
+    void setAttribute(const std::string& name, const std::string& value);
+
+    /**
+     * @brief getAttribute
+     * @param name
+     * @return
+     */
+    std::string getAttribute(const std::string& name) const;
+
+    /**
+     * @brief removeAttribute
+     * @param name
+     */
+    void removeAttribute(const std::string& name);
+
+    /**
+     * @brief hasAttribute
+     * @param name
+     * @return
+     */
+    bool hasAttribute(const std::string& name) const;
+
+    /**
+     * @brief getBBox
+     * @return
+     */
+    Box getBBox() const;
+
+    /**
+     * @brief getLocalTransform
+     * @return
+     */
+    Matrix getLocalTransform() const;
+
+    /**
+     * @brief getAbsoluteTransform
+     * @return
+     */
+    Matrix getAbsoluteTransform() const;
+
+    /**
+     * @brief isNull
+     * @return
+     */
+    bool isNull() const { return m_element == nullptr; }
+
+    /**
+     * @brief get
+     * @return
+     */
+    Element* get() { return m_element; }
+
+    /**
+     * @brief Renders the document to a bitmap
+     * @param matrix - the current transformation matrix
+     * @param bitmap - target image on which the content will be drawn
+     */
+    void render(Bitmap bitmap, const Matrix& matrix = Matrix{}) const;
+
+    /**
+     * @brief renderToBitmap
+     * @param width
+     * @param height
+     * @param backgroundColor
+     * @return
+     */
+    Bitmap renderToBitmap(std::uint32_t width, std::uint32_t height, std::uint32_t backgroundColor = 0x00000000) const;
+
+private:
+    Element* m_element = nullptr;
+};
+
 class LayoutSymbol;
+class SVGElement;
 
 class LUNASVG_API Document {
 public:
@@ -204,13 +316,23 @@ public:
      */
     Bitmap renderToBitmap(std::uint32_t width = 0, std::uint32_t height = 0, std::uint32_t backgroundColor = 0x00000000) const;
 
+    /**
+     * @brief updateLayout
+     */
+    void updateLayout();
+
     Document(Document&&);
     ~Document();
 
+    DomElement getElementById(const std::string& id) const;
+    DomElement rootElement() const;
+
 private:
     Document();
-
-    std::unique_ptr<LayoutSymbol> root;
+    bool parse(const char* data, size_t size);
+    std::unique_ptr<SVGElement> m_rootElement;
+    std::map<std::string, Element*> m_idCache;
+    std::unique_ptr<LayoutSymbol> m_rootBox;
 };
 
 } //namespace lunasvg
