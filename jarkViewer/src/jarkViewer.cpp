@@ -284,7 +284,7 @@ public:
         }break;
 
         case WM_RBUTTONUP: {//右键
-            exit(0);
+            operateQueue.push({ ActionENUM::requitExit });
         }break;
 
         case WM_MBUTTONUP: {//中键
@@ -547,7 +547,7 @@ public:
         } break;
 
         case ActionENUM::requitExit: {
-            exit(0);
+            PostMessage(m_hWnd, WM_DESTROY, 0, 0);
         } break;
 
         default:

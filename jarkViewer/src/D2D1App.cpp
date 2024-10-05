@@ -2,6 +2,7 @@
 
 D2D1App::D2D1App() 
 {
+	loadSettings();
 	m_parameters.DirtyRectsCount = 0;
 	m_parameters.pDirtyRects = nullptr;
 	m_parameters.pScrollRect = nullptr;
@@ -10,10 +11,66 @@ D2D1App::D2D1App()
 
 D2D1App::~D2D1App()
 {
+	saveSettings();
 	this->DiscardDeviceResources();
 	Utils::SafeRelease(m_pD2DFactory);
 	Utils::SafeRelease(m_pWICFactory);
 	Utils::SafeRelease(m_pDWriteFactory);
+}
+
+void D2D1App::loadSettings() {
+	const int MAX_PATH_LEN = 512;
+	TCHAR szPath[MAX_PATH_LEN];
+
+	if (GetModuleFileName(NULL, szPath, MAX_PATH_LEN) != 0) {
+
+		exePath = wstring(szPath);
+		settingPath = exePath.substr(0, exePath.length() - 3) + L"db";
+
+		auto f = _wfopen(settingPath.c_str(), L"rb");
+		if (f) {
+			SettingParameter tmp{ 0 };
+			int readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
+			fclose(f);
+
+			if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length() + 1))
+				settingPar = tmp;
+
+			if (settingPar.showCmd == SW_NORMAL) {
+				int screenWidth = (::GetSystemMetrics(SM_CXFULLSCREEN));
+				int screenHeight = (::GetSystemMetrics(SM_CYFULLSCREEN));
+
+				if (settingPar.rect.left > screenWidth || settingPar.rect.top > screenHeight ||
+					(settingPar.rect.right - settingPar.rect.left) > screenWidth ||
+					(settingPar.rect.bottom - settingPar.rect.top) > screenHeight) {
+					settingPar.rect = { 100, 100, 100 + screenWidth / 2, 100 + screenHeight / 2 };
+				}
+			}
+		}
+	}
+}
+
+void D2D1App::saveSettings() {
+	WINDOWPLACEMENT wp;
+	wp.length = sizeof(WINDOWPLACEMENT);
+
+	// 获取窗口的显示状态和位置信息
+	if (GetWindowPlacement(m_hWnd, &wp) && wp.showCmd == SW_NORMAL) {
+		settingPar.showCmd = SW_NORMAL;
+		settingPar.rect = wp.rcNormalPosition;
+	}
+	else {
+		settingPar.showCmd = SW_MAXIMIZE;
+		settingPar.rect = {};
+	}
+
+	memcpy(settingPar.header, settingHeader.data(), settingHeader.length() + 1);
+
+	auto f = _wfopen(settingPath.c_str(), L"wb");
+	if (f) {
+		fwrite(&settingPar, 1, sizeof(SettingParameter), f);
+		fclose(f);
+	}
 }
 
 // 初始化
@@ -34,17 +91,11 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance, int nCmdShow)
 	wcex.hIcon = nullptr;
 	// 注册窗口
 	RegisterClassExW(&wcex);
-	// 计算窗口大小
-	RECT window_rect = { 0, 0, 1080, 640 };
+
+	RECT window_rect = settingPar.showCmd == SW_NORMAL ? settingPar.rect : RECT{ 0, 0, 800, 600 };
 	DWORD window_style = WS_OVERLAPPEDWINDOW;
-	AdjustWindowRect(&window_rect, window_style, FALSE);
-	window_rect.right -= window_rect.left;
-	window_rect.bottom -= window_rect.top;
-	window_rect.left = (::GetSystemMetrics(SM_CXFULLSCREEN) - window_rect.right) / 2;
-	window_rect.top = (::GetSystemMetrics(SM_CYFULLSCREEN) - window_rect.bottom) / 2;
-	// 创建窗口
 	m_hWnd = CreateWindowExW(0, L"D2D1WndClass", m_wndCaption.c_str(), window_style,
-		window_rect.left, window_rect.top, window_rect.right, window_rect.bottom,
+		window_rect.left, window_rect.top, window_rect.right - window_rect.left, window_rect.bottom - window_rect.top,
 		0, 0, hInstance, this);
 	hr = m_hWnd ? S_OK : E_FAIL;
 	
@@ -54,7 +105,7 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance, int nCmdShow)
 		CreateDeviceIndependentResources();
 		CreateDeviceResources();
 
-		ShowWindow(m_hWnd, SW_MAXIMIZE);
+		ShowWindow(m_hWnd, settingPar.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
 		UpdateWindow(m_hWnd);
 	}
 	return hr;

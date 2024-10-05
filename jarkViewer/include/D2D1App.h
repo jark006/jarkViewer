@@ -10,6 +10,16 @@
 #include "Utils.h"
 
 
+struct SettingParameter {
+	uint8_t header[32];
+	RECT rect{};
+	uint32_t showCmd = SW_MAXIMIZE;
+
+	uint32_t padding[51];
+};
+
+static_assert(sizeof(SettingParameter) == 256, "sizeof(SettingParameter) != 256");
+
 class D2D1App
 {
 public:
@@ -40,6 +50,9 @@ protected:
 	void CreateWindowSizeDependentResources();
 	// 丢弃设备有关资源
 	void DiscardDeviceResources();
+
+	void loadSettings();
+	void saveSettings();
 
 	// 消息处理：鼠标
 	virtual void OnMouseDown(WPARAM btnState, int x, int y) { }
@@ -86,4 +99,9 @@ protected:
 	D3D_FEATURE_LEVEL                   m_featureLevel;
 	// 手动交换链
 	DXGI_PRESENT_PARAMETERS             m_parameters;
+
+	wstring exePath;
+	wstring settingPath;
+	string_view settingHeader = "JarkViewerSetting";
+	SettingParameter settingPar;
 };
