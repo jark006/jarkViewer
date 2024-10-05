@@ -135,6 +135,7 @@
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <StackReserveSize>8388608</StackReserveSize>
       <ProgramDatabaseFile />
+      <EnableUAC>false</EnableUAC>
     </Link>
     <ResourceCompile>
       <Culture>0x0804</Culture>

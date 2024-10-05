@@ -15,7 +15,7 @@
 
 */
 
-const wstring appName = L"JarkViewer v1.15";
+const wstring appName = L"JarkViewer v1.16";
 
 
 
@@ -78,6 +78,23 @@ struct CurImageParameter {
             zoomTarget = ZOOM_BASE;
             zoomCur = ZOOM_BASE;
         }
+    }
+
+    void handleNewSize(int winWidth = 0, int winHeight = 0) {
+        if (winHeight == 0 || winWidth == 0 || framesPtr == nullptr)
+            return;
+
+        //适应显示窗口宽高的缩放比例
+        int64_t zoomFitWindow = std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height);
+
+        zoomList = ZOOM_LIST;
+        if (!Utils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+            zoomList.push_back(zoomFitWindow);
+        else {
+            if (zoomIndex >= zoomList.size())
+                zoomIndex = zoomList.size() - 1;
+        }
+        std::sort(zoomList.begin(), zoomList.end());
     }
 };
 
@@ -341,70 +358,59 @@ public:
     }
 
     void OnResize(UINT width, UINT height) {
-        static int w = 0, h = 0;
-        if (w == width && h == height)
-            return;
-
-        w = width;
-        h = height;
         operateQueue.push({ ActionENUM::newSize, (int)width, (int)height });
     }
 
-    uint32_t getSrcPx(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
-        switch (srcImg.channels()) {
-        case 3: {
-            cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
+    uint32_t getSrcPx3(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
+        cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
-            intUnion ret = 255;
-            if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
-                cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
-                cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
-                cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
-                for (int i = 0; i < 3; i++)
-                    ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
-
-                return ret.u32;
-            }
-            ret[0] = srcPx[0];
-            ret[1] = srcPx[1];
-            ret[2] = srcPx[2];
-            return ret.u32;
-        }
-        case 4: {
-            auto srcPtr = (intUnion*)srcImg.ptr();
-            int srcW = srcImg.cols;
-
-            intUnion srcPx = srcPtr[srcW * srcY + srcX];
-            intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
-                GRID_DARK : GRID_LIGHT;
-
-            intUnion px;
-            if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) {
-                intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
-                intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
-                intUnion srcPx3 = srcPtr[srcW * (srcY)+srcX - 1];
-                for (int i = 0; i < 4; i++)
-                    px[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) / 4;
-            }
-            else {
-                px = srcPx;
-            }
-
-            if (px[3] == 0) return bgPx.u32;
-            else if (px[3] == 255) return intUnion(px[0], px[1], px[2], 255).u32;;
-
-            const int alpha = px[3];
-            intUnion ret = alpha;
+        intUnion ret = 255;
+        if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+            cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
+            cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
+            cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
             for (int i = 0; i < 3; i++)
-                ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
+                ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
+
             return ret.u32;
         }
-        }
-
-        return ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
-            GRID_DARK : GRID_LIGHT;
+        ret[0] = srcPx[0];
+        ret[1] = srcPx[1];
+        ret[2] = srcPx[2];
+        return ret.u32;
     }
 
+    uint32_t getSrcPx4(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
+
+        auto srcPtr = (intUnion*)srcImg.ptr();
+        int srcW = srcImg.cols;
+
+        intUnion srcPx = srcPtr[srcW * srcY + srcX];
+        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
+            GRID_DARK : GRID_LIGHT;
+
+        if (srcPx[3] == 0) return bgPx.u32;
+
+        intUnion px;
+        if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+            intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
+            intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
+            intUnion srcPx3 = srcPtr[srcW * srcY + srcX - 1];
+            for (int i = 0; i < 4; i++)
+                px[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) / 4;
+        }
+        else {
+            px = srcPx;
+        }
+
+        if (px[3] == 255) return px.u32;
+
+        const int alpha = px[3];
+        intUnion ret = alpha;
+        for (int i = 0; i < 3; i++)
+            ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
+        return ret.u32;
+    }
 
     void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) const {
 
@@ -428,15 +434,27 @@ public:
         if (yEnd > canvasH) yEnd = canvasH;
 
         memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
-        // 1360*768 1-10ms
+
         auto ptr = (uint32_t*)canvas.ptr();
-        for (int y = yStart; y < yEnd; y++)
-            for (int x = xStart; x < xEnd; x++) {
-                const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
-                if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
-                    ptr[y * canvasW + x] = getSrcPx(srcImg, srcX, srcY, x, y);
-            }
+
+        if (srcImg.channels() == 3) {
+            for (int y = yStart; y < yEnd; y++)
+                for (int x = xStart; x < xEnd; x++) {
+                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
+                        ptr[y * canvasW + x] = getSrcPx3(srcImg, srcX, srcY, x, y);
+                }
+        }
+        else if (srcImg.channels() == 4) {
+            for (int y = yStart; y < yEnd; y++)
+                for (int x = xStart; x < xEnd; x++) {
+                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
+                        ptr[y * canvasW + x] = getSrcPx4(srcImg, srcX, srcY, x, y);
+                }
+        }
     }
 
     void DrawScene() {
@@ -465,8 +483,12 @@ public:
         switch (operateAction.action)
         {
         case ActionENUM::newSize: {
+            if (operateAction.width == 0 || operateAction.height == 0)
+                break;
 
-            //D2D1_SIZE_U displaySize = {operateAction.width, operateAction.height};// m_pD2DDeviceContext->GetPixelSize();
+            if (winWidth == operateAction.width && winHeight == operateAction.height)
+                break;
+
             winWidth = operateAction.width;
             winHeight = operateAction.height;
 
@@ -476,7 +498,7 @@ public:
                 CreateWindowSizeDependentResources();
             }
 
-            curPar.Init(winWidth, winHeight);
+            curPar.handleNewSize(winWidth, winHeight);
         } break;
 
         case ActionENUM::preImg: {
@@ -631,6 +653,7 @@ int WINAPI wWinMain(
     AllocConsole();
     FILE* stream;
     freopen_s(&stream, "CON", "w", stdout);//重定向输入流
+    freopen_s(&stream, "CON", "w", stderr);//重定向输入流
 
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
