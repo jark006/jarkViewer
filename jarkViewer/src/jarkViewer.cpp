@@ -92,7 +92,7 @@ struct CurImageParameter {
             zoomList.push_back(zoomFitWindow);
         else {
             if (zoomIndex >= zoomList.size())
-                zoomIndex = zoomList.size() - 1;
+                zoomIndex = (int)zoomList.size() - 1;
         }
         std::sort(zoomList.begin(), zoomList.end());
     }
@@ -143,6 +143,7 @@ public:
     Cood mousePos, mousePressPos;
     int winWidth = 800;
     int winHeight = 600;
+    bool hasInitWinSize = false;
 
     ImageDatabase imgDB;
 
@@ -234,13 +235,10 @@ public:
         }
 
         curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
-        if (m_pD2DDeviceContext) {
-            D2D1_SIZE_U displaySize = m_pD2DDeviceContext->GetPixelSize();
-            curPar.Init(displaySize.width, displaySize.height);
-        }
-        else {
-            curPar.Init(800, 600);
-            Utils::log("m_pD2DDeviceContext nullptr");
+
+        if (m_pD2DDeviceContext == nullptr) {
+            MessageBoxW(NULL, L"窗口创建失败！", L"错误", MB_ICONERROR);
+            exit(-1);
         }
 
         return hr;
@@ -498,7 +496,13 @@ public:
                 CreateWindowSizeDependentResources();
             }
 
-            curPar.handleNewSize(winWidth, winHeight);
+            if (hasInitWinSize) {
+                curPar.handleNewSize(winWidth, winHeight);
+            }
+            else {
+                hasInitWinSize = true;
+                curPar.Init(winWidth, winHeight);
+            }
         } break;
 
         case ActionENUM::preImg: {
