@@ -1,20 +1,18 @@
 # jarkViewer
 
-![](ico.png)
-
-A simple image viewer
-
-一款简单的看图软件
+![](SocialPreview.png)
 
 ### 操作简单：
+
 鼠标在窗口两侧边缘滚轮切换图片，在窗口中间滚轮放大缩小。
+
 双击切换全屏，鼠标中键显示图像EXIF等详细信息，右键退出。
 
 ### 静态图像支持：
 jpg jp2 jpe jpeg ico dib bmp exr png apng pbm pgm ppm pxm pnm tif tiff ras hdr pic icon gif jxl psd tga svg webp sr avifs heic heif avif jfif jxr
 
 ### 动态图像支持：
-gif webp png apng
+gif webp png apng jxl
 
 ### RAW格式支持：
 crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw
@@ -46,7 +44,7 @@ vcpkg install opencv4[core,ade,contrib,default-features,dnn,eigen,ffmpeg,freetyp
 
 # 若运行软件提示缺少 ``*.dll``
 
-请下载安装相关运行库：
+请下载安装 `VC++ 2015-2022` 运行库：
 
 [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) 
 
