@@ -266,19 +266,21 @@ public:
 
     void OnMouseUp(WPARAM btnState, int x, int y) {
         using namespace std::chrono;
-        static auto lastTimestamp = system_clock::now();
 
         switch ((long long)btnState)
         {
         case WM_LBUTTONUP: {//左键
+            static auto lastClickTimestamp = system_clock::now();
+
             mouseIsPressing = false;
 
             auto now = system_clock::now();
-            auto delta = duration_cast<milliseconds>(now - lastTimestamp).count();
-            if (50 < delta && delta < 300) { // 50 ~ 300 ms
+            auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
+            lastClickTimestamp = now;
+
+            if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
                 Utils::ToggleFullScreen(m_hWnd);
             }
-            lastTimestamp = now;
         }break;
 
         case WM_RBUTTONUP: {//右键
@@ -457,6 +459,10 @@ public:
 
     void DrawScene() {
         using namespace Microsoft::WRL;
+        const auto frameDuration = std::chrono::milliseconds(16); // 16.667 ms per frame
+        
+        static int delayRemain = 0;
+        static auto lastTimestamp = std::chrono::steady_clock::now();
 
         static D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
             D2D1_BITMAP_OPTIONS_NONE,
@@ -473,7 +479,7 @@ public:
             if (curPar.zoomCur == curPar.zoomTarget &&
                 curPar.slideCur == curPar.slideTarget &&
                 !curPar.isAnimation) {
-                Sleep(8);
+                Sleep(16);
                 return;
             }
         }
@@ -510,6 +516,8 @@ public:
                 curFileIdx = (int)imgFileList.size() - 1;
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
+            lastTimestamp = std::chrono::steady_clock::now();
+            delayRemain = 0;
         } break;
 
         case ActionENUM::nextImg: {
@@ -517,6 +525,8 @@ public:
                 curFileIdx = 0;
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
+            lastTimestamp = std::chrono::steady_clock::now();
+            delayRemain = 0;
         } break;
 
         case ActionENUM::slide: {
@@ -630,16 +640,25 @@ public:
 
 
         if (curPar.isAnimation) {
-            static int delayRemain = 0;
+            if (delayRemain <= 0)
+                delayRemain = curPar.curFrameDelay;
 
-            delayRemain -= 16;
+            auto nowTimestamp = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(nowTimestamp - lastTimestamp);
+            lastTimestamp = nowTimestamp;
+
+            auto remainingTime = frameDuration - elapsed;
+            if (remainingTime > std::chrono::milliseconds(0)) {
+                Sleep(remainingTime.count());
+            }
+
+            delayRemain -= elapsed.count();
             if (delayRemain <= 0) {
                 delayRemain = curPar.curFrameDelay;
                 curPar.curFrameIdx++;
                 if (curPar.curFrameIdx > curPar.curFrameIdxMax)
                     curPar.curFrameIdx = 0;
             }
-            Sleep(8);
         }
     }
 
