@@ -15,7 +15,7 @@
 
 */
 
-const wstring appName = L"JarkViewer v1.16";
+const wstring appName = L"JarkViewer v1.17";
 
 
 
