@@ -238,17 +238,19 @@ public:
                 operateQueue.push({ ActionENUM::preImg });
             else if (cursorPos == CursorPos::rightEdge)
                 operateQueue.push({ ActionENUM::nextImg });
-        }break;
+            return;
+        }
 
         case WM_RBUTTONDOWN: {//右键
-        }break;
+            return;
+        }
 
         case WM_MBUTTONDOWN: {//中键
-
-        }break;
+            return;
+        }
 
         default:
-            break;
+            return;
         }
     }
 
@@ -258,11 +260,11 @@ public:
         switch ((long long)btnState)
         {
         case WM_LBUTTONUP: {//左键
-            static auto lastClickTimestamp = system_clock::now();
-
             mouseIsPressing = false;
 
             if (cursorPos == CursorPos::centerArea) {
+                static auto lastClickTimestamp = system_clock::now();
+
                 auto now = system_clock::now();
                 auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
                 lastClickTimestamp = now;
@@ -271,18 +273,21 @@ public:
                     Utils::ToggleFullScreen(m_hWnd);
                 }
             }
-        }break;
+            return;
+        }
 
         case WM_RBUTTONUP: {//右键
             operateQueue.push({ ActionENUM::requitExit });
-        }break;
+            return;
+        }
 
         case WM_MBUTTONUP: {//中键
             operateQueue.push({ ActionENUM::toggleExif });
-        }break;
+            return;
+        }
 
         default:
-            break;
+            return;
         }
     }
 
@@ -318,6 +323,12 @@ public:
             mousePressPos = mousePos;
             operateQueue.push({ ActionENUM::slide, slideDelta.x, slideDelta.y });
         }
+    }
+
+    void OnMouseLeave() {
+        cursorPosLast = cursorPos = CursorPos::centerArea;
+        showEdgeArrow = ShowEdgeArrow::none;
+        operateQueue.push({ ActionENUM::normalFresh });
     }
 
     void OnMouseWheel(UINT nFlags, short zDelta, int x, int y) {
@@ -478,12 +489,10 @@ public:
     }
 
     void DrawScene() {
-        using namespace Microsoft::WRL;
         const auto frameDuration = std::chrono::milliseconds(16); // 16.667 ms per frame
         
         static int64_t delayRemain = 0;
         static auto lastTimestamp = std::chrono::steady_clock::now();
-
         static D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400); // 设置位图的宽度和高度
 
         if (m_pD2DDeviceContext == nullptr)
@@ -494,7 +503,7 @@ public:
             if (curPar.zoomCur == curPar.zoomTarget &&
                 curPar.slideCur == curPar.slideTarget &&
                 !curPar.isAnimation) {
-                Sleep(16);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 return;
             }
         }
@@ -637,20 +646,24 @@ public:
                     cv::Point(triangle_height , height / 2 - 80),
                     cv::Point(triangle_height , height / 2 + 80)
                 };
-                cv::fillConvexPoly(mainCanvas, trianglePos, cv::Vec4b(128, 128, 128));
+                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
             }
         }
         else if (showEdgeArrow == ShowEdgeArrow::right) {
             int height = mainCanvas.rows;
             int width = mainCanvas.cols;
             if (width > 100 && height > 100) {
-            int triangle_height = 50;
+                int triangle_height = 50;
                 std::vector<cv::Point> trianglePos = {
                     cv::Point(width - 10, height / 2),
                     cv::Point(width - triangle_height , height / 2 - 80),
                     cv::Point(width - triangle_height , height / 2 + 80)
                 };
-                cv::fillConvexPoly(mainCanvas, trianglePos, cv::Vec4b(128, 128, 128));
+                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
             }
         }
 
@@ -663,7 +676,7 @@ public:
         m_pD2DDeviceContext->CreateBitmap(
             bitmapSize,
             mainCanvas.ptr(),
-            mainCanvas.step,
+            (UINT32)mainCanvas.step,
             &bitmapProperties,
             &pBitmap
         );
@@ -702,10 +715,10 @@ public:
 void test();
 
 int WINAPI wWinMain(
-    HINSTANCE hInstance,
-    HINSTANCE hPrevInstance,
-    LPWSTR lpCmdLine,
-    int nCmdShow)
+    _In_ HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR lpCmdLine,
+    _In_ int nCmdShow)
 {
 #ifndef NDEBUG
     AllocConsole();

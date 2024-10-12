@@ -377,6 +377,11 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     else
     {
+		static TRACKMOUSEEVENT tme = {
+			.cbSize = sizeof(TRACKMOUSEEVENT),
+			.dwFlags = TME_LEAVE,
+		};
+
         D2D1App *pD2DApp = reinterpret_cast<D2D1App *>(static_cast<LONG_PTR>(
             ::GetWindowLongPtrW(
                 hwnd,
@@ -406,9 +411,18 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 
 			case WM_MOUSEMOVE:
+				if (!tme.hwndTrack) {
+					tme.hwndTrack = hwnd;
+					TrackMouseEvent(&tme);
+				}
 				pD2DApp->OnMouseMove(message, LOWORD(lParam), HIWORD(lParam));
 				break;
 
+			case WM_MOUSELEAVE:
+				tme.hwndTrack = NULL;
+				pD2DApp->OnMouseLeave();
+				break;
+			
 			case WM_MOUSEWHEEL:
 				pD2DApp->OnMouseWheel(LOWORD(wParam), HIWORD(wParam), LOWORD(lParam), HIWORD(lParam));
 				break;
