@@ -30,7 +30,7 @@ void D2D1App::loadSettings() {
 		auto f = _wfopen(settingPath.c_str(), L"rb");
 		if (f) {
 			SettingParameter tmp{ 0 };
-			int readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
+			auto readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
 			fclose(f);
 
 			if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length() + 1))

@@ -1830,6 +1830,13 @@ public:
 
         fseek(f, 0, SEEK_END);
         auto fileSize = ftell(f);
+
+        if (fileSize == 0) {
+            fclose(f);
+            Utils::log("path fileSize == 0: {}", Utils::wstringToUtf8(path));
+            return { {{getDefaultMat(), 0}}, "" };
+        }
+
         fseek(f, 0, SEEK_SET);
         vector<uint8_t> fileBuf(fileSize, 0);
         fread(fileBuf.data(), 1, fileSize, f);

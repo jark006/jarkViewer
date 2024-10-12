@@ -2,11 +2,26 @@
 
 ![](SocialPreview.png)
 
-### 操作简单：
+### 操作方式：
 
-鼠标在窗口两侧边缘滚轮切换图片，在窗口中间滚轮放大缩小。
+1. 切换图片：鼠标在窗口左右边缘区域滚轮，或者按键'A'/'D'，或者方向键-左/右，或者PageUp/PageDown。
 
-双击切换全屏，鼠标中键显示图像EXIF等详细信息，右键退出。
+1. 放大缩小：鼠标在窗口中间区域滚轮，或者按键'W'/'S'，或者方向键-上/下。
+
+1. 切换全屏：双击，或者按键 F11。
+
+1. 显示图像EXIF等信息：滚轮键，或者按键 'I' (information)。
+
+1. 复制图像信息到剪贴板：空格键，或者按键 'C' (copy)。
+
+1. 快捷退出：鼠标右键，或者按键 'ESC'。
+
+### 其他
+
+1. 自动记忆上次窗口位置/尺寸
+
+1. 支持读取AI生图（stable-diffusion，Flux）的提示词等信息
+
 
 ### 静态图像支持：
 jpg jp2 jpe jpeg ico dib bmp exr png apng pbm pgm ppm pxm pnm tif tiff ras hdr pic icon gif jxl psd tga svg webp sr avifs heic heif avif jfif jxr
@@ -26,7 +41,7 @@ crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw
 3. 解压 `jarkViewer/libopencv/libopencv.7z` 所有 `*.lib` 静态库
 4. 解压 `jarkViewer/libpng/libpng.7z` 所有 `*.lib` 静态库
 
-或者手动安装第三方库
+或者开启vcpkg支持，然后手动安装第三方库
 ```sh
 vcpkg install giflib:x64-windows-static
 vcpkg install x265:x64-windows-static

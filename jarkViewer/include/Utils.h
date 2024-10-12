@@ -31,6 +31,7 @@ using std::endl;
 #include <d2d1_3helper.h>
 #include <dwrite_2.h>
 #include <wincodec.h>
+#include <imm.h>
 
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
@@ -40,6 +41,7 @@ using std::endl;
 #pragma comment(lib, "windowscodecs.lib" )
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "Winmm.lib")
+#pragma comment (lib ,"imm32.lib")
 
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
@@ -146,11 +148,19 @@ struct GifData {
 };
 
 enum class ActionENUM:int64_t {
-    unknow = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit
+    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit, normalFresh
+};
+
+enum class CursorPos :int {
+    leftEdge = -1, centerArea = 0, rightEdge = 1
+};
+
+enum class ShowEdgeArrow :int {
+    left = -1, none = 0, right = 1
 };
 
 struct Action {
-    ActionENUM action = ActionENUM::unknow;
+    ActionENUM action = ActionENUM::none;
     union {
         int x;
         int width;

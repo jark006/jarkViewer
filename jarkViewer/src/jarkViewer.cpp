@@ -1,4 +1,3 @@
-
 #include "Utils.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -12,7 +11,7 @@
 /* TODO
 1. svg: lunasvg库不支持某些特性，部分svg无法解码 考虑 https://github.com/GNOME/librsvg
 2. eps
-
+3. 在鼠标光标位置缩放
 */
 
 const wstring appName = L"JarkViewer v1.17";
@@ -36,6 +35,7 @@ struct CurImageParameter {
     bool isAnimation = false;
     int width = 0;
     int height = 0;
+    int rotation = 0; // 旋转： 0正常， 1顺90度， 2：180度， 3顺270度/逆90度
 
     CurImageParameter() {
         Init();
@@ -48,6 +48,7 @@ struct CurImageParameter {
 
         slideCur = 0;
         slideTarget = 0;
+        rotation = 0;
 
         if (framesPtr) {
             isAnimation = framesPtr->imgList.size() > 1;
@@ -118,7 +119,7 @@ public:
         std::unique_lock<std::mutex> lock(mtx);
 
         if (queue.empty())
-            return { ActionENUM::unknow };
+            return { ActionENUM::none };
 
         Action res = queue.front();
         queue.pop();
@@ -134,10 +135,10 @@ public:
     const uint32_t GRID_LIGHT = 0xFF3C3C3C;
 
     OperateQueue operateQueue;
-    ID2D1SolidColorBrush* m_pBrush = nullptr;// 单色画刷
-    IDWriteTextFormat* m_pTextFormat = nullptr;// 字体格式
 
-    bool cursorIsView = true;
+    CursorPos cursorPos = CursorPos::centerArea;
+    CursorPos cursorPosLast = CursorPos::centerArea;
+    ShowEdgeArrow showEdgeArrow = ShowEdgeArrow::none;
     bool mouseIsPressing = false;
     bool showExif = false;
     Cood mousePos, mousePressPos;
@@ -153,6 +154,12 @@ public:
     stbText stb;                 // 给Mat绘制文字
     cv::Mat mainCanvas;          // 窗口内容画布
 
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> pBitmap;
+    D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE)
+    );
+
     CurImageParameter curPar;
 
     JarkViewerApp() {
@@ -160,8 +167,6 @@ public:
     }
 
     ~JarkViewerApp() {
-        Utils::SafeRelease(m_pBrush);
-        Utils::SafeRelease(m_pTextFormat);
     }
 
     HRESULT Initialize(HINSTANCE hInstance, int nCmdShow, LPWSTR lpCmdLine) {
@@ -171,28 +176,6 @@ public:
             return S_FALSE;
         }
         if (hInstance) Utils::setCvWindowIcon(hInstance, m_hWnd, IDI_JARKVIEWER);
-
-
-        HRESULT hr = S_OK;
-
-        // 创建字体格式
-        if (m_pDWriteFactory != NULL) {
-            hr = m_pDWriteFactory->CreateTextFormat(
-                L"Sitka Text",
-                NULL,
-                DWRITE_FONT_WEIGHT_NORMAL,
-                DWRITE_FONT_STYLE_NORMAL,
-                DWRITE_FONT_STRETCH_NORMAL,
-                68.0,
-                L"en-us",
-                &m_pTextFormat);
-        }
-
-        // 创建画刷
-        if (m_pD2DDeviceContext != NULL && SUCCEEDED(hr)) {
-            hr = m_pD2DDeviceContext->CreateSolidColorBrush(
-                D2D1::ColorF(D2D1::ColorF::DarkBlue), &m_pBrush);
-        }
 
 
         wstring filePath(*lpCmdLine == '\0' ? L"" : (*lpCmdLine == '\"' ? lpCmdLine + 1 : lpCmdLine));
@@ -241,7 +224,7 @@ public:
             exit(-1);
         }
 
-        return hr;
+        return S_OK;
     }
 
     void OnMouseDown(WPARAM btnState, int x, int y) {
@@ -250,6 +233,11 @@ public:
         case WM_LBUTTONDOWN: {//左键
             mouseIsPressing = true;
             mousePressPos = { x, y };
+
+            if(cursorPos == CursorPos::leftEdge)
+                operateQueue.push({ ActionENUM::preImg });
+            else if (cursorPos == CursorPos::rightEdge)
+                operateQueue.push({ ActionENUM::nextImg });
         }break;
 
         case WM_RBUTTONDOWN: {//右键
@@ -274,12 +262,14 @@ public:
 
             mouseIsPressing = false;
 
-            auto now = system_clock::now();
-            auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
-            lastClickTimestamp = now;
+            if (cursorPos == CursorPos::centerArea) {
+                auto now = system_clock::now();
+                auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
+                lastClickTimestamp = now;
 
-            if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
-                Utils::ToggleFullScreen(m_hWnd);
+                if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
+                    Utils::ToggleFullScreen(m_hWnd);
+                }
             }
         }break;
 
@@ -298,10 +288,30 @@ public:
 
     void OnMouseMove(WPARAM btnState, int x, int y) {
         mousePos = { x, y };
-        if (winWidth >= 500)
-            cursorIsView = (50 < x) && (x < (winWidth - 50)); // 在窗口中间
-        else
-            cursorIsView = ((winWidth / 5) < x) && (x < (winWidth * 4 / 5));
+
+        if (winWidth >= 500) {
+            cursorPos = (0 <= x && x < 50) ? (CursorPos::leftEdge) : (((winWidth - 50) < x && x <= winWidth) ? CursorPos::rightEdge : CursorPos::centerArea);
+        }
+        else {
+            cursorPos = (0 <= x && x < (winWidth / 5)) ? (CursorPos::leftEdge) : (((winWidth * 4 / 5) < x && x <= winWidth) ? CursorPos::rightEdge : CursorPos::centerArea);
+        }
+
+        if (cursorPosLast != cursorPos) {
+            if (cursorPos == CursorPos::centerArea) {
+                showEdgeArrow = ShowEdgeArrow::none;
+                operateQueue.push({ ActionENUM::normalFresh });
+            }
+            else if (cursorPos == CursorPos::leftEdge) {
+                showEdgeArrow = ShowEdgeArrow::left;
+                operateQueue.push({ ActionENUM::normalFresh });
+            }
+            else if (cursorPos == CursorPos::rightEdge) {
+                showEdgeArrow = ShowEdgeArrow::right;
+                operateQueue.push({ ActionENUM::normalFresh });
+            }
+
+            cursorPosLast = cursorPos;
+        }
 
         if (mouseIsPressing) {
             auto slideDelta = mousePos - mousePressPos;
@@ -312,13 +322,13 @@ public:
 
     void OnMouseWheel(UINT nFlags, short zDelta, int x, int y) {
         operateQueue.push({
-            cursorIsView ?
+            (cursorPos == CursorPos::centerArea) ?
             (zDelta < 0 ? ActionENUM::zoomIn : ActionENUM::zoomOut) :
             (zDelta < 0 ? ActionENUM::nextImg : ActionENUM::preImg)
             });
     }
 
-    void OnKeyUp(WPARAM keyValue) {
+    void OnKeyDown(WPARAM keyValue) {
         switch (keyValue)
         {
         case VK_SPACE: { // 按空格复制图像信息到剪贴板
@@ -349,6 +359,14 @@ public:
         case VK_NEXT:
         case VK_RIGHT: {
             operateQueue.push({ ActionENUM::nextImg });
+        }break;
+
+        case 'I': {
+            operateQueue.push({ ActionENUM::toggleExif });
+        }break;
+
+        case VK_ESCAPE: { // ESC
+            operateQueue.push({ ActionENUM::requitExit });
         }break;
 
         default: {
@@ -438,6 +456,7 @@ public:
         auto ptr = (uint32_t*)canvas.ptr();
 
         if (srcImg.channels() == 3) {
+//#pragma omp parallel for // CPU使用率太高
             for (int y = yStart; y < yEnd; y++)
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -447,6 +466,7 @@ public:
                 }
         }
         else if (srcImg.channels() == 4) {
+//#pragma omp parallel for // CPU使用率太高
             for (int y = yStart; y < yEnd; y++)
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -461,13 +481,8 @@ public:
         using namespace Microsoft::WRL;
         const auto frameDuration = std::chrono::milliseconds(16); // 16.667 ms per frame
         
-        static int delayRemain = 0;
+        static int64_t delayRemain = 0;
         static auto lastTimestamp = std::chrono::steady_clock::now();
-
-        static D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
-            D2D1_BITMAP_OPTIONS_NONE,
-            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE)
-        );
 
         static D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400); // 设置位图的宽度和高度
 
@@ -475,7 +490,7 @@ public:
             return;
 
         auto operateAction = operateQueue.get();
-        if (operateAction.action == ActionENUM::unknow) {
+        if (operateAction.action == ActionENUM::none) {
             if (curPar.zoomCur == curPar.zoomTarget &&
                 curPar.slideCur == curPar.slideTarget &&
                 !curPar.isAnimation) {
@@ -612,29 +627,49 @@ public:
             stb.putAlignLeft(mainCanvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
 
+        if (showEdgeArrow == ShowEdgeArrow::left) {
+            int height = mainCanvas.rows;
+            int width = mainCanvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(10, height / 2),
+                    cv::Point(triangle_height , height / 2 - 80),
+                    cv::Point(triangle_height , height / 2 + 80)
+                };
+                cv::fillConvexPoly(mainCanvas, trianglePos, cv::Vec4b(128, 128, 128));
+            }
+        }
+        else if (showEdgeArrow == ShowEdgeArrow::right) {
+            int height = mainCanvas.rows;
+            int width = mainCanvas.cols;
+            if (width > 100 && height > 100) {
+            int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(width - 10, height / 2),
+                    cv::Point(width - triangle_height , height / 2 - 80),
+                    cv::Point(width - triangle_height , height / 2 + 80)
+                };
+                cv::fillConvexPoly(mainCanvas, trianglePos, cv::Vec4b(128, 128, 128));
+            }
+        }
+
         wstring str = std::format(L" [{}/{}] {}% ",
             curFileIdx + 1, imgFileList.size(),
             curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
             + imgFileList[curFileIdx];
         SetWindowTextW(m_hWnd, str.c_str());
 
-        ComPtr<ID2D1Bitmap1> pBitmap;
         m_pD2DDeviceContext->CreateBitmap(
             bitmapSize,
             mainCanvas.ptr(),
-            mainCanvas.cols * 4,
+            mainCanvas.step,
             &bitmapProperties,
             &pBitmap
         );
 
         m_pD2DDeviceContext->BeginDraw();
         m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-        //m_pD2DDeviceContext->DrawText(
-        //	L"Template project of Direct2D 1.1.",
-        //	wcslen(L"Template project of Direct2D 1.1."),
-        //	m_pTextFormat,
-        //	D2D1::RectF(0, 0, 1080, 0),
-        //	m_pBrush);
         m_pD2DDeviceContext->EndDraw();
         m_pSwapChain->Present(0, 0);
 
@@ -649,7 +684,7 @@ public:
 
             auto remainingTime = frameDuration - elapsed;
             if (remainingTime > std::chrono::milliseconds(0)) {
-                Sleep(remainingTime.count());
+                std::this_thread::sleep_for(remainingTime);
             }
 
             delayRemain -= elapsed.count();
@@ -687,6 +722,7 @@ int WINAPI wWinMain(
     test();
 
     Exiv2::enableBMFF();
+    ::ImmDisableIME(GetCurrentThreadId()); // 禁用输入法，防止干扰按键操作
 
     ::HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
     if (!SUCCEEDED(::CoInitialize(nullptr)))
