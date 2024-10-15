@@ -31,7 +31,7 @@ struct CurImageParameter {
     Frames* framesPtr = nullptr;
 
     vector<int64_t> zoomList;
-    int zoomIndex=0;
+    int zoomIndex = 0;
     bool isAnimation = false;
     int width = 0;
     int height = 0;
@@ -101,7 +101,7 @@ struct CurImageParameter {
 
 const vector<int64_t> CurImageParameter::ZOOM_LIST = {
     1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
-    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22, 
+    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
 };
 
 class OperateQueue {
@@ -234,7 +234,7 @@ public:
             mouseIsPressing = true;
             mousePressPos = { x, y };
 
-            if(cursorPos == CursorPos::leftEdge)
+            if (cursorPos == CursorPos::leftEdge)
                 operateQueue.push({ ActionENUM::preImg });
             else if (cursorPos == CursorPos::rightEdge)
                 operateQueue.push({ ActionENUM::nextImg });
@@ -467,7 +467,7 @@ public:
         auto ptr = (uint32_t*)canvas.ptr();
 
         if (srcImg.channels() == 3) {
-//#pragma omp parallel for // CPU使用率太高
+            //#pragma omp parallel for // CPU使用率太高
             for (int y = yStart; y < yEnd; y++)
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -477,7 +477,7 @@ public:
                 }
         }
         else if (srcImg.channels() == 4) {
-//#pragma omp parallel for // CPU使用率太高
+            //#pragma omp parallel for // CPU使用率太高
             for (int y = yStart; y < yEnd; y++)
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -489,8 +489,8 @@ public:
     }
 
     void DrawScene() {
-        const auto frameDuration = std::chrono::milliseconds(16); // 16.667 ms per frame
-        
+        const auto frameDuration = std::chrono::milliseconds(10);
+
         static int64_t delayRemain = 0;
         static auto lastTimestamp = std::chrono::steady_clock::now();
         static D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400); // 设置位图的宽度和高度

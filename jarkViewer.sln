@@ -7,6 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jarkViewer", "jarkViewer\ja
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项", "解决方案项", "{E69C9CB1-2B98-4093-872E-4F2F5D18A2CD}"
 	ProjectSection(SolutionItems) = preProject
+		associate_images.bat = associate_images.bat
 		README.md = README.md
 	EndProjectSection
 EndProject

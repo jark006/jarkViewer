@@ -18,8 +18,7 @@
 #include "lunasvg.h"
 #include "src/wp2/base.h"
 #include "src/wp2/decode.h"
-
-using namespace psd;
+#include "libbpg.h"
 
 // .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
 
@@ -32,7 +31,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm", 
+        L".jxr", L".wp2", L".pfm",L".bpg",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -705,18 +704,18 @@ public:
     static const unsigned int CHANNEL_NOT_FOUND = UINT_MAX;
 
     template <typename T, typename DataHolder>
-    void* ExpandChannelToCanvas(Allocator* allocator, const DataHolder* layer, const void* data, unsigned int canvasWidth, unsigned int canvasHeight)
+    void* ExpandChannelToCanvas(psd::Allocator* allocator, const DataHolder* layer, const void* data, unsigned int canvasWidth, unsigned int canvasHeight)
     {
         T* canvasData = static_cast<T*>(allocator->Allocate(sizeof(T) * canvasWidth * canvasHeight, 16u));
         memset(canvasData, 0u, sizeof(T) * canvasWidth * canvasHeight);
 
-        imageUtil::CopyLayerData(static_cast<const T*>(data), canvasData, layer->left, layer->top, layer->right, layer->bottom, canvasWidth, canvasHeight);
+        psd::imageUtil::CopyLayerData(static_cast<const T*>(data), canvasData, layer->left, layer->top, layer->right, layer->bottom, canvasWidth, canvasHeight);
 
         return canvasData;
     }
 
 
-    void* ExpandChannelToCanvas(const Document* document, Allocator* allocator, Layer* layer, Channel* channel)
+    void* ExpandChannelToCanvas(const psd::Document* document, psd::Allocator* allocator, psd::Layer* layer, psd::Channel* channel)
     {
         if (document->bitsPerChannel == 8)
             return ExpandChannelToCanvas<uint8_t>(allocator, layer, channel->data, document->width, document->height);
@@ -730,7 +729,7 @@ public:
 
 
     template <typename T>
-    void* ExpandMaskToCanvas(const Document* document, Allocator* allocator, T* mask)
+    void* ExpandMaskToCanvas(const psd::Document* document, psd::Allocator* allocator, T* mask)
     {
         if (document->bitsPerChannel == 8)
             return ExpandChannelToCanvas<uint8_t>(allocator, mask, mask->data, document->width, document->height);
@@ -743,11 +742,11 @@ public:
     }
 
 
-    unsigned int FindChannel(Layer* layer, int16_t channelType)
+    unsigned int FindChannel(psd::Layer* layer, int16_t channelType)
     {
         for (unsigned int i = 0; i < layer->channelCount; ++i)
         {
-            Channel* channel = &layer->channels[i];
+            psd::Channel* channel = &layer->channels[i];
             if (channel->data && channel->type == channelType)
                 return i;
         }
@@ -777,21 +776,21 @@ public:
     };
 
     template <typename T>
-    T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, unsigned int width, unsigned int height)
+    T* CreateInterleavedImage(psd::Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, unsigned int width, unsigned int height)
     {
         T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
 
         const T* r = static_cast<const T*>(srcR);
         const T* g = static_cast<const T*>(srcG);
         const T* b = static_cast<const T*>(srcB);
-        imageUtil::InterleaveRGB(b, g, r, TmpValue<T>::alphaMax, image, width, height); // RGB -> BGR
+        psd::imageUtil::InterleaveRGB(b, g, r, TmpValue<T>::alphaMax, image, width, height); // RGB -> BGR
 
         return image;
     }
 
 
     template <typename T>
-    T* CreateInterleavedImage(Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, const void* srcA, unsigned int width, unsigned int height)
+    T* CreateInterleavedImage(psd::Allocator* allocator, const void* srcR, const void* srcG, const void* srcB, const void* srcA, unsigned int width, unsigned int height)
     {
         T* image = static_cast<T*>(allocator->Allocate(4ULL * width * height * sizeof(T), 16u));
 
@@ -799,7 +798,7 @@ public:
         const T* g = static_cast<const T*>(srcG);
         const T* b = static_cast<const T*>(srcB);
         const T* a = static_cast<const T*>(srcA);
-        imageUtil::InterleaveRGBA(b, g, r, a, image, width, height); // RGB -> BGR
+        psd::imageUtil::InterleaveRGBA(b, g, r, a, image, width, height); // RGB -> BGR
 
         return image;
     }
@@ -809,15 +808,15 @@ public:
     cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf) {
         cv::Mat img;
 
-        MallocAllocator allocator;
-        NativeFile file(&allocator);
+        psd::MallocAllocator allocator;
+        psd::NativeFile file(&allocator);
 
         if (!file.OpenRead(path.c_str())) {
             Utils::log("Cannot open file {}", Utils::wstringToUtf8(path));
             return img;
         }
 
-        Document* document = CreateDocument(&file, &allocator);
+        psd::Document* document = CreateDocument(&file, &allocator);
         if (!document) {
             Utils::log("Cannot create document {}", Utils::wstringToUtf8(path));
             file.Close();
@@ -825,7 +824,7 @@ public:
         }
 
         // the sample only supports RGB colormode
-        if (document->colorMode != colorMode::RGB)
+        if (document->colorMode != psd::colorMode::RGB)
         {
             Utils::log("Document is not in RGB color mode {}", Utils::wstringToUtf8(path));
             DestroyDocument(document, &allocator);
@@ -835,7 +834,7 @@ public:
 
         // extract all layers and masks.
         bool hasTransparencyMask = false;
-        LayerMaskSection* layerMaskSection = ParseLayerMaskSection(document, &file, &allocator);
+        psd::LayerMaskSection* layerMaskSection = ParseLayerMaskSection(document, &file, &allocator);
         if (layerMaskSection)
         {
             hasTransparencyMask = layerMaskSection->hasTransparencyMask;
@@ -843,16 +842,16 @@ public:
             // extract all layers one by one. this should be done in parallel for maximum efficiency.
             for (unsigned int i = 0; i < layerMaskSection->layerCount; ++i)
             {
-                Layer* layer = &layerMaskSection->layers[i];
+                psd::Layer* layer = &layerMaskSection->layers[i];
                 ExtractLayer(document, &file, &allocator, layer);
 
                 // check availability of R, G, B, and A channels.
                 // we need to determine the indices of channels individually, because there is no guarantee that R is the first channel,
                 // G is the second, B is the third, and so on.
-                const unsigned int indexR = FindChannel(layer, channelType::R);
-                const unsigned int indexG = FindChannel(layer, channelType::G);
-                const unsigned int indexB = FindChannel(layer, channelType::B);
-                const unsigned int indexA = FindChannel(layer, channelType::TRANSPARENCY_MASK);
+                const unsigned int indexR = FindChannel(layer, psd::channelType::R);
+                const unsigned int indexG = FindChannel(layer, psd::channelType::G);
+                const unsigned int indexB = FindChannel(layer, psd::channelType::B);
+                const unsigned int indexA = FindChannel(layer, psd::channelType::TRANSPARENCY_MASK);
 
                 // note that channel data is only as big as the layer it belongs to, e.g. it can be smaller or bigger than the canvas,
                 // depending on where it is positioned. therefore, we use the provided utility functions to expand/shrink the channel data
@@ -939,7 +938,7 @@ public:
         // alpha channels. this is only available when saving the document with "Maximize Compatibility" turned on.
         if (document->imageDataSection.length != 0)
         {
-            ImageDataSection* imageData = ParseImageDataSection(document, &file, &allocator);
+            psd::ImageDataSection* imageData = ParseImageDataSection(document, &file, &allocator);
             if (imageData)
             {
                 // interleave the planar image data into one RGB or RGBA image.
@@ -1222,6 +1221,32 @@ public:
         CoUninitialize();
 
         return mat;
+    }
+
+    cv::Mat loadBPG(const wstring& path, const vector<uchar>& buf) {
+        auto img = bpg_decoder_open();
+        if (bpg_decoder_decode(img, buf.data(), buf.size()) < 0) {
+            Utils::log("cvMat cannot decode: {}", Utils::wstringToUtf8(path));
+            return cv::Mat();
+        }
+
+        BPGImageInfo img_info_s{};
+        BPGImageInfo* img_info = &img_info_s;
+
+        bpg_decoder_get_info(img, img_info);
+
+        auto width = img_info->width;
+        auto height = img_info->height;
+
+        bpg_decoder_start(img, BPG_OUTPUT_FORMAT_RGBA32);
+
+        auto ret = cv::Mat(height, width, CV_8UC4);
+        uint32_t* ptr = (uint32_t*)ret.data;
+        for (int y = 0; y < height; y++) {
+            bpg_decoder_get_line(img, ptr + width * y);
+        }
+        cv::cvtColor(ret, ret, CV_RGBA2BGRA);
+        return ret;
     }
 
     vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf) {
@@ -1924,6 +1949,9 @@ public:
         }
         else if (ext == L".jxr") {
             img = loadJXR(path, fileBuf);
+        }
+        else if (ext == L".bpg") {
+            img = loadBPG(path, fileBuf);
         }
         else if (ext == L".tga" || ext == L".hdr") {
             img = loadTGA_HDR(path, fileBuf);
