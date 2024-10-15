@@ -24,7 +24,7 @@
 
 
 ### 静态图像支持：
-jpg jp2 jpe jpeg ico dib bmp exr png apng pbm pgm ppm pxm pnm tif tiff ras hdr pic icon gif jxl psd tga svg webp sr avifs heic heif avif jfif jxr
+apng avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2
 
 ### 动态图像支持：
 gif webp png apng jxl

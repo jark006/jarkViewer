@@ -34,7 +34,7 @@ if %matchCount% equ 0 (
     echo 自动选择第一个匹配项 %viewer%
 )
 
-set "formats=apng avif avifs bmp dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2 3fr arw cr2 cr3 crw dng kdc mrw nef orf pef raf raw rw2 sr2 srf x3f"
+set "formats=apng avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2 3fr arw cr2 cr3 crw dng kdc mrw nef orf pef raf raw rw2 sr2 srf x3f"
 
 for %%f in (%formats%) do (
     reg add "HKCR\.%%f" /ve /d "jarkViewer.%%f" /f
