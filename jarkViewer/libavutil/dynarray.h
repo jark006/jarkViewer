@@ -56,7 +56,7 @@
                 if (!av_array_new) \
                     av_size_new = 0; \
                 else \
-                    (av_array) = av_array_new; \
+                    (av_array) = (decltype(av_array))av_array_new; \
             } \
         } \
         if (av_size_new) { \

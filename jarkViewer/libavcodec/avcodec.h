@@ -1275,7 +1275,7 @@ typedef struct AVCodecContext {
      * Unlike priv_data, this is not codec-specific. It is used in general
      * libavcodec functions.
      */
-    //    struct AVCodecInternal *internal;
+    AVCodecInternal *internal;
 
     /**
      * Private data of the user, can be used to carry app specific stuff.

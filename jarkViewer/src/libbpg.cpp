@@ -1351,15 +1351,15 @@ static int bpg_decoder_output_init(BPGDecoderContext *s,
     if (s->format == BPG_FORMAT_420 || s->format == BPG_FORMAT_422) {
         s->w2 = (s->w + 1) / 2;
         s->h2 = (s->h + 1) / 2;
-        s->cb_buf2 = (uint8_t*)av_malloc(s->w * sizeof(PIXEL));
-        s->cr_buf2 = (uint8_t*)av_malloc(s->w * sizeof(PIXEL));
+        s->cb_buf2 = (PIXEL*)av_malloc(s->w * sizeof(PIXEL));
+        s->cr_buf2 = (PIXEL*)av_malloc(s->w * sizeof(PIXEL));
         /* Note: too large if 422 and sizeof(PIXEL) = 1 */
         s->c_buf4 = (int16_t*)av_malloc((s->w2 + 2 * ITAPS2 - 1) * sizeof(int16_t));
 
         if (s->format == BPG_FORMAT_420) {
             for(i = 0; i < ITAPS; i++) {
-                s->cb_buf3[i] = (uint8_t*)av_malloc(s->w2 * sizeof(PIXEL));
-                s->cr_buf3[i] = (uint8_t*)av_malloc(s->w2 * sizeof(PIXEL));
+                s->cb_buf3[i] = (PIXEL*)av_malloc(s->w2 * sizeof(PIXEL));
+                s->cr_buf3[i] = (PIXEL*)av_malloc(s->w2 * sizeof(PIXEL));
             }
         }
     }

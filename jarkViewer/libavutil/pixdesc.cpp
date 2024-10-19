@@ -60,12 +60,12 @@ static const AVPixFmtDescriptorEntry pix_desc[] = {
             .nb_components = 3,
             .log2_chroma_w = 1,
             .log2_chroma_h = 0,
+            .flags = AV_PIX_FMT_FLAG_PLANAR,
             .comp = {
                 { 0, 1, 1, 0, 15 },        /* Y */
                 { 1, 1, 1, 0, 15 },        /* U */
                 { 2, 1, 1, 0, 15 },        /* V */
             },
-            .flags = AV_PIX_FMT_FLAG_PLANAR,
         }
     },
     {
@@ -75,12 +75,12 @@ static const AVPixFmtDescriptorEntry pix_desc[] = {
             .nb_components = 3,
             .log2_chroma_w = 0,
             .log2_chroma_h = 0,
+            .flags = AV_PIX_FMT_FLAG_PLANAR,
             .comp = {
                 { 0, 1, 1, 0, 15 },        /* Y */
                 { 1, 1, 1, 0, 15 },        /* U */
                 { 2, 1, 1, 0, 15 },        /* V */
             },
-            .flags = AV_PIX_FMT_FLAG_PLANAR,
         }
     },
     {

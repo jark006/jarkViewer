@@ -486,7 +486,7 @@
 #define CONFIG_FONTCONFIG 0
 #define CONFIG_INCOMPATIBLE_LIBAV_ABI 0
 #define CONFIG_MEMALIGN_HACK 0
-#define CONFIG_MEMORY_POISONING 0
+#define CONFIG_MEMORY_POISONING 1
 #define CONFIG_NEON_CLOBBER_TEST 0
 #define CONFIG_PIC 0
 #define CONFIG_POD2MAN 1
@@ -1822,9 +1822,9 @@
 /* HEVC decoder options */
 //#define USE_MD5 /* include MD5 SEI check */
 #define USE_MSPS /* support modified SPS header to simplify decoder */
-//#define USE_VAR_BIT_DEPTH /* support all bit depths with reduced code size */
+#define USE_VAR_BIT_DEPTH /* support all bit depths with reduced code size */
 #define USE_SAO_SMALL_BUFFER /* reduce the memory used by SAO */
-//#define USE_PRED           /* allow non intra frames */
+#define USE_PRED           /* allow non intra frames */
 //#define USE_FULL           /* include HEVC code not relevant for BPG decoding */
 //#define USE_FUNC_PTR /* use function pointers for dsp */
 //#define USE_AV_LOG /* include av_log() */

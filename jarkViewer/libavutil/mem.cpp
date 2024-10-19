@@ -45,6 +45,10 @@
 
 //#define USE_MEM_STATS
 
+#ifndef FF_MEMORY_POISON
+#define FF_MEMORY_POISON 0x2a
+#endif // !FF_MEMORY_POISON
+
 #ifdef USE_MEM_STATS
 #include <malloc.h>
 static int mem_cur, mem_max;
@@ -311,7 +315,7 @@ char *av_strdup(const char *s)
     char *ptr = NULL;
     if (s) {
         int len = strlen(s) + 1;
-        ptr = av_realloc(NULL, len);
+        ptr = (char*)av_realloc(NULL, len);
         if (ptr)
             memcpy(ptr, s, len);
     }
@@ -325,11 +329,11 @@ char *av_strndup(const char *s, size_t len)
     if (!s)
         return NULL;
 
-    end = memchr(s, 0, len);
+    end = (char*)memchr(s, 0, len);
     if (end)
         len = end - s;
 
-    ret = av_realloc(NULL, len + 1);
+    ret = (char*)av_realloc(NULL, len + 1);
     if (!ret)
         return NULL;
 

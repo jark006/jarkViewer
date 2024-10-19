@@ -142,7 +142,7 @@ DECLARE_ALIGNED(16, const int8_t, ff_hevc_qpel_filters[3][16]) = {
 #if defined(USE_VAR_BIT_DEPTH)
 
 #define BIT_DEPTH bit_depth
-#include "hevcdsp_template.c"
+#include "hevcdsp_template.h"
 #undef BIT_DEPTH
 
 #else
@@ -153,15 +153,15 @@ DECLARE_ALIGNED(16, const int8_t, ff_hevc_qpel_filters[3][16]) = {
 
 #ifdef USE_FULL
 #define BIT_DEPTH 9
-#include "hevcdsp_template.c"
+#include "hevcdsp_template.h"
 #undef BIT_DEPTH
 
 #define BIT_DEPTH 10
-#include "hevcdsp_template.c"
+#include "hevcdsp_template.h"
 #undef BIT_DEPTH
 
 #define BIT_DEPTH 12
-#include "hevcdsp_template.c"
+#include "hevcdsp_template.h"
 #undef BIT_DEPTH
 #endif /* USE_FULL */
 

@@ -48,12 +48,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LibraryPath>$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)libavcodec;$(ProjectDir)libavutil;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)libavutil;$(ProjectDir)libavcodec;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LibraryPath>$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir)libavcodec;$(ProjectDir)libavutil;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)libavutil;$(ProjectDir)libavcodec;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
     <CopyCppRuntimeToOutputDir>false</CopyCppRuntimeToOutputDir>
   </PropertyGroup>
