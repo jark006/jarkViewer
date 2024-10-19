@@ -146,7 +146,7 @@ public:
 
     CursorPos cursorPos = CursorPos::centerArea;
     CursorPos cursorPosLast = CursorPos::centerArea;
-    ShowEdgeArrow showEdgeArrow = ShowEdgeArrow::none;
+    ShowExtraUI extraUIFlag = ShowExtraUI::none;
     bool mouseIsPressing = false;
     bool smoothShift = false;
     bool showExif = false;
@@ -240,13 +240,19 @@ public:
         switch ((long long)btnState)
         {
         case WM_LBUTTONDOWN: {//左键
-            mouseIsPressing = true;
+            if (cursorPos == CursorPos::centerArea)
+                mouseIsPressing = true;
+
             mousePressPos = { x, y };
 
             if (cursorPos == CursorPos::leftEdge)
                 operateQueue.push({ ActionENUM::preImg });
             else if (cursorPos == CursorPos::rightEdge)
                 operateQueue.push({ ActionENUM::nextImg });
+            else if (cursorPos == CursorPos::leftUp)
+                operateQueue.push({ ActionENUM::rotationLeft });
+            else if (cursorPos == CursorPos::rightUp)
+                operateQueue.push({ ActionENUM::rotationRight });
             return;
         }
 
@@ -304,24 +310,93 @@ public:
         mousePos = { x, y };
 
         if (winWidth >= 500) {
-            cursorPos = (0 <= x && x < 50) ? (CursorPos::leftEdge) : (((winWidth - 50) < x && x <= winWidth) ? CursorPos::rightEdge : CursorPos::centerArea);
+            if(0 <= x && x < 50) {
+                if (0 <= y && y < (winHeight / 4)) {
+                    cursorPos = CursorPos::leftUp;
+                }
+                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                    cursorPos = CursorPos::leftEdge;
+                }
+                else if ((winHeight *3/ 4) <= y && y < (winHeight)) {
+                    cursorPos = CursorPos::leftDown;
+                }
+            }
+            else if (((winWidth - 50) < x && x <= winWidth)) {
+                if (0 <= y && y < (winHeight / 4)) {
+                    cursorPos = CursorPos::rightUp;
+                }
+                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                    cursorPos = CursorPos::rightEdge;
+                }
+                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                    cursorPos = CursorPos::rightDown;
+                }
+            }
+            else {
+                cursorPos = CursorPos::centerArea;
+            }
         }
         else {
-            cursorPos = (0 <= x && x < (winWidth / 5)) ? (CursorPos::leftEdge) : (((winWidth * 4 / 5) < x && x <= winWidth) ? CursorPos::rightEdge : CursorPos::centerArea);
+            if (0 <= x && x < (winWidth / 4)) {
+                if (0 <= y && y < (winHeight / 4)) {
+                    cursorPos = CursorPos::leftUp;
+                }
+                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                    cursorPos = CursorPos::leftEdge;
+                }
+                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                    cursorPos = CursorPos::leftDown;
+                }
+            }
+            else if ((winWidth * 3 / 4) < x && x <= winWidth) {
+                if (0 <= y && y < (winHeight / 4)) {
+                    cursorPos = CursorPos::rightUp;
+                }
+                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                    cursorPos = CursorPos::rightEdge;
+                }
+                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                    cursorPos = CursorPos::rightDown;
+                }
+            }
+            else {
+                cursorPos = CursorPos::centerArea;
+            }
         }
 
         if (cursorPosLast != cursorPos) {
-            if (cursorPos == CursorPos::centerArea) {
-                showEdgeArrow = ShowEdgeArrow::none;
+            switch (cursorPos)
+            {
+            case CursorPos::leftUp:
+                extraUIFlag = ShowExtraUI::leftRotation;
                 operateQueue.push({ ActionENUM::normalFresh });
-            }
-            else if (cursorPos == CursorPos::leftEdge) {
-                showEdgeArrow = ShowEdgeArrow::left;
+                break;
+
+            case CursorPos::leftDown:
+                break;
+
+            case CursorPos::leftEdge:
+                extraUIFlag = ShowExtraUI::leftArrow;
                 operateQueue.push({ ActionENUM::normalFresh });
-            }
-            else if (cursorPos == CursorPos::rightEdge) {
-                showEdgeArrow = ShowEdgeArrow::right;
+                break;
+
+            case CursorPos::centerArea:
+                extraUIFlag = ShowExtraUI::none;
                 operateQueue.push({ ActionENUM::normalFresh });
+                break;
+
+            case CursorPos::rightEdge:
+                extraUIFlag = ShowExtraUI::rightArrow;
+                operateQueue.push({ ActionENUM::normalFresh });
+                break;
+
+            case CursorPos::rightDown:
+                break;
+
+            case CursorPos::rightUp:
+                extraUIFlag = ShowExtraUI::rightRotation;
+                operateQueue.push({ ActionENUM::normalFresh });
+                break;
             }
 
             cursorPosLast = cursorPos;
@@ -336,7 +411,7 @@ public:
 
     void OnMouseLeave() {
         cursorPosLast = cursorPos = CursorPos::centerArea;
-        showEdgeArrow = ShowEdgeArrow::none;
+        extraUIFlag = ShowExtraUI::none;
         operateQueue.push({ ActionENUM::normalFresh });
     }
 
@@ -360,15 +435,11 @@ public:
         }break;
 
         case 'Q': {
-            curPar.rotation = (curPar.rotation + 1) & 0b11;
-            curPar.slideTargetRotationLeft();
-            operateQueue.push({ ActionENUM::normalFresh });
+            operateQueue.push({ ActionENUM::rotationLeft });
         }break;
 
         case 'E': {
-            curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
-            curPar.slideTargetRotationRight();
-            operateQueue.push({ ActionENUM::normalFresh });
+            operateQueue.push({ ActionENUM::rotationRight });
         }break;
 
         case 'W': {
@@ -418,7 +489,10 @@ public:
         }break;
 
         default: {
+#ifndef NDEBUG
             cout << "KeyValue: " << (int)keyValue << '\n';
+#endif // NDEBUG
+
         }break;
         }
     }
@@ -666,6 +740,16 @@ public:
             }
         } break;
 
+        case ActionENUM::rotationLeft: {
+            curPar.rotation = (curPar.rotation + 1) & 0b11;
+            curPar.slideTargetRotationLeft();
+        } break;
+
+        case ActionENUM::rotationRight: {
+            curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
+            curPar.slideTargetRotationRight();
+        } break;
+
         case ActionENUM::requitExit: {
             PostMessageW(m_hWnd, WM_DESTROY, 0, 0);
         } break;
@@ -723,7 +807,25 @@ public:
             stb.putAlignLeft(mainCanvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
 
-        if (showEdgeArrow == ShowEdgeArrow::left) {
+        switch (extraUIFlag)
+        {
+        case ShowExtraUI::leftRotation: {
+            int height = mainCanvas.rows / 4;
+            int width = mainCanvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(10, height / 2),
+                    cv::Point(triangle_height , height / 2 - 80),
+                    cv::Point(triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
+            }
+        } break;
+
+        case ShowExtraUI::leftArrow: {
             int height = mainCanvas.rows;
             int width = mainCanvas.cols;
             if (width > 100 && height > 100) {
@@ -737,8 +839,12 @@ public:
                 cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
                 cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
             }
-        }
-        else if (showEdgeArrow == ShowEdgeArrow::right) {
+        } break;
+
+        case ShowExtraUI::none:
+            break;
+
+        case ShowExtraUI::rightArrow: {
             int height = mainCanvas.rows;
             int width = mainCanvas.cols;
             if (width > 100 && height > 100) {
@@ -752,6 +858,23 @@ public:
                 cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
                 cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
             }
+        } break;
+
+        case ShowExtraUI::rightRotation: {
+            int height = mainCanvas.rows / 4;
+            int width = mainCanvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(width - 10, height / 2),
+                    cv::Point(width - triangle_height , height / 2 - 80),
+                    cv::Point(width - triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
+            }
+        } break;
         }
 
         wstring str = std::format(L" [{}/{}] {}% ",
