@@ -469,8 +469,8 @@ typedef struct HEVCSPS {
 
     int transform_skip_rotation_enabled_flag;
     int transform_skip_context_enabled_flag;
-    int implicit_rdpcm_enabled_flag;
-    int explicit_rdpcm_enabled_flag;
+    int implicit_rdpcm_enabled_flag = 0;
+    int explicit_rdpcm_enabled_flag = 0;
     int intra_smoothing_disabled_flag;
     int persistent_rice_adaptation_enabled_flag;
 

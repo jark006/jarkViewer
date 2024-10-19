@@ -351,6 +351,16 @@ public:
             Utils::ToggleFullScreen(m_hWnd);
         }break;
 
+        case 'Q': {
+            curPar.rotation = (curPar.rotation + 1) & 0b11;
+            operateQueue.push({ ActionENUM::normalFresh });
+        }break;
+
+        case 'E': {
+            curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
+            operateQueue.push({ ActionENUM::normalFresh });
+        }break;
+
         case 'W': {
             curPar.slideTarget.y += ((winHeight + winWidth) / 16);
             smoothShift = true;
@@ -459,9 +469,15 @@ public:
     }
 
     void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) const {
-
-        const int srcH = srcImg.rows;
-        const int srcW = srcImg.cols;
+        int srcH, srcW;
+        if (curPar.rotation == 1 || curPar.rotation == 3) {
+            srcH = srcImg.cols;
+            srcW = srcImg.rows;
+        }
+        else {
+            srcH = srcImg.rows;
+            srcW = srcImg.cols;
+        }
 
         const int canvasH = canvas.rows;
         const int canvasW = canvas.cols;
@@ -489,8 +505,24 @@ public:
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
                     const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
-                        ptr[y * canvasW + x] = getSrcPx3(srcImg, srcX, srcY, x, y);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
+                        switch (curPar.rotation)
+                        {
+                        case 1:
+                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX, x, y);
+                            break;
+                        case 2:
+                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
+                            break;
+                        case 3:
+                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX, x, y);
+                            break;
+                        case 0:
+                        default:
+                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcX, srcY, x, y);
+                            break;
+                        }
+                    }
                 }
         }
         else if (srcImg.channels() == 4) {
@@ -499,8 +531,24 @@ public:
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
                     const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH)
-                        ptr[y * canvasW + x] = getSrcPx4(srcImg, srcX, srcY, x, y);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
+                        switch (curPar.rotation)
+                        {
+                        case 1:
+                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
+                            break;
+                        case 2:
+                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
+                            break;
+                        case 3:
+                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
+                            break;
+                        case 0:
+                        default:
+                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcX, srcY, x, y);
+                            break;
+                        }
+                    }
                 }
         }
     }
@@ -609,7 +657,7 @@ public:
         } break;
 
         case ActionENUM::requitExit: {
-            PostMessage(m_hWnd, WM_DESTROY, 0, 0);
+            PostMessageW(m_hWnd, WM_DESTROY, 0, 0);
         } break;
 
         default:

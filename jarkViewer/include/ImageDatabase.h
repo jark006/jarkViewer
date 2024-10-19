@@ -1242,7 +1242,7 @@ public:
 
         auto ret = cv::Mat(height, width, CV_8UC4);
         uint32_t* ptr = (uint32_t*)ret.data;
-        for (int y = 0; y < height; y++) {
+        for (uint32_t y = 0; y < height; y++) {
             bpg_decoder_get_line(img, ptr + width * y);
         }
         cv::cvtColor(ret, ret, CV_RGBA2BGRA);

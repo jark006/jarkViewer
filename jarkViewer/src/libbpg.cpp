@@ -42,10 +42,6 @@
 //#define DEBUG
 #endif
 
-#if !defined(DEBUG)
-#define NDEBUG
-#endif
-
 #include <assert.h>
 #include "libbpg.h"
 
@@ -122,31 +118,6 @@ struct BPGDecoderContext {
     ColorConvertFunc *cvt_func;
 };
 
-/* ffmpeg utilities */
-#ifdef USE_AV_LOG
-void av_log(void* avcl, int level, const char *fmt, ...)
-{
-#ifdef DEBUG
-    va_list ap;
-
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-#endif
-}
-
-void avpriv_report_missing_feature(void *avc, const char *msg, ...)
-{
-#ifdef DEBUG
-    va_list ap;
-
-    va_start(ap, msg);
-    vfprintf(stderr, msg, ap);
-    va_end(ap);
-#endif
-}
-#endif /* USE_AV_LOG */
-
 /* return < 0 if error, otherwise the consumed length */
 static int get_ue32(uint32_t *pv, const uint8_t *buf, int len)
 {
@@ -177,7 +148,7 @@ static int get_ue32(uint32_t *pv, const uint8_t *buf, int len)
             break;
     }
     *pv = v;
-    return p - buf;
+    return int(p - buf);
 }
 
 static int get_ue(uint32_t *pv, const uint8_t *buf, int len)

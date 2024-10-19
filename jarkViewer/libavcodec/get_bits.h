@@ -230,8 +230,8 @@ static inline void skip_bits_long(GetBitContext *s, int n)
  */
 static inline int get_xbits(GetBitContext *s, int n)
 {
-    register int sign;
-    register int32_t cache;
+    int sign;
+    int32_t cache;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -244,7 +244,7 @@ static inline int get_xbits(GetBitContext *s, int n)
 
 static inline int get_sbits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -269,7 +269,7 @@ unsigned int get_bits_long(GetBitContext *s, int n);
  */
 static inline unsigned int get_bits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -284,7 +284,7 @@ static inline unsigned int get_bits(GetBitContext *s, int n)
  */
 static inline unsigned int show_bits(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER_NOSIZE(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE(re, s);
@@ -352,7 +352,7 @@ static inline unsigned int get_bits_long(GetBitContext *s, int n)
 
 static inline unsigned int get_bits_le(GetBitContext *s, int n)
 {
-    register int tmp;
+    int tmp;
     OPEN_READER(re, s);
     av_assert2(n>0 && n<=25);
     UPDATE_CACHE_LE(re, s);
