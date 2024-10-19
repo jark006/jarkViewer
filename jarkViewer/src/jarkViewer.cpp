@@ -97,6 +97,14 @@ struct CurImageParameter {
         }
         std::sort(zoomList.begin(), zoomList.end());
     }
+
+    void slideTargetRotationLeft() {
+        slideTarget = { slideTarget.y, -slideTarget.x };
+    }
+
+    void slideTargetRotationRight() {
+        slideTarget = { -slideTarget.y, slideTarget.x };
+    }
 };
 
 const vector<int64_t> CurImageParameter::ZOOM_LIST = {
@@ -353,11 +361,13 @@ public:
 
         case 'Q': {
             curPar.rotation = (curPar.rotation + 1) & 0b11;
+            curPar.slideTargetRotationLeft();
             operateQueue.push({ ActionENUM::normalFresh });
         }break;
 
         case 'E': {
             curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
+            curPar.slideTargetRotationRight();
             operateQueue.push({ ActionENUM::normalFresh });
         }break;
 
