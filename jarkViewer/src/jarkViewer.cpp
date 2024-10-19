@@ -140,6 +140,7 @@ public:
     CursorPos cursorPosLast = CursorPos::centerArea;
     ShowEdgeArrow showEdgeArrow = ShowEdgeArrow::none;
     bool mouseIsPressing = false;
+    bool smoothShift = false;
     bool showExif = false;
     Cood mousePos, mousePressPos;
     int winWidth = 800;
@@ -350,23 +351,39 @@ public:
             Utils::ToggleFullScreen(m_hWnd);
         }break;
 
-        case 'W':
+        case 'W': {
+            curPar.slideTarget.y += ((winHeight + winWidth) / 16);
+            smoothShift = true;
+        }break;
+
+        case 'S': {
+            curPar.slideTarget.y -= ((winHeight + winWidth) / 16);
+            smoothShift = true;
+        }break;
+
+        case 'A': {
+            curPar.slideTarget.x += ((winHeight + winWidth) / 16);
+            smoothShift = true;
+        }break;
+
+        case 'D': {
+            curPar.slideTarget.x -= ((winHeight + winWidth) / 16);
+            smoothShift = true;
+        }break;
+
         case VK_UP: {
             operateQueue.push({ ActionENUM::zoomOut });
         }break;
 
-        case 'S':
         case VK_DOWN: {
             operateQueue.push({ ActionENUM::zoomIn });
         }break;
 
-        case 'A':
         case VK_PRIOR:
         case VK_LEFT: {
             operateQueue.push({ ActionENUM::preImg });
         }break;
 
-        case 'D':
         case VK_NEXT:
         case VK_RIGHT: {
             operateQueue.push({ ActionENUM::nextImg });
@@ -556,6 +573,7 @@ public:
         case ActionENUM::slide: {
             curPar.slideTarget.x += operateAction.x;
             curPar.slideTarget.y += operateAction.y;
+            smoothShift = false;
         } break;
 
         case ActionENUM::toggleExif: {
@@ -563,25 +581,31 @@ public:
         } break;
 
         case ActionENUM::zoomIn: {
-            if (curPar.zoomIndex > 0)
+            if (curPar.zoomIndex > 0) {
                 curPar.zoomIndex--;
-            auto zoomNext = curPar.zoomList[curPar.zoomIndex];
-            if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
-                curPar.slideTarget.x = (int)(zoomNext * curPar.slideTarget.x / curPar.zoomTarget);
-                curPar.slideTarget.y = (int)(zoomNext * curPar.slideTarget.y / curPar.zoomTarget);
+
+                auto zoomNext = curPar.zoomList[curPar.zoomIndex];
+                if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
+                    curPar.slideTarget.x = (int)(zoomNext * curPar.slideTarget.x / curPar.zoomTarget);
+                    curPar.slideTarget.y = (int)(zoomNext * curPar.slideTarget.y / curPar.zoomTarget);
+                }
+                curPar.zoomTarget = zoomNext;
+                smoothShift = true;
             }
-            curPar.zoomTarget = zoomNext;
         } break;
 
         case ActionENUM::zoomOut: {
-            if (curPar.zoomIndex < curPar.zoomList.size() - 1)
+            if (curPar.zoomIndex < curPar.zoomList.size() - 1) {
                 curPar.zoomIndex++;
-            auto zoomNext = curPar.zoomList[curPar.zoomIndex];
-            if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
-                curPar.slideTarget.x = (int)(zoomNext * curPar.slideTarget.x / curPar.zoomTarget);
-                curPar.slideTarget.y = (int)(zoomNext * curPar.slideTarget.y / curPar.zoomTarget);
+
+                auto zoomNext = curPar.zoomList[curPar.zoomIndex];
+                if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
+                    curPar.slideTarget.x = (int)(zoomNext * curPar.slideTarget.x / curPar.zoomTarget);
+                    curPar.slideTarget.y = (int)(zoomNext * curPar.slideTarget.y / curPar.zoomTarget);
+                }
+                curPar.zoomTarget = zoomNext;
+                smoothShift = true;
             }
-            curPar.zoomTarget = zoomNext;
         } break;
 
         case ActionENUM::requitExit: {
@@ -596,36 +620,41 @@ public:
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         curPar.curFrameDelay = (delay <= 0 ? 10 : delay);
 
-        if (curPar.zoomCur != curPar.zoomTarget) { // 简单缩放动画
-            const int progressMax = 1 << 4;
-            static int progressCnt = progressMax;
-            static int64_t zoomInit = 0;
-            static int64_t zoomTargetInit = 0;
-            static Cood hasSlideInit{};
+        if (curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+            if (smoothShift) { // 简单缩放动画
+                const int progressMax = 1 << 8;
+                static int progressCnt = progressMax;
+                static int64_t zoomInit = 0;
+                static int64_t zoomTargetInit = 0;
+                static Cood slideInit{}, slideTargetInit{};
 
-            //未开始进行动画 或 动画未完成就有新缩放操作
-            if (progressCnt >= progressMax || zoomTargetInit != curPar.zoomTarget) {
-                progressCnt = 1;
-                zoomInit = curPar.zoomCur;
-                zoomTargetInit = curPar.zoomTarget;
-                hasSlideInit = curPar.slideCur;
-            }
-            else {
-                auto addDelta = ((progressMax - progressCnt) / 2);
-                if (addDelta <= 0) {
-                    progressCnt = progressMax;
-                    curPar.zoomCur = curPar.zoomTarget;
-                    curPar.slideCur = curPar.slideTarget;
+                //未开始进行动画 或 动画未完成就有新缩放操作
+                if (progressCnt >= progressMax || zoomTargetInit != curPar.zoomTarget || slideTargetInit != curPar.slideTarget) {
+                    progressCnt = 1;
+                    zoomInit = curPar.zoomCur;
+                    zoomTargetInit = curPar.zoomTarget;
+                    slideInit = curPar.slideCur;
+                    slideTargetInit = curPar.slideTarget;
                 }
                 else {
-                    progressCnt += addDelta;
-                    curPar.zoomCur = zoomInit + (curPar.zoomTarget - zoomInit) * progressCnt / progressMax;
-                    curPar.slideCur = hasSlideInit + (curPar.slideTarget - hasSlideInit) * progressCnt / progressMax;
+                    auto addDelta = ((progressMax - progressCnt) / 4);
+                    if (addDelta <= 1) {
+                        progressCnt = progressMax;
+                        curPar.zoomCur = curPar.zoomTarget;
+                        curPar.slideCur = curPar.slideTarget;
+                        smoothShift = false;
+                    }
+                    else {
+                        progressCnt += addDelta;
+                        curPar.zoomCur = zoomInit + (curPar.zoomTarget - zoomInit) * progressCnt / progressMax;
+                        curPar.slideCur = slideInit + (curPar.slideTarget - slideInit) * progressCnt / progressMax;
+                    }
                 }
             }
-        }
-        else {
-            curPar.slideCur = curPar.slideTarget;
+            else {
+                curPar.zoomCur = curPar.zoomTarget;
+                curPar.slideCur = curPar.slideTarget;
+            }
         }
 
         drawCanvas(srcImg, mainCanvas);

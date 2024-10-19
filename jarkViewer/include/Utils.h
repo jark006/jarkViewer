@@ -94,6 +94,11 @@ struct Cood {
         this->y += t.y;
     }
 
+    void operator+=(const int i) {
+        this->x += i;
+        this->y += i;
+    }
+
     Cood operator+(const Cood& t) const {
         Cood temp;
         temp.x = this->x + t.x;
