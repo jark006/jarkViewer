@@ -688,7 +688,7 @@ public:
     cv::Mat rotateImage(const cv::Mat& image, double angle) {
         int width = image.cols;
         int height = image.rows;
-        cv::Point2f center(width / 2, height / 2);
+        cv::Point2f center(width / 2.0f, height / 2.0f);
 
         cv::Mat rotationMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
 
@@ -980,7 +980,7 @@ public:
             curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
             + imgFileList[curFileIdx];
         if (curPar.rotation)
-            str += (curPar.rotation == 1 ? L"  左转90°" : (curPar.rotation == 3 ? L"  右转90°" : (L"  旋转180°")));
+            str += (curPar.rotation == 1 ? L"  逆时针旋转90°" : (curPar.rotation == 3 ? L"  顺时针旋转90°" : (L"  旋转180°")));
         SetWindowTextW(m_hWnd, str.c_str());
 
         m_pD2DDeviceContext->CreateBitmap(
