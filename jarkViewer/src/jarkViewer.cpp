@@ -449,11 +449,26 @@ public:
     }
 
     void OnMouseWheel(UINT nFlags, short zDelta, int x, int y) {
-        operateQueue.push({
-            (cursorPos == CursorPos::centerArea) ?
-            (zDelta < 0 ? ActionENUM::zoomIn : ActionENUM::zoomOut) :
-            (zDelta < 0 ? ActionENUM::nextImg : ActionENUM::preImg)
-            });
+        switch (cursorPos)
+        {
+        case CursorPos::centerArea:
+            operateQueue.push({ zDelta < 0 ? ActionENUM::zoomIn : ActionENUM::zoomOut });
+            break;
+
+        case CursorPos::leftEdge:
+        case CursorPos::rightEdge:
+            operateQueue.push({ zDelta < 0 ? ActionENUM::nextImg : ActionENUM::preImg });
+            break;
+
+        case CursorPos::leftDown:
+        case CursorPos::rightDown:
+            break;
+
+        case CursorPos::leftUp:
+        case CursorPos::rightUp:
+            operateQueue.push({ zDelta < 0 ? ActionENUM::rotateRight : ActionENUM::rotateLeft });
+            break;
+        }
     }
 
     void OnKeyDown(WPARAM keyValue) {
