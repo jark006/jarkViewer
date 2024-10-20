@@ -153,7 +153,7 @@ struct GifData {
 };
 
 enum class ActionENUM:int64_t {
-    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit, normalFresh, rotationLeft, rotationRight
+    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit, normalFresh, rotateLeft, rotateRight
 };
 
 enum class CursorPos :int {
@@ -161,7 +161,7 @@ enum class CursorPos :int {
 };
 
 enum class ShowExtraUI :int {
-    leftRotation = -2, leftArrow = -1, none = 0, rightArrow = 1, rightRotation = 2,
+    rotateLeftButton = -2, leftArrow = -1, none = 0, rightArrow = 1, rotateRightButton = 2,
 };
 
 struct Action {

@@ -98,11 +98,11 @@ struct CurImageParameter {
         std::sort(zoomList.begin(), zoomList.end());
     }
 
-    void slideTargetRotationLeft() {
+    void slideTargetRotateLeft() {
         slideTarget = { slideTarget.y, -slideTarget.x };
     }
 
-    void slideTargetRotationRight() {
+    void slideTargetRotateRight() {
         slideTarget = { -slideTarget.y, slideTarget.x };
     }
 };
@@ -162,6 +162,7 @@ public:
 
     stbText stb;                 // 给Mat绘制文字
     cv::Mat mainCanvas;          // 窗口内容画布
+    D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400);
 
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> pBitmap;
     D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
@@ -250,9 +251,9 @@ public:
             else if (cursorPos == CursorPos::rightEdge)
                 operateQueue.push({ ActionENUM::nextImg });
             else if (cursorPos == CursorPos::leftUp)
-                operateQueue.push({ ActionENUM::rotationLeft });
+                operateQueue.push({ ActionENUM::rotateLeft });
             else if (cursorPos == CursorPos::rightUp)
-                operateQueue.push({ ActionENUM::rotationRight });
+                operateQueue.push({ ActionENUM::rotateRight });
             return;
         }
 
@@ -368,7 +369,7 @@ public:
             switch (cursorPos)
             {
             case CursorPos::leftUp:
-                extraUIFlag = ShowExtraUI::leftRotation;
+                extraUIFlag = ShowExtraUI::rotateLeftButton;
                 operateQueue.push({ ActionENUM::normalFresh });
                 break;
 
@@ -394,7 +395,7 @@ public:
                 break;
 
             case CursorPos::rightUp:
-                extraUIFlag = ShowExtraUI::rightRotation;
+                extraUIFlag = ShowExtraUI::rotateRightButton;
                 operateQueue.push({ ActionENUM::normalFresh });
                 break;
             }
@@ -435,11 +436,11 @@ public:
         }break;
 
         case 'Q': {
-            operateQueue.push({ ActionENUM::rotationLeft });
+            operateQueue.push({ ActionENUM::rotateLeft });
         }break;
 
         case 'E': {
-            operateQueue.push({ ActionENUM::rotationRight });
+            operateQueue.push({ ActionENUM::rotateRight });
         }break;
 
         case 'W': {
@@ -637,12 +638,154 @@ public:
         }
     }
 
+    cv::Mat rotateImage(const cv::Mat& image, double angle) {
+        int width = image.cols;
+        int height = image.rows;
+        cv::Point2f center(width / 2, height / 2);
+
+        cv::Mat rotationMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
+
+        cv::Mat rotatedImage;
+        cv::warpAffine(image, rotatedImage, rotationMatrix, image.size(), 
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(BG_COLOR, BG_COLOR, BG_COLOR));
+
+        return rotatedImage;
+    }
+
+    void rotateLeftAnimation() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        drawCanvas(srcImg, mainCanvas);
+
+        for (int i = 0; i <= 90; i += ((100 - i) / 4)) {
+            auto tmp = rotateImage(mainCanvas, i);
+            handleExtraUI(tmp);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                tmp.ptr(),
+                (UINT32)tmp.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            Sleep(1);
+        }
+    }
+
+    void rotateRightAnimation() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        drawCanvas(srcImg, mainCanvas);
+
+        for (int i = 0; i >= -90; i += ((-100 - i) / 4)) {
+            auto tmp = rotateImage(mainCanvas, i);
+            handleExtraUI(tmp);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                tmp.ptr(),
+                (UINT32)tmp.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            Sleep(1);
+        }
+
+    }
+
+    void handleExtraUI(cv::Mat& canvas) {
+
+        if (showExif) {
+            const int padding = 10;
+            const int rightEdge = (canvas.cols - 2 * padding) / 4 + padding;
+            RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, canvas.rows - padding };
+            stb.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
+        }
+
+        switch (extraUIFlag)
+        {
+        case ShowExtraUI::rotateLeftButton: {
+            int height = canvas.rows / 4;
+            int width = canvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(10, height / 2),
+                    cv::Point(triangle_height , height / 2 - 80),
+                    cv::Point(triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            }
+        } break;
+
+        case ShowExtraUI::leftArrow: {
+            int height = canvas.rows;
+            int width = canvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(10, height / 2),
+                    cv::Point(triangle_height , height / 2 - 80),
+                    cv::Point(triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            }
+        } break;
+
+        case ShowExtraUI::none:
+            break;
+
+        case ShowExtraUI::rightArrow: {
+            int height = canvas.rows;
+            int width = canvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(width - 10, height / 2),
+                    cv::Point(width - triangle_height , height / 2 - 80),
+                    cv::Point(width - triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            }
+        } break;
+
+        case ShowExtraUI::rotateRightButton: {
+            int height = canvas.rows / 4;
+            int width = canvas.cols;
+            if (width > 100 && height > 100) {
+                int triangle_height = 50;
+                std::vector<cv::Point> trianglePos = {
+                    cv::Point(width - 10, height / 2),
+                    cv::Point(width - triangle_height , height / 2 - 80),
+                    cv::Point(width - triangle_height , height / 2 + 80)
+                };
+                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
+                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
+                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            }
+        } break;
+        }
+    }
+
     void DrawScene() {
         const auto frameDuration = std::chrono::milliseconds(10);
 
         static int64_t delayRemain = 0;
         static auto lastTimestamp = std::chrono::steady_clock::now();
-        static D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400); // 设置位图的宽度和高度
 
         if (m_pD2DDeviceContext == nullptr)
             return;
@@ -740,14 +883,16 @@ public:
             }
         } break;
 
-        case ActionENUM::rotationLeft: {
+        case ActionENUM::rotateLeft: {
+            rotateLeftAnimation();
             curPar.rotation = (curPar.rotation + 1) & 0b11;
-            curPar.slideTargetRotationLeft();
+            curPar.slideTargetRotateLeft();
         } break;
 
-        case ActionENUM::rotationRight: {
+        case ActionENUM::rotateRight: {
+            rotateRightAnimation();
             curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
-            curPar.slideTargetRotationRight();
+            curPar.slideTargetRotateRight();
         } break;
 
         case ActionENUM::requitExit: {
@@ -800,82 +945,7 @@ public:
         }
 
         drawCanvas(srcImg, mainCanvas);
-        if (showExif) {
-            const int padding = 10;
-            const int rightEdge = (mainCanvas.cols - 2 * padding) / 4 + padding;
-            RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, mainCanvas.rows - padding };
-            stb.putAlignLeft(mainCanvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
-        }
-
-        switch (extraUIFlag)
-        {
-        case ShowExtraUI::leftRotation: {
-            int height = mainCanvas.rows / 4;
-            int width = mainCanvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(10, height / 2),
-                    cv::Point(triangle_height , height / 2 - 80),
-                    cv::Point(triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
-            }
-        } break;
-
-        case ShowExtraUI::leftArrow: {
-            int height = mainCanvas.rows;
-            int width = mainCanvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(10, height / 2),
-                    cv::Point(triangle_height , height / 2 - 80),
-                    cv::Point(triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
-            }
-        } break;
-
-        case ShowExtraUI::none:
-            break;
-
-        case ShowExtraUI::rightArrow: {
-            int height = mainCanvas.rows;
-            int width = mainCanvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(width - 10, height / 2),
-                    cv::Point(width - triangle_height , height / 2 - 80),
-                    cv::Point(width - triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
-            }
-        } break;
-
-        case ShowExtraUI::rightRotation: {
-            int height = mainCanvas.rows / 4;
-            int width = mainCanvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(width - 10, height / 2),
-                    cv::Point(width - triangle_height , height / 2 - 80),
-                    cv::Point(width - triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(mainCanvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, mainCanvas, 1, 0, mainCanvas);
-            }
-        } break;
-        }
+        handleExtraUI(mainCanvas);
 
         wstring str = std::format(L" [{}/{}] {}% ",
             curFileIdx + 1, imgFileList.size(),
@@ -939,8 +1009,6 @@ int WINAPI wWinMain(
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
-
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
     test();
 

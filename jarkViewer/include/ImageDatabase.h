@@ -1225,7 +1225,7 @@ public:
 
     cv::Mat loadBPG(const wstring& path, const vector<uchar>& buf) {
         auto img = bpg_decoder_open();
-        if (bpg_decoder_decode(img, buf.data(), buf.size()) < 0) {
+        if (bpg_decoder_decode(img, buf.data(), (int)buf.size()) < 0) {
             Utils::log("cvMat cannot decode: {}", Utils::wstringToUtf8(path));
             return cv::Mat();
         }
