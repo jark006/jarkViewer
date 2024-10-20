@@ -674,18 +674,23 @@ public:
         cv::Mat rotationMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
 
         cv::Mat rotatedImage;
-        cv::warpAffine(image, rotatedImage, rotationMatrix, image.size(), 
+        cv::warpAffine(image, rotatedImage, rotationMatrix, image.size(),
             cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(BG_COLOR, BG_COLOR, BG_COLOR));
 
         return rotatedImage;
     }
 
+    // 取宽高两者的最大值作为新画布的宽高，绘制好内容再旋转，最后截取画布。
+    // 若直接使用原尺寸画布进行旋转，宽或高其中较小的那边旋转到较长那边时，会缺失部分内容
     void rotateLeftAnimation() {
+        int maxEdge = winWidth > winHeight ? winWidth : winHeight;
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-        drawCanvas(srcImg, mainCanvas);
+        drawCanvas(srcImg, tmpCanvas);
 
         for (int i = 0; i <= 90; i += ((100 - i) / 4)) {
-            auto tmp = rotateImage(mainCanvas, i);
+            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge- winWidth)/2, (maxEdge - winHeight) / 2, winWidth, winHeight));
             handleExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
@@ -700,16 +705,18 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
-            Sleep(1);
         }
     }
 
     void rotateRightAnimation() {
+        int maxEdge = winWidth > winHeight ? winWidth : winHeight;
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-        drawCanvas(srcImg, mainCanvas);
+        drawCanvas(srcImg, tmpCanvas);
 
         for (int i = 0; i >= -90; i += ((-100 - i) / 4)) {
-            auto tmp = rotateImage(mainCanvas, i);
+            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 2, (maxEdge - winHeight) / 2, winWidth, winHeight));
             handleExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
@@ -724,7 +731,6 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
-            Sleep(1);
         }
 
     }
