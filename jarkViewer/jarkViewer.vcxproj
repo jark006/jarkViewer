@@ -369,6 +369,10 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="file\home.png" />
+    <Image Include="file\leftArrow.png" />
+    <Image Include="file\leftRotate.png" />
+    <Image Include="file\rightArrow.png" />
+    <Image Include="file\RightRotate.png" />
     <Image Include="file\tips.png" />
     <Image Include="jarkViewer.ico" />
     <Image Include="small.ico" />

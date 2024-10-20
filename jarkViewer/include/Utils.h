@@ -595,4 +595,35 @@ public:
 
         isFullScreen = !isFullScreen;
     }
+
+    static void overlayImg(cv::Mat& canvas, cv::Mat& img, int xOffset, int yOffset) {
+        if (canvas.type() != CV_8UC4 || img.type() != CV_8UC4)
+            return;
+
+        int canvasHeight = canvas.rows;
+        int canvasWidth = canvas.cols;
+        int imgHeight = img.rows;
+        int imgWidth = img.cols;
+
+        auto canvasPtr = (intUnion*)canvas.ptr();
+        auto imgPtr = (intUnion*)img.ptr();
+
+        for (int y = 0; y < imgHeight; y++) {
+            if (yOffset + y >= canvasHeight)break;
+            for (int x = 0; x < imgWidth; x++) {
+                if (xOffset + x >= canvasWidth)break;
+                auto imgPx = imgPtr[y * imgWidth + x];
+
+                int alpha = imgPx[3];
+                if (alpha) {
+                    auto& canvasPx = canvasPtr[(yOffset + y) * canvasWidth + xOffset + x];
+                    canvasPx = {
+                        (uint8_t)((canvasPx[0] * (255 - alpha) + imgPx[0] * alpha) / 255),
+                        (uint8_t)((canvasPx[1] * (255 - alpha) + imgPx[1] * alpha) / 255),
+                        (uint8_t)((canvasPx[2] * (255 - alpha) + imgPx[2] * alpha) / 255),
+                        255 };
+                }
+            }
+        }
+    }
 };

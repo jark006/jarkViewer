@@ -684,6 +684,18 @@
     <Image Include="file\home.png">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="file\leftArrow.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\leftRotate.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\rightArrow.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\RightRotate.png">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Font Include="file\MSYHMONO.ttf" />

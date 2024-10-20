@@ -35,7 +35,7 @@ struct CurImageParameter {
     bool isAnimation = false;
     int width = 0;
     int height = 0;
-    int rotation = 0; // 旋转： 0正常， 1顺90度， 2：180度， 3顺270度/逆90度
+    int rotation = 0; // 旋转： 0正常， 1逆90度， 2：180度， 3顺90度
 
     CurImageParameter() {
         Init();
@@ -135,6 +135,33 @@ public:
     }
 };
 
+class ExtraUIRes
+{
+public:
+    cv::Mat imgData, leftArrow, RightArrow, leftRotate, rightRotate;
+
+    ExtraUIRes() {
+        rcFileInfo rc;
+
+        rc = Utils::GetResource(IDB_PNG2, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        leftArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+
+        rc = Utils::GetResource(IDB_PNG3, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        leftRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+
+        rc = Utils::GetResource(IDB_PNG4, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        RightArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+
+        rc = Utils::GetResource(IDB_PNG5, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rightRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+    }
+    ~ExtraUIRes() {}
+};
+
 class JarkViewerApp : public D2D1App {
 public:
     const int BG_GRID_WIDTH = 16;
@@ -171,6 +198,7 @@ public:
     );
 
     CurImageParameter curPar;
+    ExtraUIRes extraUIRes;
 
     JarkViewerApp() {
         m_wndCaption = appName;
@@ -710,37 +738,26 @@ public:
             stb.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
 
+        int canvasHeight = canvas.rows;
+        int canvasWidth = canvas.cols;
+
         switch (extraUIFlag)
         {
         case ShowExtraUI::rotateLeftButton: {
-            int height = canvas.rows / 4;
-            int width = canvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(10, height / 2),
-                    cv::Point(triangle_height , height / 2 - 80),
-                    cv::Point(triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            if (canvasWidth > 100 && canvasHeight > 100) {
+                auto& img = extraUIRes.leftRotate;
+                int imgHeight = img.rows;
+                int imgWidth = img.cols;
+                Utils::overlayImg(canvas, img, 0, (canvasHeight / 4 - imgHeight) / 2);
             }
         } break;
 
         case ShowExtraUI::leftArrow: {
-            int height = canvas.rows;
-            int width = canvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(10, height / 2),
-                    cv::Point(triangle_height , height / 2 - 80),
-                    cv::Point(triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            if (canvasWidth > 100 && canvasHeight > 100) {
+                auto& img = extraUIRes.leftArrow;
+                int imgHeight = img.rows;
+                int imgWidth = img.cols;
+                Utils::overlayImg(canvas, img, 0, (canvasHeight - imgHeight) / 2);
             }
         } break;
 
@@ -748,34 +765,20 @@ public:
             break;
 
         case ShowExtraUI::rightArrow: {
-            int height = canvas.rows;
-            int width = canvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(width - 10, height / 2),
-                    cv::Point(width - triangle_height , height / 2 - 80),
-                    cv::Point(width - triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            if (canvasWidth > 100 && canvasHeight > 100) {
+                auto& img = extraUIRes.RightArrow;
+                int imgHeight = img.rows;
+                int imgWidth = img.cols;
+                Utils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight - imgHeight) / 2);
             }
         } break;
 
         case ShowExtraUI::rotateRightButton: {
-            int height = canvas.rows / 4;
-            int width = canvas.cols;
-            if (width > 100 && height > 100) {
-                int triangle_height = 50;
-                std::vector<cv::Point> trianglePos = {
-                    cv::Point(width - 10, height / 2),
-                    cv::Point(width - triangle_height , height / 2 - 80),
-                    cv::Point(width - triangle_height , height / 2 + 80)
-                };
-                cv::Mat overlay = cv::Mat::zeros(canvas.size(), CV_8UC4);
-                cv::fillConvexPoly(overlay, trianglePos, cv::Vec4b(128, 128, 128, 128));
-                cv::addWeighted(overlay, 0.5, canvas, 1, 0, canvas);
+            if (canvasWidth > 100 && canvasHeight > 100) {
+                auto& img = extraUIRes.rightRotate;
+                int imgHeight = img.rows;
+                int imgWidth = img.cols;
+                Utils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight / 4 - imgHeight) / 2);
             }
         } break;
         }
@@ -951,6 +954,8 @@ public:
             curFileIdx + 1, imgFileList.size(),
             curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
             + imgFileList[curFileIdx];
+        if (curPar.rotation)
+            str += (curPar.rotation == 1 ? L"  左转90°" : (curPar.rotation == 3 ? L"  右转90°" : (L"  旋转180°")));
         SetWindowTextW(m_hWnd, str.c_str());
 
         m_pD2DDeviceContext->CreateBitmap(
