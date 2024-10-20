@@ -26,9 +26,20 @@ extern "C" {
 #if defined(__native_client__)
 #define LIBYUV_DISABLE_NEON
 #endif
+
+// clang >= 19.0.0 required for SME
+#if !defined(LIBYUV_DISABLE_SME) && defined(__clang__) && defined(__aarch64__)
+#if __clang_major__ < 19
+#define LIBYUV_DISABLE_SME
+#endif
+#endif
+
 // MemorySanitizer does not support assembly code yet. http://crbug.com/344505
 #if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
+#if __has_feature(memory_sanitizer) && !defined(LIBYUV_DISABLE_NEON)
+#define LIBYUV_DISABLE_NEON
+#endif
+#if __has_feature(memory_sanitizer) && !defined(LIBYUV_DISABLE_X86)
 #define LIBYUV_DISABLE_X86
 #endif
 #endif
@@ -42,6 +53,8 @@ extern "C" {
 // The following are available for GCC 32 or 64 bit:
 #if !defined(LIBYUV_DISABLE_X86) && (defined(__i386__) || defined(__x86_64__))
 #define HAS_TRANSPOSEWX8_SSSE3
+#define HAS_TRANSPOSE4X4_32_SSE2
+#define HAS_TRANSPOSE4X4_32_AVX2
 #endif
 
 // The following are available for 64 bit GCC:
@@ -52,8 +65,18 @@ extern "C" {
 
 #if !defined(LIBYUV_DISABLE_NEON) && \
     (defined(__ARM_NEON__) || defined(LIBYUV_NEON) || defined(__aarch64__))
+#if defined(__aarch64__)
+#define HAS_TRANSPOSEWX16_NEON
+#else
 #define HAS_TRANSPOSEWX8_NEON
+#endif
 #define HAS_TRANSPOSEUVWX8_NEON
+#define HAS_TRANSPOSE4X4_32_NEON
+#endif
+
+#if !defined(LIBYUV_DISABLE_SME) && defined(__aarch64__)
+#define HAS_TRANSPOSEWXH_SME
+#define HAS_TRANSPOSEUVWXH_SME
 #endif
 
 #if !defined(LIBYUV_DISABLE_MSA) && defined(__mips_msa)
@@ -88,6 +111,17 @@ void TransposeWx8_NEON(const uint8_t* src,
                        uint8_t* dst,
                        int dst_stride,
                        int width);
+void TransposeWx16_NEON(const uint8_t* src,
+                        int src_stride,
+                        uint8_t* dst,
+                        int dst_stride,
+                        int width);
+void TransposeWxH_SME(const uint8_t* src,
+                      int src_stride,
+                      uint8_t* dst,
+                      int dst_stride,
+                      int width,
+                      int height);
 void TransposeWx8_SSSE3(const uint8_t* src,
                         int src_stride,
                         uint8_t* dst,
@@ -114,6 +148,11 @@ void TransposeWx8_Any_NEON(const uint8_t* src,
                            uint8_t* dst,
                            int dst_stride,
                            int width);
+void TransposeWx16_Any_NEON(const uint8_t* src,
+                            int src_stride,
+                            uint8_t* dst,
+                            int dst_stride,
+                            int width);
 void TransposeWx8_Any_SSSE3(const uint8_t* src,
                             int src_stride,
                             uint8_t* dst,
@@ -172,6 +211,14 @@ void TransposeUVWx8_NEON(const uint8_t* src,
                          uint8_t* dst_b,
                          int dst_stride_b,
                          int width);
+void TransposeUVWxH_SME(const uint8_t* src,
+                        int src_stride,
+                        uint8_t* dst_a,
+                        int dst_stride_a,
+                        uint8_t* dst_b,
+                        int dst_stride_b,
+                        int width,
+                        int height);
 void TransposeUVWx16_MSA(const uint8_t* src,
                          int src_stride,
                          uint8_t* dst_a,
@@ -232,6 +279,32 @@ void TransposeWx1_16_C(const uint16_t* src,
                        uint16_t* dst,
                        int dst_stride,
                        int width);
+
+// Transpose 32 bit values (ARGB)
+void Transpose4x4_32_NEON(const uint8_t* src,
+                          int src_stride,
+                          uint8_t* dst,
+                          int dst_stride,
+                          int width);
+
+void Transpose4x4_32_SSE2(const uint8_t* src,
+                          int src_stride,
+                          uint8_t* dst,
+                          int dst_stride,
+                          int width);
+
+void Transpose4x4_32_AVX2(const uint8_t* src,
+                          int src_stride,
+                          uint8_t* dst,
+                          int dst_stride,
+                          int width);
+
+void Transpose4x4_32_C(const uint8_t* src,
+                       int src_stride,
+                       uint8_t* dst,
+                       int dst_stride,
+                       int width);
+
 #ifdef __cplusplus
 }  // extern "C"
 }  // namespace libyuv

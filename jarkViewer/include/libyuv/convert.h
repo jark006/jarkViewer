@@ -367,6 +367,23 @@ int I212ToI422(const uint16_t* src_y,
                int width,
                int height);
 
+#define H212ToH420 I212ToI420
+LIBYUV_API
+int I212ToI420(const uint16_t* src_y,
+               int src_stride_y,
+               const uint16_t* src_u,
+               int src_stride_u,
+               const uint16_t* src_v,
+               int src_stride_v,
+               uint8_t* dst_y,
+               int dst_stride_y,
+               uint8_t* dst_u,
+               int dst_stride_u,
+               uint8_t* dst_v,
+               int dst_stride_v,
+               int width,
+               int height);
+
 #define H412ToH444 I412ToI444
 LIBYUV_API
 int I412ToI444(const uint16_t* src_y,
@@ -381,6 +398,37 @@ int I412ToI444(const uint16_t* src_y,
                int dst_stride_u,
                uint8_t* dst_v,
                int dst_stride_v,
+               int width,
+               int height);
+
+#define H412ToH420 I412ToI420
+LIBYUV_API
+int I412ToI420(const uint16_t* src_y,
+               int src_stride_y,
+               const uint16_t* src_u,
+               int src_stride_u,
+               const uint16_t* src_v,
+               int src_stride_v,
+               uint8_t* dst_y,
+               int dst_stride_y,
+               uint8_t* dst_u,
+               int dst_stride_u,
+               uint8_t* dst_v,
+               int dst_stride_v,
+               int width,
+               int height);
+
+// Convert 10 bit P010 to 8 bit NV12.
+// dst_y can be NULL
+LIBYUV_API
+int P010ToNV12(const uint16_t* src_y,
+               int src_stride_y,
+               const uint16_t* src_uv,
+               int src_stride_uv,
+               uint8_t* dst_y,
+               int dst_stride_y,
+               uint8_t* dst_uv,
+               int dst_stride_uv,
                int width,
                int height);
 
@@ -473,6 +521,21 @@ int I010ToP010(const uint16_t* src_y,
                uint16_t* dst_y,
                int dst_stride_y,
                uint16_t* dst_uv,
+               int dst_stride_uv,
+               int width,
+               int height);
+
+// Convert 10 bit YUV I010 to NV12
+LIBYUV_API
+int I010ToNV12(const uint16_t* src_y,
+               int src_stride_y,
+               const uint16_t* src_u,
+               int src_stride_u,
+               const uint16_t* src_v,
+               int src_stride_v,
+               uint8_t* dst_y,
+               int dst_stride_y,
+               uint8_t* dst_uv,
                int dst_stride_uv,
                int width,
                int height);
@@ -750,6 +813,21 @@ int ARGBToI420(const uint8_t* src_argb,
                int dst_stride_v,
                int width,
                int height);
+
+// Convert ARGB to I420 with Alpha
+LIBYUV_API
+int ARGBToI420Alpha(const uint8_t* src_argb,
+                    int src_stride_argb,
+                    uint8_t* dst_y,
+                    int dst_stride_y,
+                    uint8_t* dst_u,
+                    int dst_stride_u,
+                    uint8_t* dst_v,
+                    int dst_stride_v,
+                    uint8_t* dst_a,
+                    int dst_stride_a,
+                    int width,
+                    int height);
 
 // BGRA little endian (argb in memory) to I420.
 LIBYUV_API

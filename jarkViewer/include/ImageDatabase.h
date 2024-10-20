@@ -137,6 +137,7 @@ public:
 
     // vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
     // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
+    // TODO 部分图像仍不能正常解码
     cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf) {
         avifImage* image = avifImageCreateEmpty();
         if (image == nullptr) {
@@ -184,21 +185,30 @@ public:
 
         auto ret = cv::Mat(rgb.height, rgb.width, CV_8UC4);
         if (rgb.depth == 8) {
-            memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
+            if (rgb.rowBytes == ret.step1() && rgb.rowBytes == rgb.width * 4) {
+                memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
+            }
+            else {
+                int minStep = rgb.rowBytes < ret.step1() ? rgb.rowBytes : ret.step1();
+                for (int y = 0; y < rgb.height; y++) {
+                    memcpy(ret.ptr() + ret.step1() * y, rgb.pixels + rgb.rowBytes * y, (size_t)minStep);
+                }
+            }
         }
         else {
-            Utils::log("rgb.depth: {} {}", rgb.depth, Utils::wstringToUtf8(path));
-            const uint16_t* src = (uint16_t*)rgb.pixels;
-            uint8_t* dst = ret.ptr();
             int bitShift = 2;
             switch (rgb.depth) {
             case 10: bitShift = 2; break;
             case 12: bitShift = 4; break;
             case 16: bitShift = 8; break;
             }
-            const size_t length = (size_t)rgb.width * rgb.height * 4;
-            for (size_t i = 0; i < length; ++i) {
-                dst[i] = (uint8_t)(src[i] >> bitShift);
+
+            for (int y = 0; y < rgb.height; y++) {
+                const uint16_t* src = (uint16_t*)(rgb.pixels + rgb.rowBytes * y);
+                uint8_t* dst = (uint8_t*)(ret.ptr() + ret.step1() * y);
+                for (int x = 0; x < rgb.width * 4; x++) {
+                    dst[x] = (uint8_t)(src[x] >> bitShift);
+                }
             }
         }
 

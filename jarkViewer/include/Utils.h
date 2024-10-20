@@ -605,18 +605,20 @@ public:
         int imgHeight = img.rows;
         int imgWidth = img.cols;
 
-        auto canvasPtr = (intUnion*)canvas.ptr();
-        auto imgPtr = (intUnion*)img.ptr();
-
         for (int y = 0; y < imgHeight; y++) {
-            if (yOffset + y >= canvasHeight)break;
-            for (int x = 0; x < imgWidth; x++) {
-                if (xOffset + x >= canvasWidth)break;
-                auto imgPx = imgPtr[y * imgWidth + x];
+            if (yOffset + y >= canvasHeight)
+                break;
 
+            auto canvasPtr = (intUnion*)(canvas.ptr() + canvas.step1() * (yOffset + y));
+            auto imgPtr = (intUnion*)(img.ptr() + img.step1() * y);
+            for (int x = 0; x < imgWidth; x++) {
+                if (xOffset + x >= canvasWidth)
+                    break;
+
+                auto imgPx = imgPtr[x];
                 int alpha = imgPx[3];
                 if (alpha) {
-                    auto& canvasPx = canvasPtr[(yOffset + y) * canvasWidth + xOffset + x];
+                    auto& canvasPx = canvasPtr[xOffset + x];
                     canvasPx = {
                         (uint8_t)((canvasPx[0] * (255 - alpha) + imgPx[0] * alpha) / 255),
                         (uint8_t)((canvasPx[1] * (255 - alpha) + imgPx[1] * alpha) / 255),

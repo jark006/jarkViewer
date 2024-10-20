@@ -272,12 +272,17 @@ private:
         y += fontSize + c_y0;
         x += c_x0;
 
-        auto ptr = (intUnion*)img.ptr();
         for (int yy = 0; yy < wordHigh; yy++) {
-            if (y + yy >= img.rows)break;
+            if (y + yy >= img.rows)
+                break;
+
+            auto ptr = (intUnion*)(img.ptr() + img.step1() * (y + yy));
+
             for (int xx = 0; xx < wordWidth; xx++) {
-                if (x + xx >= img.cols)break;
-                auto& orgColor = ptr[(y + yy) * img.cols + x + xx];
+                if (x + xx >= img.cols)
+                    break;
+
+                auto& orgColor = ptr[x + xx];
                 int alpha = wordBuff[yy * fontSize + xx] * color[3] / 255;
                 if (alpha)
                     orgColor = {

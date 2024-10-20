@@ -12,6 +12,7 @@
 1. svg: lunasvg库不支持某些特性，部分svg无法解码 考虑 https://github.com/GNOME/librsvg
 2. eps
 3. 在鼠标光标位置缩放
+4. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 */
 
 const wstring appName = L"JarkViewer v1.19";
@@ -569,7 +570,7 @@ public:
     }
 
     uint32_t getSrcPx4(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
-
+        // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
         auto srcPtr = (intUnion*)srcImg.ptr();
         int srcW = srcImg.cols;
 
@@ -627,6 +628,7 @@ public:
         if (xEnd > canvasW) xEnd = canvasW;
         if (yEnd > canvasH) yEnd = canvasH;
 
+        // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
         memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
 
         auto ptr = (uint32_t*)canvas.ptr();
@@ -707,7 +709,8 @@ public:
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         drawCanvas(srcImg, tmpCanvas);
-
+        
+        bool needDelay = (maxEdge <= 1920);
         for (int i = 0; i <= 90; i += ((100 - i) / 4)) {
             auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge- winWidth)/2, (maxEdge - winHeight) / 2, winWidth, winHeight));
             handleExtraUI(tmp);
@@ -724,6 +727,8 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
+            if (needDelay)
+                Sleep(1);
         }
     }
 
@@ -734,6 +739,7 @@ public:
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         drawCanvas(srcImg, tmpCanvas);
 
+        bool needDelay = (maxEdge <= 1920);
         for (int i = 0; i >= -90; i += ((-100 - i) / 4)) {
             auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 2, (maxEdge - winHeight) / 2, winWidth, winHeight));
             handleExtraUI(tmp);
@@ -750,6 +756,8 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
+            if (needDelay)
+                Sleep(1);
         }
 
     }
