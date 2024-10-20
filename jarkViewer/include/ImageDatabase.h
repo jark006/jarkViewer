@@ -49,25 +49,19 @@ public:
         L".3fr"  // Hasselblad
     };
 
-    static cv::Mat& getDefaultMat() {
-        static cv::Mat defaultMat;
-        static bool isInit = false;
+    cv::Mat errorTipsMat, homeMat;
 
-        if (!isInit) {
-            isInit = true;
+    cv::Mat& getErrorTipsMat() {
+        if (errorTipsMat.empty()) {
             auto rc = Utils::GetResource(IDB_PNG, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
-            defaultMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+            errorTipsMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
         }
-        return defaultMat;
+        return errorTipsMat;
     }
 
-    static cv::Mat& getHomeMat() {
-        static cv::Mat homeMat;
-        static bool isInit = false;
-
-        if (!isInit) {
-            isInit = true;
+    cv::Mat& getHomeMat() {
+        if (homeMat.empty()) {
             auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
             homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
@@ -670,7 +664,7 @@ public:
             }
             else {
                 Utils::log("Unsupported image format");
-                img = getDefaultMat();
+                img = getErrorTipsMat();
             }
 
             totalWidth += img.cols;
@@ -1325,14 +1319,14 @@ public:
 
         if (gif == nullptr) {
             Utils::log("DGifOpen: Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(error));
-            frames.push_back({ getDefaultMat(), 0 });
+            frames.push_back({ getErrorTipsMat(), 0 });
             return frames;
         }
 
         if (DGifSlurp(gif) != GIF_OK) {
             Utils::log("DGifSlurp Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(gif->Error));
             DGifCloseFile(gif, &error);
-            frames.push_back({ getDefaultMat(), 0 });
+            frames.push_back({ getErrorTipsMat(), 0 });
             return frames;
         }
 
@@ -1377,7 +1371,7 @@ public:
 
         if (frames.empty()) {
             Utils::log("Gif decode 0 frames: {}", Utils::wstringToUtf8(path));
-            frames.push_back({ getDefaultMat(), 0 });
+            frames.push_back({ getErrorTipsMat(), 0 });
         }
 
         return frames;
@@ -1391,7 +1385,7 @@ public:
         WebPDemuxer* demux = WebPDemux(&webp_data);
         if (!demux) {
             Utils::log("Failed to create WebP demuxer: {}", Utils::wstringToUtf8(path));
-            frames.push_back({ getDefaultMat(), 0 });
+            frames.push_back({ getErrorTipsMat(), 0 });
             return frames;
         }
 
@@ -1410,7 +1404,7 @@ public:
                     WebPDemuxDelete(demux);
 
                     Utils::log("Failed to initialize WebP decoder config: {}", Utils::wstringToUtf8(path));
-                    frames.push_back({ getDefaultMat(), 0 });
+                    frames.push_back({ getErrorTipsMat(), 0 });
                     return frames;
                 }
 
@@ -1422,7 +1416,7 @@ public:
                     WebPDemuxDelete(demux);
 
                     Utils::log("Failed to decode WebP frame: {}", Utils::wstringToUtf8(path));
-                    frames.push_back({ getDefaultMat(), 0 });
+                    frames.push_back({ getErrorTipsMat(), 0 });
                     return frames;
                 }
 
@@ -1844,13 +1838,13 @@ public:
     Frames loader(const wstring& path) {
         if (path.length() < 4) {
             Utils::log("path.length() < 4: {}", Utils::wstringToUtf8(path));
-            return { {{getDefaultMat(), 0}}, "" };
+            return { {{getErrorTipsMat(), 0}}, "" };
         }
 
         auto f = _wfopen(path.c_str(), L"rb");
         if (f == nullptr) {
             Utils::log("path canot open: {}", Utils::wstringToUtf8(path));
-            return { {{getDefaultMat(), 0}}, "" };
+            return { {{getErrorTipsMat(), 0}}, "" };
         }
 
         fseek(f, 0, SEEK_END);
@@ -1859,7 +1853,7 @@ public:
         if (fileSize == 0) {
             fclose(f);
             Utils::log("path fileSize == 0: {}", Utils::wstringToUtf8(path));
-            return { {{getDefaultMat(), 0}}, "" };
+            return { {{getErrorTipsMat(), 0}}, "" };
         }
 
         fseek(f, 0, SEEK_SET);
@@ -1877,7 +1871,7 @@ public:
         if (ext == L".gif") { //静态或动画
             ret.imgList = loadGif(path, fileBuf);
             if (ret.imgList.empty()) {
-                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.imgList.push_back({ getErrorTipsMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
                     "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
             }
@@ -1891,7 +1885,7 @@ public:
         if (ext == L".jxl") { //静态或动画
             ret.imgList = loadJXL(path, fileBuf);
             if (ret.imgList.empty()) {
-                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.imgList.push_back({ getErrorTipsMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
                     "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
             }
@@ -1906,7 +1900,7 @@ public:
         if (ext == L".wp2") { // webp2 静态或动画
             ret.imgList = loadWP2(path, fileBuf);
             if (ret.imgList.empty()) {
-                ret.imgList.push_back({ getDefaultMat(), 0 });
+                ret.imgList.push_back({ getErrorTipsMat(), 0 });
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
                     "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
             }
@@ -1960,7 +1954,7 @@ public:
             img = loadSVG(path, fileBuf);
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
             if (img.empty()) {
-                img = getDefaultMat();
+                img = getErrorTipsMat();
             }
         }
         else if (ext == L".ico" || ext == L".icon") {
@@ -1969,12 +1963,12 @@ public:
         else if (ext == L".psd") {
             img = loadPSD(path, fileBuf);
             if (img.empty())
-                img = getDefaultMat();
+                img = getErrorTipsMat();
         }
         else if (ext == L".pfm") {
             img = loadPFM(path, fileBuf);
             if (img.empty()) {
-                img = getDefaultMat();
+                img = getErrorTipsMat();
                 ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize);
             }
             else {
@@ -1984,7 +1978,7 @@ public:
         else if (supportRaw.contains(ext)) {
             img = loadRaw(path, fileBuf);
             if (img.empty())
-                img = getDefaultMat();
+                img = getErrorTipsMat();
         }
 
         if (img.empty())
@@ -2000,7 +1994,7 @@ public:
         }
 
         if (img.empty())
-            img = getDefaultMat();
+            img = getErrorTipsMat();
 
         ret.imgList.emplace_back(img, 0);
 

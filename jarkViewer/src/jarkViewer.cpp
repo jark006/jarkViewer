@@ -246,12 +246,12 @@ public:
             if (filePath.empty()) { //直接打开软件，没有传入参数
                 imgFileList.emplace_back(appName);
                 curFileIdx = 0;
-                imgDB.put(appName, { {{ImageDatabase::getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
+                imgDB.put(appName, { {{imgDB.getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
             }
             else { // 打开的文件不支持，默认加到尾部
                 imgFileList.emplace_back(fullPath.wstring());
                 curFileIdx = (int)imgFileList.size() - 1;
-                imgDB.put(fullPath.wstring(), { {{ImageDatabase::getDefaultMat(), 0}}, "图像格式不支持或已删除" });
+                imgDB.put(fullPath.wstring(), { {{imgDB.getErrorTipsMat(), 0}}, "图像格式不支持或已删除" });
             }
         }
 
