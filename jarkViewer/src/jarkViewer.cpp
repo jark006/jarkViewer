@@ -402,6 +402,8 @@ public:
                 break;
 
             case CursorPos::leftDown:
+                extraUIFlag = ShowExtraUI::none;
+                operateQueue.push({ ActionENUM::normalFresh });
                 break;
 
             case CursorPos::leftEdge:
@@ -420,6 +422,8 @@ public:
                 break;
 
             case CursorPos::rightDown:
+                extraUIFlag = ShowExtraUI::none;
+                operateQueue.push({ ActionENUM::normalFresh });
                 break;
 
             case CursorPos::rightUp:
