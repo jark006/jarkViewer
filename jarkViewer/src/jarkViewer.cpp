@@ -14,7 +14,7 @@
 3. 在鼠标光标位置缩放
 */
 
-const wstring appName = L"JarkViewer v1.18";
+const wstring appName = L"JarkViewer v1.19";
 
 
 
