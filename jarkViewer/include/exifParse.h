@@ -6,8 +6,11 @@
 class ExifParse{
 public:
     static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
-        return std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
-            Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
+        return path.ends_with(L".ico") ?
+            std::format("路径: {}\n大小: {}\n",
+                Utils::wstringToUtf8(path), Utils::size2Str(fileSize)) :
+            std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
+                Utils::wstringToUtf8(path), Utils::size2Str(fileSize), width, height);
     }
 
     static string handleMathDiv(const string& str) {

@@ -2005,6 +2005,8 @@ public:
 
         if (img.empty())
             img = getErrorTipsMat();
+        else if (img.type() == CV_8UC3)
+            cv::cvtColor(img, img, cv::COLOR_BGR2BGRA);
 
         ret.imgList.emplace_back(img, 0);
 

@@ -121,7 +121,21 @@ private:
 public:
     void push(Action action) {
         std::unique_lock<std::mutex> lock(mtx);
-        queue.push(action);
+
+        if (!queue.empty() && action.action == ActionENUM::slide) {
+            Action& back = queue.back();
+
+            if (back.action == ActionENUM::slide) {
+                back.x += action.x;
+                back.y += action.y;
+            }
+            else {
+                queue.push(action);
+            }
+        }
+        else {
+            queue.push(action);
+        }
     }
 
     Action get() {
@@ -631,11 +645,10 @@ public:
         // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
         memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
 
-        auto ptr = (uint32_t*)canvas.ptr();
-
-        if (srcImg.channels() == 3) {
+        if (srcImg.type() == CV_8UC3) {
             //#pragma omp parallel for // CPU使用率太高
-            for (int y = yStart; y < yEnd; y++)
+            for (int y = yStart; y < yEnd; y++) {
+                auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
                     const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -643,25 +656,26 @@ public:
                         switch (curPar.rotation)
                         {
                         case 1:
-                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX, x, y);
+                            ptr[x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX, x, y);
                             break;
                         case 2:
-                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
+                            ptr[x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
                             break;
                         case 3:
-                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX, x, y);
+                            ptr[x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX, x, y);
                             break;
-                        case 0:
                         default:
-                            ptr[y * canvasW + x] = getSrcPx3(srcImg, srcX, srcY, x, y);
+                            ptr[x] = getSrcPx3(srcImg, srcX, srcY, x, y);
                             break;
                         }
                     }
                 }
+            }
         }
-        else if (srcImg.channels() == 4) {
+        else if (srcImg.type() == CV_8UC4) {
             //#pragma omp parallel for // CPU使用率太高
-            for (int y = yStart; y < yEnd; y++)
+            for (int y = yStart; y < yEnd; y++) {
+                auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
                     const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
@@ -669,21 +683,21 @@ public:
                         switch (curPar.rotation)
                         {
                         case 1:
-                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
+                            ptr[x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
                             break;
                         case 2:
-                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
+                            ptr[x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
                             break;
                         case 3:
-                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
+                            ptr[x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
                             break;
-                        case 0:
                         default:
-                            ptr[y * canvasW + x] = getSrcPx4(srcImg, srcX, srcY, x, y);
+                            ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
                             break;
                         }
                     }
                 }
+            }
         }
     }
 
@@ -1013,10 +1027,8 @@ public:
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(nowTimestamp - lastTimestamp);
             lastTimestamp = nowTimestamp;
 
-            auto remainingTime = frameDuration - elapsed;
-            if (remainingTime > std::chrono::milliseconds(0)) {
-                std::this_thread::sleep_for(remainingTime);
-            }
+            if (frameDuration > elapsed)
+                std::this_thread::sleep_for(frameDuration - elapsed);
 
             delayRemain -= elapsed.count();
             if (delayRemain <= 0) {
