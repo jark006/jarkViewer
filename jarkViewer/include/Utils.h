@@ -41,7 +41,7 @@ using std::endl;
 #pragma comment(lib, "windowscodecs.lib" )
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "Winmm.lib")
-#pragma comment (lib ,"imm32.lib")
+#pragma comment(lib ,"imm32.lib")
 
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>

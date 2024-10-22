@@ -20,6 +20,59 @@
 #include "src/wp2/decode.h"
 #include "libbpg.h"
 
+#pragma comment(lib, "IlmImf.lib")
+#pragma comment(lib, "ippiw.lib")
+#pragma comment(lib, "ippicvmt.lib")
+#pragma comment(lib, "libjpeg-turbo.lib")
+#pragma comment(lib, "libopenjp2.lib")
+#pragma comment(lib, "libpng.lib")
+#pragma comment(lib, "libprotobuf.lib")
+#pragma comment(lib, "libtiff.lib")
+#pragma comment(lib, "libwebp.lib")
+#pragma comment(lib, "opencv_world4100.lib")
+#pragma comment(lib, "zlib.lib")
+#pragma comment(lib, "ittnotify.lib")
+#pragma comment(lib, "heif.lib")
+#pragma comment(lib, "libde265.lib")
+#pragma comment(lib, "x265-static.lib")
+#pragma comment(lib, "avif.lib")
+#pragma comment(lib, "yuv.lib")
+#pragma comment(lib, "dav1d.lib")
+#pragma comment(lib, "aom.lib")
+#pragma comment(lib, "gif.lib")
+#pragma comment(lib, "raw.lib")
+#pragma comment(lib, "OpenGL32.Lib")
+#pragma comment(lib, "GlU32.Lib")
+#pragma comment(lib, "freeglut.lib")
+#pragma comment(lib, "lcms2.lib")
+#pragma comment(lib, "jasper.lib")
+#pragma comment(lib, "brotlicommon.lib")
+#pragma comment(lib, "brotlidec.lib")
+#pragma comment(lib, "brotlienc.lib")
+#pragma comment(lib, "charset.lib")
+#pragma comment(lib, "exiv2.lib")
+#pragma comment(lib, "iconv.lib")
+#pragma comment(lib, "inih.lib")
+#pragma comment(lib, "INIReader.lib")
+#pragma comment(lib, "intl.lib")
+#pragma comment(lib, "libexpatMT.lib")
+#pragma comment(lib, "Psapi.lib")
+#pragma comment(lib, "jxl.lib")
+#pragma comment(lib, "jxl_cms.lib")
+#pragma comment(lib, "jxl_threads.lib")
+#pragma comment(lib, "hwy.lib")
+#pragma comment(lib, "libpng16.lib")
+#pragma comment(lib, "FreeImage.lib")
+#pragma comment(lib, "FreeImagePlus.lib")
+#pragma comment(lib, "pixman-1.lib")
+#pragma comment(lib, "fontconfig.lib")
+#pragma comment(lib, "Psd_MT.lib")
+#pragma comment(lib, "lunasvg.lib")
+#pragma comment(lib, "plutovg.lib")
+#pragma comment(lib, "webp2.lib")
+#pragma comment(lib, "imageio.lib")
+//#pragma comment(lib, "thorvg.lib")
+
 // .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
 
 class ImageDatabase:public LRU<wstring, Frames> {
@@ -189,9 +242,9 @@ public:
                 memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
             }
             else {
-                int minStep = rgb.rowBytes < ret.step1() ? rgb.rowBytes : ret.step1();
-                for (int y = 0; y < rgb.height; y++) {
-                    memcpy(ret.ptr() + ret.step1() * y, rgb.pixels + rgb.rowBytes * y, (size_t)minStep);
+                size_t minStep = rgb.rowBytes < ret.step1() ? rgb.rowBytes : ret.step1();
+                for (uint32_t y = 0; y < rgb.height; y++) {
+                    memcpy(ret.ptr() + ret.step1() * y, rgb.pixels + rgb.rowBytes * y, minStep);
                 }
             }
         }
@@ -203,10 +256,10 @@ public:
             case 16: bitShift = 8; break;
             }
 
-            for (int y = 0; y < rgb.height; y++) {
+            for (uint32_t y = 0; y < rgb.height; y++) {
                 const uint16_t* src = (uint16_t*)(rgb.pixels + rgb.rowBytes * y);
                 uint8_t* dst = (uint8_t*)(ret.ptr() + ret.step1() * y);
-                for (int x = 0; x < rgb.width * 4; x++) {
+                for (uint32_t x = 0; x < rgb.width * 4; x++) {
                     dst[x] = (uint8_t)(src[x] >> bitShift);
                 }
             }
@@ -1070,7 +1123,7 @@ public:
     }
 
     cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf){
-        const int maxEdge = 1024;
+        const int maxEdge = 3840;
 
         auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
         if (!document) {
@@ -1095,7 +1148,7 @@ public:
         }
 
         auto bitmap = document->renderToBitmap(width, height);
-        if (!bitmap.valid()) {
+        if (bitmap.isNull()) {
             Utils::log("Failed to render SVG to bitmap {}", Utils::wstringToUtf8(path));
             return cv::Mat();
         }
@@ -1622,7 +1675,10 @@ public:
             offset++;
             string dimLine;
             while (buf[offset] != '\n' && offset < maxOffset) dimLine += buf[offset++];
-            sscanf(dimLine.c_str(), "%d", &height);
+            if (sscanf(dimLine.c_str(), "%d", &height) != 1) {
+                Utils::log("parsePFMHeader fail!");
+                return false;
+            }
         }break;
 
         case 2:break;

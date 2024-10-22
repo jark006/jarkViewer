@@ -9,13 +9,12 @@
 #include <wrl.h>
 
 /* TODO
-1. svg: lunasvg库不支持某些特性，部分svg无法解码 考虑 https://github.com/GNOME/librsvg
-2. eps
-3. 在鼠标光标位置缩放
-4. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
+1. eps格式
+1. 在鼠标光标位置缩放
+1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 */
 
-const wstring appName = L"JarkViewer v1.19";
+const wstring appName = L"JarkViewer v1.20";
 
 
 

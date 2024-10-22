@@ -597,6 +597,9 @@
     <ClInclude Include="libavcodec\videodsp_template.h">
       <Filter>libavcodec</Filter>
     </ClInclude>
+    <ClInclude Include="include\lunasvg.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
