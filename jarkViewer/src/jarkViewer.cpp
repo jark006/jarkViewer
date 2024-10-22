@@ -14,7 +14,7 @@
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 */
 
-const wstring appName = L"JarkViewer v1.20";
+const wstring appName = L"JarkViewer v1.21";
 
 
 

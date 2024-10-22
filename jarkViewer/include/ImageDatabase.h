@@ -1124,6 +1124,13 @@ public:
 
     cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf){
         const int maxEdge = 3840;
+        static bool isInitFont = false;
+
+        if (!isInitFont) {
+            isInitFont = true;
+            auto rc = Utils::GetResource(IDR_MSYHMONO_TTF, L"TTF");
+            lunasvg_add_font_face_from_data("", false, false, rc.addr, rc.size, nullptr, nullptr);
+        }
 
         auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
         if (!document) {

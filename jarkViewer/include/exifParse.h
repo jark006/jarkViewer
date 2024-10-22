@@ -6,7 +6,7 @@
 class ExifParse{
 public:
     static std::string getSimpleInfo(const wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
-        return path.ends_with(L".ico") ?
+        return (path.ends_with(L".ico") || (width == 0 && height == 0)) ?
             std::format("路径: {}\n大小: {}\n",
                 Utils::wstringToUtf8(path), Utils::size2Str(fileSize)) :
             std::format("路径: {}\n大小: {}\n分辨率: {}x{}",
