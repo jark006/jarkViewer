@@ -19,6 +19,7 @@
 #include "src/wp2/base.h"
 #include "src/wp2/decode.h"
 #include "libbpg.h"
+#include "thorvg.h"
 
 #pragma comment(lib, "IlmImf.lib")
 #pragma comment(lib, "ippiw.lib")
@@ -71,7 +72,9 @@
 #pragma comment(lib, "plutovg.lib")
 #pragma comment(lib, "webp2.lib")
 #pragma comment(lib, "imageio.lib")
-//#pragma comment(lib, "thorvg.lib")
+
+// meson setup builddir --backend=vs --buildtype release -Dloaders="all" -Dtools="all"
+#pragma comment(lib, "thorvg-0.lib")
 
 // .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
 
@@ -84,7 +87,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm",L".bpg",
+        L".jxr", L".wp2", L".pfm",L".bpg", 
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -101,6 +104,10 @@ public:
         L".mrw", // Minolta
         L".3fr"  // Hasselblad
     };
+
+    ImageDatabase() {
+        setCapacity(3);
+    }
 
     cv::Mat errorTipsMat, homeMat;
 
@@ -374,7 +381,7 @@ public:
             return frames;
         }
 
-        JxlBasicInfo info;
+        JxlBasicInfo info{};
         JxlPixelFormat format = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
 
         JxlDecoderSetInput(dec.get(), buf.data(), buf.size());
@@ -1323,7 +1330,14 @@ public:
     }
 
     cv::Mat loadMat(const wstring& path, const vector<uchar>& buf) {
-        auto img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
+        cv::Mat img;
+        try{
+            img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
+        }
+        catch (cv::Exception e) {
+            Utils::log("cvMat cannot decode: {} [{}]", Utils::wstringToUtf8(path), e.what());
+            return cv::Mat();
+        }
 
         if (img.empty()) {
             Utils::log("cvMat cannot decode: {}", Utils::wstringToUtf8(path));

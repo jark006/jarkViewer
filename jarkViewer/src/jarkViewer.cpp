@@ -8,13 +8,21 @@
 #include "D2D1App.h"
 #include <wrl.h>
 
+// 启用OMP播放动画时 CPU 使用率太高
+//#define ENABLE_OMP
+
+#ifdef ENABLE_OMP
+#include "omp.h"
+#endif
+
 /* TODO
 1. eps格式
 1. 在鼠标光标位置缩放
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
+1. svg动画
 */
 
-const wstring appName = L"JarkViewer v1.21";
+const wstring appName = L"JarkViewer v1.22";
 
 
 
@@ -645,7 +653,9 @@ public:
         memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
 
         if (srcImg.type() == CV_8UC3) {
-            //#pragma omp parallel for // CPU使用率太高
+#ifdef ENABLE_OMP
+            #pragma omp parallel for
+#endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
                 for (int x = xStart; x < xEnd; x++) {
@@ -672,7 +682,9 @@ public:
             }
         }
         else if (srcImg.type() == CV_8UC4) {
-            //#pragma omp parallel for // CPU使用率太高
+#ifdef ENABLE_OMP
+            #pragma omp parallel for
+#endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
                 for (int x = xStart; x < xEnd; x++) {

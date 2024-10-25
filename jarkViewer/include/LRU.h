@@ -63,8 +63,8 @@ public:
     }
 
     void setCapacity(size_t capacity) {
-        if (capacity < 10 || capacity > 4096)
-            capacity = 20;
+        if (capacity < 3 || capacity > 4096)
+            capacity = 3;
         CAPACITY = capacity;
     }
 
