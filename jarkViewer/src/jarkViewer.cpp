@@ -1,7 +1,5 @@
 #include "Utils.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 #include "stbText.h"
 #include "ImageDatabase.h"
 
@@ -20,6 +18,7 @@
 1. 在鼠标光标位置缩放
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 1. svg动画
+1. xpm和bpm格式
 */
 
 const wstring appName = L"JarkViewer v1.22";
@@ -197,6 +196,7 @@ public:
     CursorPos cursorPosLast = CursorPos::centerArea;
     ShowExtraUI extraUIFlag = ShowExtraUI::none;
     bool mouseIsPressing = false;
+    bool ctrlIsPressing = false;
     bool smoothShift = false;
     bool showExif = false;
     Cood mousePos, mousePressPos;
@@ -229,18 +229,27 @@ public:
     ~JarkViewerApp() {
     }
 
-    HRESULT Initialize(HINSTANCE hInstance, int nCmdShow, LPWSTR lpCmdLine) {
-        namespace fs = std::filesystem;
-
-        if (!SUCCEEDED(D2D1App::Initialize(hInstance, nCmdShow))) {
+    HRESULT InitWindow(HINSTANCE hInstance) {
+        if (!SUCCEEDED(D2D1App::Initialize(hInstance)))
             return S_FALSE;
+
+        if (m_pD2DDeviceContext == nullptr) {
+            MessageBoxW(NULL, L"窗口创建失败！", L"错误", MB_ICONERROR);
+            exit(-1);
         }
-        if (hInstance) Utils::setCvWindowIcon(hInstance, m_hWnd, IDI_JARKVIEWER);
 
+        if (hInstance)
+            Utils::setCvWindowIcon(hInstance, m_hWnd, IDI_JARKVIEWER);
 
-        wstring filePath(*lpCmdLine == '\0' ? L"" : (*lpCmdLine == '\"' ? lpCmdLine + 1 : lpCmdLine));
-        if (filePath.length() && filePath[filePath.length() - 1] == L'\"')
-            filePath.pop_back();
+        return S_OK;
+    }
+
+    void initOpenFile(wstring filePath) {
+        namespace fs = std::filesystem;
+        
+        curFileIdx = -1;
+        imgFileList.clear();
+        imgDB.clear();
 
         fs::path fullPath = fs::absolute(filePath);
         wstring fileName = fullPath.filename().wstring();
@@ -278,13 +287,7 @@ public:
         }
 
         curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
-
-        if (m_pD2DDeviceContext == nullptr) {
-            MessageBoxW(NULL, L"窗口创建失败！", L"错误", MB_ICONERROR);
-            exit(-1);
-        }
-
-        return S_OK;
+        curPar.Init(winWidth, winHeight);
     }
 
     void OnMouseDown(WPARAM btnState, int x, int y) {
@@ -494,76 +497,126 @@ public:
     }
 
     void OnKeyDown(WPARAM keyValue) {
+        if (ctrlIsPressing) {
+            switch (keyValue)
+            {
+            case 'O': { // Ctrl + O
+                auto path = Utils::SelectFile(m_hWnd);
+                if (!path.empty()) {
+                    initOpenFile(path);
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }break;
+            }
+        }
+        else{
+            switch (keyValue)
+            {
+            case VK_CONTROL: {
+                ctrlIsPressing = true;
+            }break;
+
+            case VK_SPACE: { // 按空格复制图像信息到剪贴板
+                Utils::copyToClipboard(Utils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
+            }break;
+
+            case VK_F11: {
+                Utils::ToggleFullScreen(m_hWnd);
+            }break;
+
+            case 'Q': {
+                operateQueue.push({ ActionENUM::rotateLeft });
+            }break;
+
+            case 'E': {
+                operateQueue.push({ ActionENUM::rotateRight });
+            }break;
+
+            case 'W': {
+                curPar.slideTarget.y += ((winHeight + winWidth) / 16);
+                smoothShift = true;
+            }break;
+
+            case 'S': {
+                curPar.slideTarget.y -= ((winHeight + winWidth) / 16);
+                smoothShift = true;
+            }break;
+
+            case 'A': {
+                curPar.slideTarget.x += ((winHeight + winWidth) / 16);
+                smoothShift = true;
+            }break;
+
+            case 'D': {
+                curPar.slideTarget.x -= ((winHeight + winWidth) / 16);
+                smoothShift = true;
+            }break;
+
+            case VK_UP: {
+                operateQueue.push({ ActionENUM::zoomOut });
+            }break;
+
+            case VK_DOWN: {
+                operateQueue.push({ ActionENUM::zoomIn });
+            }break;
+
+            case VK_PRIOR:
+            case VK_LEFT: {
+                operateQueue.push({ ActionENUM::preImg });
+            }break;
+
+            case VK_NEXT:
+            case VK_RIGHT: {
+                operateQueue.push({ ActionENUM::nextImg });
+            }break;
+
+            case 'I': {
+                operateQueue.push({ ActionENUM::toggleExif });
+            }break;
+
+            case VK_ESCAPE: { // ESC
+                operateQueue.push({ ActionENUM::requitExit });
+            }break;
+
+            default: {
+#ifndef NDEBUG
+                cout << "OnKeyDown KeyValue: " << (int)keyValue << '\n';
+#endif // NDEBUG
+            }break;
+            }
+            }
+    }
+
+    void OnKeyUp(WPARAM keyValue) {
         switch (keyValue)
         {
-        case VK_SPACE: { // 按空格复制图像信息到剪贴板
-            Utils::copyToClipboard(Utils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
-        }break;
-
-        case VK_F11: {
-            Utils::ToggleFullScreen(m_hWnd);
-        }break;
-
-        case 'Q': {
-            operateQueue.push({ ActionENUM::rotateLeft });
-        }break;
-
-        case 'E': {
-            operateQueue.push({ ActionENUM::rotateRight });
-        }break;
-
-        case 'W': {
-            curPar.slideTarget.y += ((winHeight + winWidth) / 16);
-            smoothShift = true;
-        }break;
-
-        case 'S': {
-            curPar.slideTarget.y -= ((winHeight + winWidth) / 16);
-            smoothShift = true;
-        }break;
-
-        case 'A': {
-            curPar.slideTarget.x += ((winHeight + winWidth) / 16);
-            smoothShift = true;
-        }break;
-
-        case 'D': {
-            curPar.slideTarget.x -= ((winHeight + winWidth) / 16);
-            smoothShift = true;
-        }break;
-
-        case VK_UP: {
-            operateQueue.push({ ActionENUM::zoomOut });
-        }break;
-
-        case VK_DOWN: {
-            operateQueue.push({ ActionENUM::zoomIn });
-        }break;
-
-        case VK_PRIOR:
-        case VK_LEFT: {
-            operateQueue.push({ ActionENUM::preImg });
-        }break;
-
-        case VK_NEXT:
-        case VK_RIGHT: {
-            operateQueue.push({ ActionENUM::nextImg });
-        }break;
-
-        case 'I': {
-            operateQueue.push({ ActionENUM::toggleExif });
-        }break;
-
-        case VK_ESCAPE: { // ESC
-            operateQueue.push({ ActionENUM::requitExit });
+        case VK_CONTROL: {
+            ctrlIsPressing = false;
         }break;
 
         default: {
 #ifndef NDEBUG
-            cout << "KeyValue: " << (int)keyValue << '\n';
+            cout << "OnKeyUp KeyValue: " << (int)keyValue << '\n';
 #endif // NDEBUG
-
         }break;
+        }
+    }
+
+    void OnDropFiles(WPARAM wParam) {
+        wstring path;
+        HDROP hDrop = (HDROP)wParam;
+        UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+
+        if (0 < fileCount) { // 拖入多文件时，只接受第一个
+            wchar_t filePath[4096] = {};
+            DragQueryFileW(hDrop, 0, filePath, 4096);
+            path = filePath;
+        }
+        DragFinish(hDrop);
+
+        if (!path.empty()) {
+            initOpenFile(path);
+            operateQueue.push({ ActionENUM::normalFresh });
         }
     }
 
@@ -1064,8 +1117,8 @@ int WINAPI wWinMain(
 #ifndef NDEBUG
     AllocConsole();
     FILE* stream;
-    freopen_s(&stream, "CON", "w", stdout);//重定向输入流
-    freopen_s(&stream, "CON", "w", stderr);//重定向输入流
+    freopen_s(&stream, "CON", "w", stdout);//重定向标准输出流
+    freopen_s(&stream, "CON", "w", stderr);//重定向错误输出流
 
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
@@ -1080,9 +1133,19 @@ int WINAPI wWinMain(
     if (!SUCCEEDED(::CoInitialize(nullptr)))
         return 0;
 
+    wstring filePath = lpCmdLine;
+    if (!filePath.empty() && filePath.front() == '\"') {
+        filePath = filePath.substr(1);
+    }
+    if (!filePath.empty() && filePath.back() == '\"') {
+        filePath.pop_back();
+    }
+
     JarkViewerApp app;
-    if (SUCCEEDED(app.Initialize(hInstance, nCmdShow, lpCmdLine)))
+    if (SUCCEEDED(app.InitWindow(hInstance))) {
+        app.initOpenFile(filePath);
         app.Run();
+    }
 
     ::CoUninitialize();
     return 0;

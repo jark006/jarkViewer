@@ -32,6 +32,8 @@ using std::endl;
 #include <dwrite_2.h>
 #include <wincodec.h>
 #include <imm.h>
+#include <commdlg.h>
+#include <shellapi.h>
 
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
@@ -628,4 +630,29 @@ public:
             }
         }
     }
+
+    static std::wstring SelectFile(HWND hWnd) {
+        OPENFILENAMEW ofn;
+        wchar_t szFile[1024] = { 0 };
+
+        memset(&ofn, 0, sizeof(ofn));
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFile = szFile;
+        ofn.hwndOwner = hWnd;
+        ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+        ofn.lpstrFilter = L"All Files\0*.*\0"; // 过滤器
+        ofn.nFilterIndex = 1;
+        ofn.lpstrFileTitle = NULL;
+        ofn.nMaxFileTitle = 0;
+        ofn.lpstrInitialDir = NULL;
+        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+        if (GetOpenFileNameW(&ofn) == TRUE) {
+            return std::wstring(szFile);
+        }
+        else {
+            return L"";
+        }
+    }
+
 };

@@ -29,7 +29,7 @@ public:
     virtual ~D2D1App();
 
     // 初始化
-    virtual HRESULT Initialize(HINSTANCE hInstance, int nCmdShow);
+    virtual HRESULT Initialize(HINSTANCE hInstance);
     // 可以重写此函数来实现你想做的每帧执行的操作
     virtual void UpdateScene(float dt) {};
     // 渲染
@@ -62,6 +62,7 @@ protected:
     virtual void OnMouseWheel(UINT nFlags, short zDelta, int x, int y) { }
     virtual void OnKeyDown(WPARAM keyValue) { }
     virtual void OnKeyUp(WPARAM keyValue) { }
+    virtual void OnDropFiles(WPARAM wParam) { }
     // 消息处理：重设尺寸
     virtual void OnResize(UINT width, UINT height);
     // 消息处理：窗口销毁

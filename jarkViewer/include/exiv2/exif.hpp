@@ -530,7 +530,7 @@ class EXIV2API ExifParser {
 
     @return Write method used.
   */
-  static WriteMethod encode(Blob& blob, const byte* pData, size_t size, ByteOrder byteOrder, ExifData& exifData);
+  static WriteMethod encode(std::vector<byte>& blob, const byte* pData, size_t size, ByteOrder byteOrder, ExifData& exifData);
   /*!
     @brief Encode metadata from the provided metadata to Exif format.
 
@@ -551,7 +551,7 @@ class EXIV2API ExifParser {
     @param byteOrder Byte order to use.
     @param exifData  Exif metadata container.
   */
-  static void encode(Blob& blob, ByteOrder byteOrder, ExifData& exifData) {
+  static void encode(std::vector<byte>& blob, ByteOrder byteOrder, ExifData& exifData) {
     encode(blob, nullptr, 0, byteOrder, exifData);
   }
 

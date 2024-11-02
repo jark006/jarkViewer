@@ -663,7 +663,7 @@ class EXIV2API ImageFactory {
 // template, inline and free functions
 
 //! Append \em len bytes pointed to by \em buf to \em blob.
-EXIV2API void append(Exiv2::Blob& blob, const byte* buf, size_t len);
+EXIV2API void append(std::vector<uint8_t>& blob, const byte* buf, size_t len);
 
 }  // namespace Exiv2
 

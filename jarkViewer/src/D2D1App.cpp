@@ -74,7 +74,7 @@ void D2D1App::saveSettings() {
 }
 
 // 初始化
-HRESULT D2D1App::Initialize(HINSTANCE hInstance, int nCmdShow)
+HRESULT D2D1App::Initialize(HINSTANCE hInstance)
 {
     HRESULT hr = E_FAIL;
     //register window class
@@ -105,6 +105,7 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance, int nCmdShow)
         CreateDeviceIndependentResources();
         CreateDeviceResources();
 
+        DragAcceptFiles(m_hWnd, TRUE);
         ShowWindow(m_hWnd, settingPar.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
         UpdateWindow(m_hWnd);
     }
@@ -433,6 +434,10 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             case WM_KEYUP:
                 pD2DApp->OnKeyUp(wParam);
+                break;
+
+            case WM_DROPFILES:
+                pD2DApp->OnDropFiles(wParam);
                 break;
 
             case WM_DESTROY:

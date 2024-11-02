@@ -21,6 +21,11 @@
 #include "libbpg.h"
 #include "thorvg.h"
 
+#ifndef STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#endif // !STB_IMAGE_IMPLEMENTATION
+
 #pragma comment(lib, "IlmImf.lib")
 #pragma comment(lib, "ippiw.lib")
 #pragma comment(lib, "ippicvmt.lib")
@@ -87,7 +92,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm",L".bpg", 
+        L".jxr", L".wp2", L".pfm", L".bpg", 
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -195,7 +200,7 @@ public:
         return matImg;
     }
 
-    // vcpkg install libavif[aom]:x64-windows-static libavif[dav1d]:x64-windows-static
+    // vcpkg install libavif[core,aom,dav1d]:x64-windows-static
     // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
     // TODO 部分图像仍不能正常解码
     cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf) {

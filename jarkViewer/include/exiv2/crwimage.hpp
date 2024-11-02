@@ -109,7 +109,7 @@ class EXIV2API CrwParser {
 
     @throw Error If the metadata from the CRW image cannot be encoded.
    */
-  static void encode(Blob& blob, const byte* pData, size_t size, const CrwImage* pCrwImage);
+  static void encode(std::vector<byte>& blob, const byte* pData, size_t size, const CrwImage* pCrwImage);
 
 };  // class CrwParser
 
