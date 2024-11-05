@@ -1,4 +1,5 @@
 #include "D2D1App.h"
+#include <dwmapi.h>
 
 D2D1App::D2D1App() 
 {
@@ -106,6 +107,26 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance)
         CreateDeviceResources();
 
         DragAcceptFiles(m_hWnd, TRUE);
+
+        bool isDarkMode = false;
+        HKEY hKey;
+        if (RegOpenKeyEx(HKEY_CURRENT_USER,
+            TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+            0, KEY_READ, &hKey) == ERROR_SUCCESS)
+        {
+            DWORD value = 0;
+            DWORD size = sizeof(value);
+            if (RegQueryValueEx(hKey, TEXT("AppsUseLightTheme"), NULL, NULL,
+                reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS)
+            {
+                isDarkMode = (value == 0);
+            }
+            RegCloseKey(hKey);
+        }
+
+        BOOL useSystemTheme = isDarkMode;
+        DwmSetWindowAttribute(m_hWnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &useSystemTheme, sizeof(useSystemTheme));
+
         ShowWindow(m_hWnd, settingPar.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
         UpdateWindow(m_hWnd);
     }
