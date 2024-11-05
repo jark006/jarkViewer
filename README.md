@@ -56,7 +56,7 @@ vcpkg install libavif[core,aom,dav1d]:x64-windows-static
 vcpkg install libjxl[core,tools]:x64-windows-static
 vcpkg install libheif[core,hevc]:x64-windows-static
 vcpkg install libraw[core,dng-lossy,openmp]:x64-windows-static
-vcpkg install opencv4[core,ade,contrib,default-features,dnn,eigen,ffmpeg,freetype,gdcm,gstreamer,halide,ipp,jasper,jpeg,lapack,nonfree,openexr,opengl,openjpeg,openmp,openvino,ovis,png,python,qt,quirc,sfm,tbb,tiff,vtk,vulkan,webp,world]:x64-windows-static
+vcpkg install opencv4[core,ade,contrib,default-features,eigen,ffmpeg,freetype,gdcm,gstreamer,halide,ipp,jasper,jpeg,lapack,nonfree,openexr,opengl,openjpeg,openmp,openvino,ovis,png,python,qt,quirc,sfm,tbb,tiff,vtk,vulkan,webp,world]:x64-windows-static
 ```
 
 ---
@@ -71,4 +71,4 @@ vcpkg install opencv4[core,ade,contrib,default-features,dnn,eigen,ffmpeg,freetyp
 
 # 预览
 
-![](preview.jpg)
+![](preview.png)

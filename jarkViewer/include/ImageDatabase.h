@@ -19,7 +19,7 @@
 #include "src/wp2/base.h"
 #include "src/wp2/decode.h"
 #include "libbpg.h"
-#include "thorvg.h"
+//#include "thorvg.h"
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -79,7 +79,7 @@
 #pragma comment(lib, "imageio.lib")
 
 // meson setup builddir --backend=vs --buildtype release -Dloaders="all" -Dtools="all"
-#pragma comment(lib, "thorvg-0.lib")
+//#pragma comment(lib, "thorvg-0.lib")
 
 // .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
 
