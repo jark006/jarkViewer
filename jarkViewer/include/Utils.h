@@ -609,14 +609,14 @@ public:
         int imgWidth = img.cols;
 
         for (int y = 0; y < imgHeight; y++) {
-            if (yOffset + y >= canvasHeight)
-                break;
+            if ((yOffset + y) <= 0 || canvasHeight <= (yOffset + y))
+                continue;
 
             auto canvasPtr = (intUnion*)(canvas.ptr() + canvas.step1() * (yOffset + y));
             auto imgPtr = (intUnion*)(img.ptr() + img.step1() * y);
             for (int x = 0; x < imgWidth; x++) {
-                if (xOffset + x >= canvasWidth)
-                    break;
+                if ((xOffset + x) <= 0 || canvasWidth <= (xOffset + x))
+                    continue;
 
                 auto imgPx = imgPtr[x];
                 int alpha = imgPx[3];
