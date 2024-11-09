@@ -705,6 +705,33 @@ public:
         // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
         memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
 
+        if (((srcH == 600 and srcW == 800) or (srcH == 800 and srcW == 600)) and *((uint32_t*)srcImg.ptr()) == 0xFF464646) {
+            // 内置的用于提示的图像
+        }
+        else { // 普通图像  画边框
+            if (0 < xStart and xStart < canvasW) {
+                for (int y = std::max(yStart - 1, 0); 0 <= y and y < std::min(yEnd + 1, canvasH - 1); y++) {
+                    ((uint32_t*)canvas.ptr())[y * canvasW + xStart - 1] = 0xFF000000;
+                }
+            }
+            if (0 < xEnd and xEnd < canvasW) {
+                for (int y = std::max(yStart - 1, 0); 0 <= y and y < std::min(yEnd + 1, canvasH - 1); y++) {
+                    ((uint32_t*)canvas.ptr())[y * canvasW + xEnd] = 0xFF000000;
+                }
+            }
+
+            if (0 < yStart and yStart < canvasH) {
+                for (int x = std::max(xStart - 1, 0); 0 <= x and x < std::min(xEnd + 1, canvasW - 1); x++) {
+                    ((uint32_t*)canvas.ptr())[(yStart - 1) * canvasW + x] = 0xFF000000;
+                }
+            }
+            if (0 < yEnd and yEnd < canvasH) {
+                for (int x = std::max(xStart - 1, 0); 0 <= x and x < std::min(xEnd + 1, canvasW - 1); x++) {
+                    ((uint32_t*)canvas.ptr())[yEnd * canvasW + x] = 0xFF000000;
+                }
+            }
+        }
+
         if (srcImg.type() == CV_8UC3) {
 #ifdef ENABLE_OMP
             #pragma omp parallel for
