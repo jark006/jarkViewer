@@ -1,44 +1,42 @@
-# jarkViewer
+# 🌟 jarkViewer 
 
-![](SocialPreview.png)
-
-### 操作方式：
-
-1. 切换图片：鼠标在窗口左右边缘滚轮，或左/右键、PgUp/PgDown键
-
-1. 放大缩小：鼠标在窗口中间区域滚轮，或上/下键
-
-1. 旋转图像：鼠标在窗口左上角/右上角滚轮或单击，或Q/E键
-
-1. 平移图像：鼠标拖动，或WASD键进行上下左右平移
-
-1. 图像信息：滚轮键，或 i 键
-
-1. 复制信息：空格，或C键
-
-1. 切换全屏：双击，或F11键
-
-1. 快捷退出：右键，或ESC键
-
-### 其他
-
-1. 自动记忆上次窗口位置/尺寸
-
-1. 支持读取AI生图（stable-diffusion，Flux）的提示词等信息
-
-
-### 静态图像支持：
-apng avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2
-
-### 动态图像支持：
-gif webp png apng jxl
-
-### RAW格式支持：
-crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw
+![Version](https://img.shields.io/github/v/release/jark006/jarkViewer) ![Stars](https://img.shields.io/github/stars/jark006/jarkViewer) ![License](https://img.shields.io/github/license/jark006/jarkViewer) ![Issues](https://img.shields.io/github/issues/jark006/jarkViewer)  
+*一个高效便捷的多格式图片查看工具*
 
 ---
 
-## 编译前操作
+![Preview](SocialPreview.png)
+
+## ✨ 操作方式
+
+1. **切换图片**：窗口左右边缘滚轮 / 左键 / 右键 / PgUp / PgDown  
+1. **放大缩小**：窗口中间滚轮 / 上下方向键  
+1. **旋转图片**：窗口左上角或右上角滚轮 / 单击 / Q 和 E 键  
+1. **平移图片**：鼠标拖动 / WASD 键  
+1. **查看图像信息**：点击滚轮 / 按 `I` 键  
+1. **复制信息**：按空格 / `C` 键  
+1. **切换全屏**：双击窗口 / `F11` 键  
+1. **快捷退出**：右键单击 / 按 `ESC` 键
+
+---
+
+## ⚙️ 其他功能  
+
+1. ✅ 自动记忆上次窗口位置/尺寸  
+2. 📖 支持读取AI生成图像（如 Stable-Diffusion、Flux）的提示词等信息【前提是图片中包含了提示词信息，不是所有的文生图图片都包含提示词信息的】
+
+---
+
+## 📂 支持的图像格式
+
+- **静态图像**：`png avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2
+` 等  
+- **动态图像**：`gif webp png apng jxl`  
+- **RAW格式**：`crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw` 等  
+
+---
+
+## 🛠️ 编译前的准备
 
 1. 解压 `jarkViewer/lib/lib.7z` 所有 `*.lib` 静态库
 2. 解压 `jarkViewer/libexiv2/libexiv2.7z` 所有 `*.lib` 静态库
@@ -61,14 +59,18 @@ vcpkg install opencv4[core,ade,contrib,default-features,eigen,ffmpeg,freetype,gd
 
 ---
 
-# 若运行软件提示缺少 ``*.dll``
+## 🔧 DLL 缺失解决方案
 
-请下载安装 `VC++ 2015-2022` 运行库：
-
-[Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) 
+请下载并安装 [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)。
 
 ---
 
-# 预览
+## 🖼️ 软件预览
 
-![](preview.png)
+![软件截图](preview.png)
+
+---
+
+## 📜 License
+
+本项目采用 MIT 许可证开放源代码。了解更多内容，请查看 [LICENSE 文件](https://github.com/jark006/jarkViewer/blob/main/LICENSE)。
