@@ -363,58 +363,63 @@ public:
     void OnMouseMove(WPARAM btnState, int x, int y) {
         mousePos = { x, y };
 
-        if (winWidth >= 500) {
-            if(0 <= x && x < 50) {
-                if (0 <= y && y < (winHeight / 4)) {
-                    cursorPos = CursorPos::leftUp;
-                }
-                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
-                    cursorPos = CursorPos::leftEdge;
-                }
-                else if ((winHeight *3/ 4) <= y && y < (winHeight)) {
-                    cursorPos = CursorPos::leftDown;
-                }
-            }
-            else if (((winWidth - 50) < x && x <= winWidth)) {
-                if (0 <= y && y < (winHeight / 4)) {
-                    cursorPos = CursorPos::rightUp;
-                }
-                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
-                    cursorPos = CursorPos::rightEdge;
-                }
-                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
-                    cursorPos = CursorPos::rightDown;
-                }
-            }
-            else {
-                cursorPos = CursorPos::centerArea;
-            }
+        if (mouseIsPressing) {
+            cursorPos = CursorPos::centerArea;
         }
         else {
-            if (0 <= x && x < (winWidth / 4)) {
-                if (0 <= y && y < (winHeight / 4)) {
-                    cursorPos = CursorPos::leftUp;
+            if (winWidth >= 500) {
+                if (0 <= x && x < 50) {
+                    if (0 <= y && y < (winHeight / 4)) {
+                        cursorPos = CursorPos::leftUp;
+                    }
+                    else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                        cursorPos = CursorPos::leftEdge;
+                    }
+                    else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                        cursorPos = CursorPos::leftDown;
+                    }
                 }
-                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
-                    cursorPos = CursorPos::leftEdge;
+                else if (((winWidth - 50) < x && x <= winWidth)) {
+                    if (0 <= y && y < (winHeight / 4)) {
+                        cursorPos = CursorPos::rightUp;
+                    }
+                    else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                        cursorPos = CursorPos::rightEdge;
+                    }
+                    else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                        cursorPos = CursorPos::rightDown;
+                    }
                 }
-                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
-                    cursorPos = CursorPos::leftDown;
-                }
-            }
-            else if ((winWidth * 3 / 4) < x && x <= winWidth) {
-                if (0 <= y && y < (winHeight / 4)) {
-                    cursorPos = CursorPos::rightUp;
-                }
-                else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
-                    cursorPos = CursorPos::rightEdge;
-                }
-                else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
-                    cursorPos = CursorPos::rightDown;
+                else {
+                    cursorPos = CursorPos::centerArea;
                 }
             }
             else {
-                cursorPos = CursorPos::centerArea;
+                if (0 <= x && x < (winWidth / 4)) {
+                    if (0 <= y && y < (winHeight / 4)) {
+                        cursorPos = CursorPos::leftUp;
+                    }
+                    else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                        cursorPos = CursorPos::leftEdge;
+                    }
+                    else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                        cursorPos = CursorPos::leftDown;
+                    }
+                }
+                else if ((winWidth * 3 / 4) < x && x <= winWidth) {
+                    if (0 <= y && y < (winHeight / 4)) {
+                        cursorPos = CursorPos::rightUp;
+                    }
+                    else if ((winHeight / 4) <= y && y < (winHeight * 3 / 4)) {
+                        cursorPos = CursorPos::rightEdge;
+                    }
+                    else if ((winHeight * 3 / 4) <= y && y < (winHeight)) {
+                        cursorPos = CursorPos::rightDown;
+                    }
+                }
+                else {
+                    cursorPos = CursorPos::centerArea;
+                }
             }
         }
 
@@ -806,10 +811,12 @@ public:
         return rotatedImage;
     }
 
-    // 取宽高两者的最大值作为新画布的宽高，绘制好内容再旋转，最后截取画布。
+    // 取对角线作为新画布的宽高，绘制好内容再旋转，最后截取画布。
     // 若直接使用原尺寸画布进行旋转，宽或高其中较小的那边旋转到较长那边时，会缺失部分内容
     void rotateLeftAnimation() {
-        int maxEdge = winWidth > winHeight ? winWidth : winHeight;
+        int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
+        if (maxEdge < 2)
+            return;
         auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
@@ -838,7 +845,9 @@ public:
     }
 
     void rotateRightAnimation() {
-        int maxEdge = winWidth > winHeight ? winWidth : winHeight;
+        int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
+        if (maxEdge < 2)
+            return;
         auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];

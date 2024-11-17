@@ -1408,32 +1408,42 @@ public:
 
         if (gif == nullptr) {
             Utils::log("DGifOpen: Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(error));
-            frames.push_back({ getErrorTipsMat(), 0 });
             return frames;
         }
+        int retCode = DGifSlurp(gif);
+        //if (retCode != GIF_OK) { // 部分GIF可能无法完全解码
+        //    Utils::log("DGifSlurp Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(gif->Error));
+        //    DGifCloseFile(gif, &error);
+        //    return frames;
+        //}
 
-        if (DGifSlurp(gif) != GIF_OK) {
-            Utils::log("DGifSlurp Error: {} {}", Utils::wstringToUtf8(path), GifErrorString(gif->Error));
-            DGifCloseFile(gif, &error);
-            frames.push_back({ getErrorTipsMat(), 0 });
-            return frames;
+        // 对画布尺寸进行修正：某些GIF的SWidth、SHeight小于帧的宽、高
+        // https://www.cnblogs.com/stronghorse/p/16002884.html
+        for (int i = 0; i < gif->ImageCount; i++) {
+            const GifImageDesc& ImageDesc = gif->SavedImages[i].ImageDesc;
+            if ((ImageDesc.Width + ImageDesc.Left) > gif->SWidth)
+                gif->SWidth = ImageDesc.Width + ImageDesc.Left;
+            if ((ImageDesc.Height + ImageDesc.Top) > gif->SHeight)
+                gif->SHeight = ImageDesc.Height + ImageDesc.Top;
         }
 
-        const auto byteSize = 4ULL * gif->SWidth * gif->SHeight;
-        auto gifRaster = std::make_unique<GifByteType[]>(byteSize);
-
-        memset(gifRaster.get(), 0, byteSize);
+        const auto pxNums = gif->SWidth * gif->SHeight;
+        const auto byteSize = 4ULL * pxNums;
+        vector<GifByteType> canvas(byteSize);
+        vector<GifByteType> lastCanvas(byteSize);
+        vector<GifByteType> tmpCanvas(byteSize);
 
         for (int i = 0; i < gif->ImageCount; ++i) {
+            memset(tmpCanvas.data(), 0, byteSize);
             SavedImage& image = gif->SavedImages[i];
-            GraphicsControlBlock gcb;
+            GraphicsControlBlock gcb{};
             auto retCode = DGifSavedExtensionToGCB(gif, i, &gcb);
             if (retCode != GIF_OK) {
                 gcb.TransparentColor = -1;
                 gcb.DelayTime = 10;
             }
-            auto colorMap = image.ImageDesc.ColorMap != nullptr ? image.ImageDesc.ColorMap : gif->SColorMap;
-            auto ptr = gifRaster.get();
+
+            auto colorMap = image.ImageDesc.ColorMap ? image.ImageDesc.ColorMap : gif->SColorMap;
 
             for (int y = 0; y < image.ImageDesc.Height; ++y) {
                 for (int x = 0; x < image.ImageDesc.Width; ++x) {
@@ -1445,22 +1455,44 @@ public:
                     }
                     GifColorType& color = colorMap->Colors[colorIndex];
                     int pixelIdx = (gifY * gif->SWidth + gifX) * 4;
-                    ptr[pixelIdx] = color.Blue;
-                    ptr[pixelIdx + 1] = color.Green;
-                    ptr[pixelIdx + 2] = color.Red;
-                    ptr[pixelIdx + 3] = 255;
+                    tmpCanvas[pixelIdx] = color.Blue;
+                    tmpCanvas[pixelIdx + 1] = color.Green;
+                    tmpCanvas[pixelIdx + 2] = color.Red;
+                    tmpCanvas[pixelIdx + 3] = 255;
                 }
             }
 
-            frames.emplace_back(cv::Mat(gif->SHeight, gif->SWidth, CV_8UC4, gifRaster.get()).clone(),
+            if (i == 0) { // 首帧 全量帧
+                memcpy(canvas.data(), tmpCanvas.data(), byteSize);
+            }
+            else {
+                auto canvasPtr = (uint32_t*)canvas.data();
+                auto tmpCanvasPtr = (uint32_t*)tmpCanvas.data();
+                for (int idx = 0; idx < pxNums; idx++) {
+                    if (tmpCanvasPtr[idx])
+                        canvasPtr[idx] = tmpCanvasPtr[idx];
+                }
+            }
+
+            frames.emplace_back(cv::Mat(gif->SHeight, gif->SWidth, CV_8UC4, canvas.data()).clone(),
                 gcb.DelayTime * 10);
+
+            if (gcb.DisposalMode <= DISPOSE_DO_NOT) { // 不处理
+            }
+            else if (gcb.DisposalMode == DISPOSE_BACKGROUND) { // 恢复到背景色
+                memset(canvas.data(), 0, byteSize);
+            }
+            else if (gcb.DisposalMode == DISPOSE_PREVIOUS) { // 恢复到前一帧
+                memcpy(canvas.data(), lastCanvas.data(), byteSize);
+            }
+
+            memcpy(lastCanvas.data(), canvas.data(), byteSize);
         }
 
         DGifCloseFile(gif, nullptr);
 
         if (frames.empty()) {
             Utils::log("Gif decode 0 frames: {}", Utils::wstringToUtf8(path));
-            frames.push_back({ getErrorTipsMat(), 0 });
         }
 
         return frames;

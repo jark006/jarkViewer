@@ -384,8 +384,7 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
 
-    if (message == WM_CREATE)
-    {
+    if (message == WM_CREATE) {
         LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
         D2D1App *pD2DApp = (D2D1App *)pcs->lpCreateParams;
 
@@ -397,8 +396,12 @@ LRESULT D2D1App::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         result = 1;
     }
-    else
-    {
+    else if (message == WM_GETMINMAXINFO) {
+        MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+        mmi->ptMinTrackSize.x = 400; // 最小宽度
+        mmi->ptMinTrackSize.y = 300; // 最小高度    
+    }
+    else {
         static TRACKMOUSEEVENT tme = {
             .cbSize = sizeof(TRACKMOUSEEVENT),
             .dwFlags = TME_LEAVE,
