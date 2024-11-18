@@ -1299,30 +1299,52 @@ public:
         return mat;
     }
 
-    cv::Mat loadBPG(const wstring& path, const vector<uchar>& buf) {
-        auto img = bpg_decoder_open();
-        if (bpg_decoder_decode(img, buf.data(), (int)buf.size()) < 0) {
+    std::vector<ImageNode> loadBPG(const std::wstring& path, const std::vector<uchar>& buf) {
+        auto decoderContext = bpg_decoder_open();
+        if (bpg_decoder_decode(decoderContext, buf.data(), (int)buf.size()) < 0) {
             Utils::log("cvMat cannot decode: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
-        BPGImageInfo img_info_s{};
-        BPGImageInfo* img_info = &img_info_s;
+        std::vector<ImageNode> frames;
+        BPGImageInfo img_info{};
+        bpg_decoder_get_info(decoderContext, &img_info);
 
-        bpg_decoder_get_info(img, img_info);
+        auto width = img_info.width;
+        auto height = img_info.height;
 
-        auto width = img_info->width;
-        auto height = img_info->height;
+        cv::Mat frame(height, width, CV_8UC4);
+        uint32_t* ptr = (uint32_t*)frame.data;
 
-        bpg_decoder_start(img, BPG_OUTPUT_FORMAT_RGBA32);
+        if (img_info.has_animation) {
+            while (true) {
+                if (bpg_decoder_start(decoderContext, BPG_OUTPUT_FORMAT_RGBA32) == 0) {
+                    for (uint32_t y = 0; y < height; y++) {
+                        bpg_decoder_get_line(decoderContext, ptr + width * y);
+                    }
+                    cv::cvtColor(frame, frame, cv::COLOR_RGBA2BGRA);
 
-        auto ret = cv::Mat(height, width, CV_8UC4);
-        uint32_t* ptr = (uint32_t*)ret.data;
-        for (uint32_t y = 0; y < height; y++) {
-            bpg_decoder_get_line(img, ptr + width * y);
+                    int num, den;
+                    bpg_decoder_get_frame_duration(decoderContext, &num, &den);
+                    frames.push_back({ frame.clone(), den == 0 ? 100 : (num * 1000 / den) });
+                }
+                else {
+                    break;
+                }
+            }
         }
-        cv::cvtColor(ret, ret, CV_RGBA2BGRA);
-        return ret;
+        else {
+            if (bpg_decoder_start(decoderContext, BPG_OUTPUT_FORMAT_RGBA32) == 0) {
+                for (uint32_t y = 0; y < height; y++) {
+                    bpg_decoder_get_line(decoderContext, ptr + width * y);
+                }
+                cv::cvtColor(frame, frame, cv::COLOR_RGBA2BGRA);
+                frames.push_back({ frame, 0 });
+            }
+        }
+
+        bpg_decoder_close(decoderContext);
+        return frames;
     }
 
     vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf) {
@@ -2006,6 +2028,21 @@ public:
             return ret;
         }
 
+        if (ext == L".bpg") { //静态或动画
+            ret.imgList = loadBPG(path, fileBuf);
+            if (ret.imgList.empty()) {
+                ret.imgList.push_back({ getErrorTipsMat(), 0 });
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+            }
+            else {
+                auto& img = ret.imgList.front().img;
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
+                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+            }
+            return ret;
+        }
+
         if (ext == L".jxl") { //静态或动画
             ret.imgList = loadJXL(path, fileBuf);
             if (ret.imgList.empty()) {
@@ -2067,9 +2104,6 @@ public:
         }
         else if (ext == L".jxr") {
             img = loadJXR(path, fileBuf);
-        }
-        else if (ext == L".bpg") {
-            img = loadBPG(path, fileBuf);
         }
         else if (ext == L".tga" || ext == L".hdr") {
             img = loadTGA_HDR(path, fileBuf);
