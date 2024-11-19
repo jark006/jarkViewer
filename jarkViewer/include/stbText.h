@@ -14,10 +14,9 @@ class stbText {
 public:
     const uint32_t IDR_TTF_DEFAULT = IDR_MSYHMONO_TTF;
 
-    stbText(const char* filePath) {
-        FILE* fontFile = fopen(filePath, "rb");
-        if (fontFile == nullptr)
-        {
+    stbText(const wchar_t* filePath) {
+        FILE* fontFile = _wfopen(filePath, L"rb");
+        if (fontFile == nullptr) {
             Utils::log("Can not open font file!");
             Init(IDR_TTF_DEFAULT, L"TTF");
             return;
@@ -26,22 +25,20 @@ public:
         auto fileSize = ftell(fontFile);
         fseek(fontFile, 0, SEEK_SET);
 
-        fontBuffer = (uint8_t*)malloc(fileSize);
-        if (fontBuffer == nullptr) {
-            Utils::log("Can not malloc fontBuffer!");
-            Init(IDR_TTF_DEFAULT, L"TTF");
-            return;
-        }
+        fontFileBuffer.resize(fileSize);
 
-        fread(fontBuffer, 1, fileSize, fontFile);
+        fread(fontFileBuffer.data(), 1, fileSize, fontFile);
         fclose(fontFile);
 
-        /* 初始化字体 */
-        if (!stbtt_InitFont(&info, fontBuffer, 0)) {
+        if (!stbtt_InitFont(&info, fontFileBuffer.data(), 0)) {
             Utils::log("stb init font failed");
             Init(IDR_TTF_DEFAULT, L"TTF");
             return;
         }
+
+        auto newBufferSize = 2ULL * fontSize * fontSize;
+        wordBuff.resize(newBufferSize);
+        memset(wordBuff.data(), 0, newBufferSize);
 
         scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
@@ -50,54 +47,30 @@ public:
         Init(IDR_TTF_DEFAULT, L"TTF");
     }
 
-    // 需要把字体文件加到资源文件里
     stbText(unsigned int idi, const wchar_t* type) {
         Init(idi, type);
     }
 
-    ~stbText() {
-        if (wordBuff && wordBuff != wordBuffDefault)
-            free(wordBuff);
-
-        if (fontBuffer)
-            free(fontBuffer);
-    }
+    ~stbText() {}
 
     void setLineGap(float percent) {
         lineGapPercent = percent;
     }
 
     void setSize(int newSize) {
-        if (wordBuff && wordBuff != wordBuffDefault)
-            free(wordBuff);
+        fontSize = newSize > 2048 ? 2048 : newSize;
 
-        if (newSize <= fontSize) {
-            fontSize = newSize;
-            wordBuff = wordBuffDefault;
-        }
-        else {
-            if (newSize > 2048)
-                newSize = 2048;
-
-            wordBuff = (uint8_t*)malloc((size_t)newSize * newSize * 2);
-            if (wordBuff) {
-                fontSize = newSize;
-            }
-            else {
-                fontSize = fontSizeDefault;
-                wordBuff = wordBuffDefault;
-            }
-        }
-
-        memset(wordBuff, 0, (size_t)fontSize * fontSize * 2);
+        auto newBufferSize = 2ULL * fontSize * fontSize;
+        wordBuff.resize(newBufferSize);
+        memset(wordBuff.data(), 0, newBufferSize);
 
         scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
 
 
     void saveTest(const char* pngPath, int code) {
-        stbtt_MakeCodepointBitmap(&info, wordBuff, fontSize, fontSize, fontSize, scale, scale, code);
-        stbi_write_png(pngPath, fontSize, fontSize, 1, wordBuff, fontSize);
+        stbtt_MakeCodepointBitmap(&info, wordBuff.data(), fontSize, fontSize, fontSize, scale, scale, code);
+        stbi_write_png(pngPath, fontSize, fontSize, 1, wordBuff.data(), fontSize);
     }
 
     // str : UTF-8
@@ -130,7 +103,7 @@ public:
             }
 
             if (codePoint == '\n') {
-                yOffset += int(fontSizeDefault * (1 + lineGapPercent));
+                yOffset += int(fontSize * (1 + lineGapPercent));
                 xOffset = x;
             }
             else {
@@ -182,7 +155,7 @@ public:
         if (W_cnt > W)
             W = W_cnt;
 
-        const int sizeAndGap = int(fontSize * (1 + lineGapPercent));//等宽字体
+        const int sizeAndGap = int(fontSize * (1 + lineGapPercent));// Mono Font
         H *= fontSize;
         W = sizeAndGap * W / 2;
 
@@ -231,32 +204,36 @@ public:
                 if (codePoint == '\n')
                     continue;
             }
-            
+
             xOffset += putWord(img, xOffset, yOffset, codePoint, color);
         }
     }
 
 private:
 
-    const static int fontSizeDefault = 16;
-    uint8_t wordBuffDefault[fontSizeDefault * fontSizeDefault * 2] = { 0 };
-
     float scale = 0.1f;
-    float lineGapPercent = 0.1f; // 左右间距 字符宽度的百分比
+    float lineGapPercent = 0.1f;
     stbtt_fontinfo info{};
 
-    int fontSize = fontSizeDefault;
-    uint8_t* wordBuff = wordBuffDefault;
-    uint8_t* fontBuffer = nullptr;
+    int fontSize = 16;
+
+    vector<uint8_t> wordBuff;
+    vector<uint8_t> fontFileBuffer;
 
     rcFileInfo rc;
 
     void Init(unsigned int idi, const wchar_t* type) {
         rc = Utils::GetResource(idi, type);
 
-        /* 初始化字体 */
-        if (!stbtt_InitFont(&info, rc.addr, 0))
+        if (!stbtt_InitFont(&info, rc.addr, 0)) {
             Utils::log("stb init font failed");
+            Init(IDR_TTF_DEFAULT, L"TTF");
+            return;
+        }
+
+        auto newBufferSize = 2ULL * fontSize * fontSize;
+        wordBuff.resize(newBufferSize);
+        memset(wordBuff.data(), 0, newBufferSize);
 
         scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
@@ -267,7 +244,7 @@ private:
 
         int wordWidth = c_x1 - c_x0;
         int wordHigh = c_y1 - c_y0;
-        stbtt_MakeCodepointBitmap(&info, wordBuff, wordWidth, wordHigh, fontSize, scale, scale, codePoint);
+        stbtt_MakeCodepointBitmap(&info, wordBuff.data(), wordWidth, wordHigh, fontSize, scale, scale, codePoint);
 
         y += fontSize + c_y0;
         x += c_x0;
@@ -293,7 +270,7 @@ private:
             }
         }
 
-        const int size = int(fontSize * (1 + lineGapPercent));//等宽字体
+        const int size = int(fontSize * (1 + lineGapPercent));
         return codePoint < 128 ? (size / 2) : size;
     }
 };

@@ -224,6 +224,11 @@ public:
 
     JarkViewerApp() {
         m_wndCaption = appName;
+
+        UINT dpi = GetDpiForSystem(); // 100%: 96 150%: 144 200%: 192
+        if (dpi >= 144) {
+            stb.setSize(dpi < 168 ? 24 : 32);
+        }
     }
 
     ~JarkViewerApp() {
