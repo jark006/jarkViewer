@@ -251,7 +251,7 @@ public:
 
     void initOpenFile(wstring filePath) {
         namespace fs = std::filesystem;
-        
+
         curFileIdx = -1;
         imgFileList.clear();
         imgDB.clear();
@@ -519,7 +519,7 @@ public:
             }break;
             }
         }
-        else{
+        else {
             switch (keyValue)
             {
             case VK_CONTROL: {
@@ -543,22 +543,62 @@ public:
             }break;
 
             case 'W': {
-                curPar.slideTarget.y += ((winHeight + winWidth) / 16);
+                int newTargetY = curPar.slideTarget.y + ((winHeight + winWidth) / 16);
+
+                int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+                int newTargetYMin = -newTargetYMax;
+                if (newTargetY > newTargetYMax) {
+                    newTargetY = newTargetYMax;
+                }
+                else if (newTargetY < newTargetYMin) {
+                    newTargetY = newTargetYMin;
+                }
+                curPar.slideTarget.y = newTargetY;
                 smoothShift = true;
             }break;
 
             case 'S': {
-                curPar.slideTarget.y -= ((winHeight + winWidth) / 16);
+                int newTargetY = curPar.slideTarget.y - ((winHeight + winWidth) / 16);
+
+                int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+                int newTargetYMin = -newTargetYMax;
+                if (newTargetY > newTargetYMax) {
+                    newTargetY = newTargetYMax;
+                }
+                else if (newTargetY < newTargetYMin) {
+                    newTargetY = newTargetYMin;
+                }
+                curPar.slideTarget.y = newTargetY;
                 smoothShift = true;
             }break;
 
             case 'A': {
-                curPar.slideTarget.x += ((winHeight + winWidth) / 16);
+                int newTargetX = curPar.slideTarget.x + ((winHeight + winWidth) / 16);
+
+                int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+                int newTargetXMin = -newTargetXMax;
+                if (newTargetX > newTargetXMax) {
+                    newTargetX = newTargetXMax;
+                }
+                else if (newTargetX < newTargetXMin) {
+                    newTargetX = newTargetXMin;
+                }
+                curPar.slideTarget.x = newTargetX;
                 smoothShift = true;
             }break;
 
             case 'D': {
-                curPar.slideTarget.x -= ((winHeight + winWidth) / 16);
+                int newTargetX = curPar.slideTarget.x - ((winHeight + winWidth) / 16);
+
+                int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+                int newTargetXMin = -newTargetXMax;
+                if (newTargetX > newTargetXMax) {
+                    newTargetX = newTargetXMax;
+                }
+                else if (newTargetX < newTargetXMin) {
+                    newTargetX = newTargetXMin;
+                }
+                curPar.slideTarget.x = newTargetX;
                 smoothShift = true;
             }break;
 
@@ -594,7 +634,7 @@ public:
 #endif // NDEBUG
             }break;
             }
-            }
+        }
     }
 
     void OnKeyUp(WPARAM keyValue) {
@@ -744,7 +784,7 @@ public:
 
         if (srcImg.type() == CV_8UC3) {
 #ifdef ENABLE_OMP
-            #pragma omp parallel for
+#pragma omp parallel for
 #endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
@@ -773,7 +813,7 @@ public:
         }
         else if (srcImg.type() == CV_8UC4) {
 #ifdef ENABLE_OMP
-            #pragma omp parallel for
+#pragma omp parallel for
 #endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
@@ -826,10 +866,10 @@ public:
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         drawCanvas(srcImg, tmpCanvas);
-        
+
         bool needDelay = (maxEdge <= 1920);
         for (int i = 0; i <= 90; i += ((100 - i) / 4)) {
-            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge- winWidth)/2, (maxEdge - winHeight) / 2, winWidth, winHeight));
+            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 2, (maxEdge - winHeight) / 2, winWidth, winHeight));
             handleExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
@@ -1001,9 +1041,30 @@ public:
         } break;
 
         case ActionENUM::slide: {
-            curPar.slideTarget.x += operateAction.x;
-            curPar.slideTarget.y += operateAction.y;
-            smoothShift = false;
+            int newTargetX = curPar.slideTarget.x + operateAction.x;
+            int newTargetY = curPar.slideTarget.y + operateAction.y;
+
+            int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+            int newTargetXMin = -newTargetXMax;
+            if (newTargetX > newTargetXMax) {
+                newTargetX = newTargetXMax;
+            }
+            else if (newTargetX < newTargetXMin) {
+                newTargetX = newTargetXMin;
+            }
+
+            int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
+            int newTargetYMin = -newTargetYMax;
+            if (newTargetY > newTargetYMax) {
+                newTargetY = newTargetYMax;
+            }
+            else if (newTargetY < newTargetYMin) {
+                newTargetY = newTargetYMin;
+            }
+
+            curPar.slideTarget.x = newTargetX;
+            curPar.slideTarget.y = newTargetY;
+
         } break;
 
         case ActionENUM::toggleExif: {
