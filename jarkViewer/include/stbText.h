@@ -14,42 +14,7 @@ class stbText {
 public:
     const uint32_t IDR_TTF_DEFAULT = IDR_MSYHMONO_TTF;
 
-    stbText(const wchar_t* filePath) {
-        FILE* fontFile = _wfopen(filePath, L"rb");
-        if (fontFile == nullptr) {
-            Utils::log("Can not open font file!");
-            Init(IDR_TTF_DEFAULT, L"TTF");
-            return;
-        }
-        fseek(fontFile, 0, SEEK_END);
-        auto fileSize = ftell(fontFile);
-        fseek(fontFile, 0, SEEK_SET);
-
-        fontFileBuffer.resize(fileSize);
-
-        fread(fontFileBuffer.data(), 1, fileSize, fontFile);
-        fclose(fontFile);
-
-        if (!stbtt_InitFont(&info, fontFileBuffer.data(), 0)) {
-            Utils::log("stb init font failed");
-            Init(IDR_TTF_DEFAULT, L"TTF");
-            return;
-        }
-
-        auto newBufferSize = 2ULL * fontSize * fontSize;
-        wordBuff.resize(newBufferSize);
-        memset(wordBuff.data(), 0, newBufferSize);
-
-        scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
-    }
-
-    stbText() {
-        Init(IDR_TTF_DEFAULT, L"TTF");
-    }
-
-    stbText(unsigned int idi, const wchar_t* type) {
-        Init(idi, type);
-    }
+    stbText() {}
 
     ~stbText() {}
 
@@ -58,13 +23,11 @@ public:
     }
 
     void setSize(int newSize) {
-        fontSize = newSize > 2048 ? 2048 : newSize;
+        fontSize = newSize > 2048 ? 2048 : (newSize < 16 ? 16 : newSize);
 
         auto newBufferSize = 2ULL * fontSize * fontSize;
         wordBuff.resize(newBufferSize);
         memset(wordBuff.data(), 0, newBufferSize);
-
-        scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
 
 
@@ -75,6 +38,13 @@ public:
 
     // str : UTF-8
     void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Vec4b& color) {
+        if (!hasInit) {
+            Init(IDR_TTF_DEFAULT, L"TTF");
+            hasInit = true;
+        }
+        if (scale == 0)
+            scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
+
         int codePoint = '?';
         int xOffset = x, yOffset = y;
         const auto len = strlen(str);
@@ -166,6 +136,13 @@ public:
     }
 
     void putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
+        if (!hasInit) {
+            Init(IDR_TTF_DEFAULT, L"TTF");
+            hasInit = true;
+        }
+        if (scale == 0)
+            scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
+
         int codePoint = '?';
         int xOffset = r.left, yOffset = r.top;
         int areaWidth = r.right - r.left;
@@ -210,8 +187,8 @@ public:
     }
 
 private:
-
-    float scale = 0.1f;
+    bool hasInit = false;
+    float scale = 0;
     float lineGapPercent = 0.1f;
     stbtt_fontinfo info{};
 
@@ -227,15 +204,16 @@ private:
 
         if (!stbtt_InitFont(&info, rc.addr, 0)) {
             Utils::log("stb init font failed");
-            Init(IDR_TTF_DEFAULT, L"TTF");
+            if (idi != IDR_TTF_DEFAULT) {
+                Utils::log("Reset to IDR_TTF_DEFAULT");
+                Init(IDR_TTF_DEFAULT, L"TTF");
+            }
             return;
         }
 
         auto newBufferSize = 2ULL * fontSize * fontSize;
         wordBuff.resize(newBufferSize);
         memset(wordBuff.data(), 0, newBufferSize);
-
-        scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
     }
 
     int putWord(cv::Mat& img, int x, int y, const int codePoint, const cv::Vec4b& color) {

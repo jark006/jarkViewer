@@ -1,6 +1,7 @@
 # 🌟 jarkViewer 
 
-![Version](https://img.shields.io/github/v/release/jark006/jarkViewer) ![Stars](https://img.shields.io/github/stars/jark006/jarkViewer) ![License](https://img.shields.io/github/license/jark006/jarkViewer) ![Issues](https://img.shields.io/github/issues/jark006/jarkViewer)  
+![Version](https://img.shields.io/github/v/release/jark006/jarkViewer) ![Stars](https://img.shields.io/github/stars/jark006/jarkViewer) ![License](https://img.shields.io/github/license/jark006/jarkViewer) ![Issues](https://img.shields.io/github/issues/jark006/jarkViewer)
+
 *一个高效便捷的多格式图片查看工具*
 
 ---
@@ -29,9 +30,8 @@
 
 ## 📂 支持的图像格式
 
-- **静态图像**：`png avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2
-` 等  
-- **动态图像**：`gif webp png apng jxl`  
+- **静态图像**：`avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2` 等
+- **动态图像**：`gif webp png apng jxl bpg`  
 - **RAW格式**：`crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw` 等  
 
 ---
