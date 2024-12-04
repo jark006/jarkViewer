@@ -221,6 +221,7 @@ public:
 
     CurImageParameter curPar;
     ExtraUIRes extraUIRes;
+    std::chrono::system_clock::time_point lastClickTimestamp;
 
     JarkViewerApp() {
         m_wndCaption = appName;
@@ -337,8 +338,6 @@ public:
             mouseIsPressing = false;
 
             if (cursorPos == CursorPos::centerArea) {
-                static auto lastClickTimestamp = system_clock::now();
-
                 auto now = system_clock::now();
                 auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
                 lastClickTimestamp = now;

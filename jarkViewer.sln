@@ -8,6 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项", "解决方案项", "{E69C9CB1-2B98-4093-872E-4F2F5D18A2CD}"
 	ProjectSection(SolutionItems) = preProject
 		associate_images.bat = associate_images.bat
+		associate_images_uninstall.bat = associate_images_uninstall.bat
 		README.md = README.md
 	EndProjectSection
 EndProject
