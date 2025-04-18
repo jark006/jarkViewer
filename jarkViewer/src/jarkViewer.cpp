@@ -525,7 +525,7 @@ public:
                 ctrlIsPressing = true;
             }break;
 
-            case VK_SPACE: { // 按空格复制图像信息到剪贴板
+            case 'C': { // 复制图像信息到剪贴板
                 Utils::copyToClipboard(Utils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
             }break;
 
@@ -613,7 +613,8 @@ public:
             case VK_LEFT: {
                 operateQueue.push({ ActionENUM::preImg });
             }break;
-
+                        
+            case VK_SPACE:
             case VK_NEXT:
             case VK_RIGHT: {
                 operateQueue.push({ ActionENUM::nextImg });

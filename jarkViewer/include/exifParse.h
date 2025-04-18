@@ -375,7 +375,7 @@ public:
             string prompt = AI_Prompt(path, buf);
 
             if ((exifStr.length() + xmpStr.length() + iptcStr.length() + prompt.length()) > 0)
-                return  "\n\n【按空格复制图像全部信息】\n" + exifStr + xmpStr + iptcStr + prompt;
+                return  "\n\n【按 C 键复制图像全部信息】\n" + exifStr + xmpStr + iptcStr + prompt;
             else
                 return "";
         }
