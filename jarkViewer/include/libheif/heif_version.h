@@ -28,10 +28,10 @@
 #define LIBHEIF_HEIF_VERSION_H
 
 /* Numeric representation of the version */
-#define LIBHEIF_NUMERIC_VERSION ((1<<24) | (17<<16) | (6<<8) | 0)
+#define LIBHEIF_NUMERIC_VERSION ((1<<24) | (19<<16) | (5<<8) | 0)
 
 /* Version string */
-#define LIBHEIF_VERSION "1.17.6"
+#define LIBHEIF_VERSION "1.19.5"
 
 
 

@@ -157,6 +157,13 @@
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
     <ClInclude Include="include\libbpg.h" />
+    <ClInclude Include="include\libheif\heif.h" />
+    <ClInclude Include="include\libheif\heif_cxx.h" />
+    <ClInclude Include="include\libheif\heif_items.h" />
+    <ClInclude Include="include\libheif\heif_plugin.h" />
+    <ClInclude Include="include\libheif\heif_properties.h" />
+    <ClInclude Include="include\libheif\heif_regions.h" />
+    <ClInclude Include="include\libheif\heif_version.h" />
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\lunasvg.h" />

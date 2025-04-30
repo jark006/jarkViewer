@@ -22,6 +22,9 @@
     <Filter Include="libavutil">
       <UniqueIdentifier>{23ce7870-000b-458a-a47b-c85027f16107}</UniqueIdentifier>
     </Filter>
+    <Filter Include="libheif">
+      <UniqueIdentifier>{ad933f3c-42ea-40f3-8b5f-ad21c636aa56}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Resource.h">
@@ -599,6 +602,27 @@
     </ClInclude>
     <ClInclude Include="include\lunasvg.h">
       <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_cxx.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_plugin.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_properties.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_regions.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_version.h">
+      <Filter>libheif</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libheif\heif_items.h">
+      <Filter>libheif</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

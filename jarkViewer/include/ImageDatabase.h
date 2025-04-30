@@ -2144,9 +2144,11 @@ public:
 
         if (ret.exifStr.empty()) {
             auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileSize);
-            const size_t idx = exifTmp.find("\n方向: ");
-            if (idx != string::npos) {
-                handleExifOrientation(exifTmp[idx + 9] - '0', img);
+            if (ext != L".heic" && ext != L".heif") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
+                const size_t idx = exifTmp.find("\n方向: ");
+                if (idx != string::npos) {
+                    handleExifOrientation(exifTmp[idx + 9] - '0', img);
+                }
             }
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize) + exifTmp;
         }

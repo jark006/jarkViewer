@@ -21,7 +21,7 @@
 #ifndef LIBHEIF_HEIF_PROPERTIES_H
 #define LIBHEIF_HEIF_PROPERTIES_H
 
-#include "libheif/heif.h"
+#include "heif.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,7 +37,10 @@ enum heif_item_property_type
   heif_item_property_type_transform_mirror = heif_fourcc('i', 'm', 'i', 'r'),
   heif_item_property_type_transform_rotation = heif_fourcc('i', 'r', 'o', 't'),
   heif_item_property_type_transform_crop = heif_fourcc('c', 'l', 'a', 'p'),
-  heif_item_property_type_image_size = heif_fourcc('i', 's', 'p', 'e')
+  heif_item_property_type_image_size = heif_fourcc('i', 's', 'p', 'e'),
+  heif_item_property_type_uuid = heif_fourcc('u', 'u', 'i', 'd'),
+  heif_item_property_type_tai_clock_info = heif_fourcc('t', 'a', 'i', 'c'),
+  heif_item_property_type_tai_timestamp = heif_fourcc('i', 't', 'a', 'i')
 };
 
 // Get the heif_property_id for a heif_item_id.
@@ -130,6 +133,59 @@ void heif_item_get_property_transform_crop_borders(const struct heif_context* co
                                                    heif_property_id propertyId,
                                                    int image_width, int image_height,
                                                    int* left, int* top, int* right, int* bottom);
+
+/**
+ * @param context     The heif_context for the file
+ * @param itemId      The image item id to which this property belongs.
+ * @param fourcc_type The short four-cc type of the property to add.
+ * @param uuid_type   If fourcc_type=='uuid', this should point to a 16-byte UUID type. It is ignored otherwise and can be NULL.
+ * @param data        Data to insert for this property (including a full-box header, if required for this box).
+ * @param size        Length of data in bytes.
+ * @param is_essential   Whether this property is essential (boolean).
+ * @param out_propertyId Outputs the id of the inserted property. Can be NULL.
+*/
+LIBHEIF_API
+struct heif_error heif_item_add_raw_property(const struct heif_context* context,
+                                             heif_item_id itemId,
+                                             uint32_t fourcc_type,
+                                             const uint8_t* uuid_type,
+                                             const uint8_t* data, size_t size,
+                                             int is_essential,
+                                             heif_property_id* out_propertyId);
+
+LIBHEIF_API
+struct heif_error heif_item_get_property_raw_size(const struct heif_context* context,
+                                                  heif_item_id itemId,
+                                                  heif_property_id propertyId,
+                                                  size_t* out_size);
+
+/**
+ * @param out_data User-supplied array to write the property data to. The required size of the output array is given by heif_item_get_property_raw_size().
+*/
+LIBHEIF_API
+struct heif_error heif_item_get_property_raw_data(const struct heif_context* context,
+                                                  heif_item_id itemId,
+                                                  heif_property_id propertyId,
+                                                  uint8_t* out_data);
+
+/**
+ * Get the extended type for an extended "uuid" box.
+ *
+ * This provides the UUID for the extended box.
+ *
+ * This method should only be called on properties of type `heif_item_property_type_uuid`.
+ *
+ * @param context the heif_context containing the HEIF file
+ * @param itemId the image item id to which this property belongs.
+ * @param propertyId the property index (1-based) to get the extended type for
+ * @param out_extended_type output of the call, must be a pointer to at least 16-bytes.
+ * @return heif_error_success or an error indicating the failure
+ */
+LIBHEIF_API
+struct heif_error heif_item_get_property_uuid_type(const struct heif_context* context,
+                                                   heif_item_id itemId,
+                                                   heif_property_id propertyId,
+                                                   uint8_t out_extended_type[16]);
 
 #ifdef __cplusplus
 }

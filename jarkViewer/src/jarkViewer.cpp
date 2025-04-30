@@ -21,7 +21,7 @@
 1. xpm和bpm格式
 */
 
-const wstring appName = L"JarkViewer v1.23";
+const wstring appName = L"JarkViewer v1.24";
 
 
 
