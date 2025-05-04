@@ -19,7 +19,7 @@
 #include "src/wp2/base.h"
 #include "src/wp2/decode.h"
 #include "libbpg.h"
-//#include "thorvg.h"
+#include "minizip/unzip.h"
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -77,6 +77,8 @@
 #pragma comment(lib, "plutovg.lib")
 #pragma comment(lib, "webp2.lib")
 #pragma comment(lib, "imageio.lib")
+#pragma comment(lib, "minizip.lib")
+#pragma comment(lib, "bz2.lib")
 
 // meson setup builddir --backend=vs --buildtype release -Dloaders="all" -Dtools="all"
 //#pragma comment(lib, "thorvg-0.lib")
@@ -92,7 +94,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm", L".bpg", 
+        L".jxr", L".wp2", L".pfm", L".bpg",L".livp",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -139,6 +141,8 @@ public:
     // vcpkg install libheif:x64-windows-static
     // vcpkg install libheif[hevc]:x64-windows-static
     cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf) {
+        if (buf.empty())
+            return cv::Mat();
 
         auto exifStr = std::format("路径: {}\n大小: {}",
             Utils::wstringToUtf8(path), Utils::size2Str(buf.size()));
@@ -1814,6 +1818,133 @@ public:
     }
 
 
+    std::pair<std::vector<uint8_t>,std::string> unzipLivp(std::vector<uint8_t>& livpFileBuff) {
+        // 创建内存文件句柄
+        zlib_filefunc_def memory_filefunc;
+        memset(&memory_filefunc, 0, sizeof(zlib_filefunc_def));
+
+        // 准备内存访问结构
+        struct membuf {
+            std::vector<uint8_t>& buffer;
+            size_t position;
+        } mem = { livpFileBuff, 0 };
+
+        memory_filefunc.opaque = (voidpf)&mem;
+
+        // 实现内存读取函数
+        memory_filefunc.zopen_file = [](voidpf opaque, const char* filename, int mode) -> voidpf {
+            return opaque;
+            };
+
+        memory_filefunc.zread_file = [](voidpf opaque, voidpf stream, void* buf, uLong size) -> uLong {
+            membuf* mem = (membuf*)opaque;
+            size_t remaining = mem->buffer.size() - mem->position;
+            size_t to_read = (size < remaining) ? size : remaining;
+            if (to_read > 0) {
+                memcpy(buf, mem->buffer.data() + mem->position, to_read);
+                mem->position += to_read;
+            }
+            return to_read;
+            };
+
+        memory_filefunc.zwrite_file = [](voidpf, voidpf, const void*, uLong) -> uLong {
+            return 0; // 不需要写入
+            };
+
+        memory_filefunc.ztell_file = [](voidpf opaque, voidpf stream) -> long {
+            return (long)((membuf*)opaque)->position;
+            };
+
+        memory_filefunc.zseek_file = [](voidpf opaque, voidpf stream, uLong offset, int origin) -> long {
+            membuf* mem = (membuf*)opaque;
+            size_t new_position = 0;
+
+            switch (origin) {
+            case ZLIB_FILEFUNC_SEEK_CUR:
+                new_position = mem->position + offset;
+                break;
+            case ZLIB_FILEFUNC_SEEK_END:
+                new_position = mem->buffer.size() + offset;
+                break;
+            case ZLIB_FILEFUNC_SEEK_SET:
+                new_position = offset;
+                break;
+            default:
+                return -1;
+            }
+
+            if (new_position > mem->buffer.size()) {
+                return -1;
+            }
+
+            mem->position = new_position;
+            return 0;
+            };
+
+        memory_filefunc.zclose_file = [](voidpf, voidpf) -> int {
+            return 0; // 不需要关闭
+            };
+
+        memory_filefunc.zerror_file = [](voidpf, voidpf) -> int {
+            return 0; // 无错误
+            };
+
+        // 打开ZIP文件
+        unzFile zipfile = unzOpen2("__memory__", &memory_filefunc);
+        if (!zipfile) {
+            return {}; // 打开失败返回空vector
+        }
+
+        // 遍历ZIP文件中的文件
+        if (unzGoToFirstFile(zipfile) != UNZ_OK) {
+            unzClose(zipfile);
+            return {};
+        }
+
+        std::vector<uint8_t> image_data;
+        std::string extName;
+        do {
+            unz_file_info file_info;
+            char filename[256];
+
+            if (unzGetCurrentFileInfo(zipfile, &file_info, filename, sizeof(filename), nullptr, 0, nullptr, 0) != UNZ_OK) {
+                continue;
+            }
+
+            std::string file_name(filename);
+            std::transform(file_name.begin(), file_name.end(), file_name.begin(), ::tolower);
+
+            // 检查是否是图像文件
+            if (file_name.ends_with(".jpg") || file_name.ends_with(".jpeg") ||
+                file_name.ends_with(".heic") || file_name.ends_with(".heif")) {
+
+                // 打开当前文件
+                if (unzOpenCurrentFile(zipfile) != UNZ_OK) {
+                    continue;
+                }
+
+                // 读取文件内容
+                image_data.resize(file_info.uncompressed_size);
+                int bytes_read = unzReadCurrentFile(zipfile, image_data.data(), file_info.uncompressed_size);
+
+                unzCloseCurrentFile(zipfile);
+
+                if (bytes_read > 0 && static_cast<uLong>(bytes_read) == file_info.uncompressed_size) {
+                    extName = file_name.size() >= 4 ? file_name.substr(file_name.length() - 4, 4) : "";
+                    for (auto& c : extName)	c = std::tolower(c);
+                    break; // 成功读取图像文件
+                }
+                else {
+                    image_data.clear(); // 读取失败，清空数据
+                }
+            }
+        } while (unzGoToNextFile(zipfile) == UNZ_OK);
+
+        unzClose(zipfile);
+        return { image_data, extName };
+    }
+
+
     struct PngSource {
         const uint8_t* data;
         size_t size;
@@ -2018,12 +2149,12 @@ public:
             ret.imgList = loadGif(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getErrorTipsMat(), 0 });
-                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
-                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
             }
             else {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
             }
             return ret;
         }
@@ -2032,13 +2163,13 @@ public:
             ret.imgList = loadBPG(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getErrorTipsMat(), 0 });
-                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
-                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
             }
             else {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
-                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+                    + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
             }
             return ret;
         }
@@ -2047,13 +2178,13 @@ public:
             ret.imgList = loadJXL(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getErrorTipsMat(), 0 });
-                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
-                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
             }
             else {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
-                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+                    + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
             }
             return ret;
         }
@@ -2062,13 +2193,13 @@ public:
             ret.imgList = loadWP2(path, fileBuf);
             if (ret.imgList.empty()) {
                 ret.imgList.push_back({ getErrorTipsMat(), 0 });
-                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize) +
-                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileSize > 32 ? 32 : fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
+                    "\n文件头32字节: " + Utils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
             }
             else {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
-                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+                    + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
             }
             return ret;
         }
@@ -2077,8 +2208,8 @@ public:
             ret.imgList = loadWebp(path, fileBuf);
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
-                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+                    + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
@@ -2088,15 +2219,31 @@ public:
             ret.imgList = loadApng(path, fileBuf); //若是静态图像则不解码，返回空
             if (!ret.imgList.empty()) {
                 auto& img = ret.imgList.front().img;
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize)
-                    + ExifParse::getExif(path, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+                    + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
                 return ret;
             }
             // 若空白则往下执行，使用opencv读取
         }
 
         cv::Mat img;
-        if (ext == L".heic" || ext == L".heif") {
+
+        if (ext == L".livp") {
+            auto [picBuff, extName] = unzipLivp(fileBuf);
+            if (picBuff.empty()) {
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+                if (img.empty()) {
+                    img = getErrorTipsMat();
+                }
+            }
+            else {
+                fileBuf = std::move(picBuff);
+                if (extName == "heic" || extName == "heif")
+                    img = loadHeic(path, fileBuf);
+                else if (extName == ".jpg" || extName == "jpeg")
+                    img = loadMat(path, fileBuf);
+            }
+        }else if (ext == L".heic" || ext == L".heif") {
             img = loadHeic(path, fileBuf);
         }
         else if (ext == L".avif" || ext == L".avifs") {
@@ -2110,7 +2257,7 @@ public:
         }
         else if (ext == L".svg") {
             img = loadSVG(path, fileBuf);
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
             if (img.empty()) {
                 img = getErrorTipsMat();
             }
@@ -2127,10 +2274,10 @@ public:
             img = loadPFM(path, fileBuf);
             if (img.empty()) {
                 img = getErrorTipsMat();
-                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
             }
             else {
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize);
+                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
             }
         }
         else if (supportRaw.contains(ext)) {
@@ -2143,14 +2290,14 @@ public:
             img = loadMat(path, fileBuf);
 
         if (ret.exifStr.empty()) {
-            auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileSize);
-            if (ext != L".heic" && ext != L".heif") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
+            auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
+            if (ext != L".heic" && ext != L".heif" && ext != L".livp") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
                 const size_t idx = exifTmp.find("\n方向: ");
                 if (idx != string::npos) {
                     handleExifOrientation(exifTmp[idx + 9] - '0', img);
                 }
             }
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileSize) + exifTmp;
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
         }
 
         if (img.empty())

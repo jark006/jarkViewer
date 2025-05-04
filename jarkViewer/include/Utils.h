@@ -19,6 +19,7 @@ using std::string_view;
 using std::unordered_set;
 using std::unordered_map;
 using std::cout;
+using std::cerr;
 using std::endl;
 
 #include "framework.h"
