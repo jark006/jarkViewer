@@ -201,6 +201,12 @@ public:
                 }
             }
 
+            if (tagName == "Exif.Photo.MakerNote") {
+                if (tagValue.length() > 0 && tagValue.starts_with("Apple iOS")) {
+                    tagValue = "Apple IOS";
+                }
+            }
+
             if (tagName == "Exif.GPSInfo.GPSLatitude" || tagName == "Exif.GPSInfo.GPSLongitude") {
                 auto firstSpaceIdx = tagValue.find_first_of(' ');
                 auto secondSpaceIdx = tagValue.find_last_of(' ');
@@ -257,7 +263,7 @@ public:
             else oss << tmp;
         }
 
-        return oss.str()+ossEnd.str();
+        return oss.str() + ossEnd.str();
     }
 
     static std::string xmpDataToString(const std::wstring& path, const Exiv2::XmpData& xmpData) {

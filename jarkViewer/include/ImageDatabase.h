@@ -41,10 +41,13 @@
 #pragma comment(lib, "heif.lib")
 #pragma comment(lib, "libde265.lib")
 #pragma comment(lib, "x265-static.lib")
+
+// avif
 #pragma comment(lib, "avif.lib")
 #pragma comment(lib, "yuv.lib")
 #pragma comment(lib, "dav1d.lib")
 #pragma comment(lib, "aom.lib")
+
 #pragma comment(lib, "gif.lib")
 #pragma comment(lib, "raw.lib")
 #pragma comment(lib, "OpenGL32.Lib")
@@ -109,7 +112,28 @@ public:
         L".kdc", // Kodak
         L".x3f", // Sigma
         L".mrw", // Minolta
-        L".3fr"  // Hasselblad
+        L".3fr", // Hasselblad
+        L".ari", // ARRIRAW
+        L".bay", // Casio
+        L".cap", // Phase One
+        L".dcr", // Kodak
+        L".dcs", // Kodak
+        L".drf", // DNG+
+        L".eip", // Enhanced Image Package, Phase One
+        L".erf", // Epson
+        L".fff", // Imacon/Hasselblad
+        L".gpr", // GoPro
+        L".iiq", // Phase One
+        L".k25", // Kodak
+        L".mdc", // Minolta
+        L".mef", // Mamiya
+        L".mos", // Leaf
+        L".nrw", // Nikon
+        L".ptx", // Pentax
+        L".r3d", // Red Digital Cinema
+        L".rwl", // Leica
+        L".rwz", // Leica
+        L".srw", // Samsung
     };
 
     ImageDatabase() {
@@ -220,6 +244,8 @@ public:
             avifImageDestroy(image);
             return cv::Mat();
         }
+
+        decoder->strictFlags = AVIF_STRICT_DISABLED;  // 严格模式下，老旧的不标准格式会解码失败
 
         avifResult result = avifDecoderReadMemory(decoder, image, buf.data(), buf.size());
         if (result != AVIF_RESULT_OK) {
@@ -2231,17 +2257,21 @@ public:
         if (ext == L".livp") {
             auto [picBuff, extName] = unzipLivp(fileBuf);
             if (picBuff.empty()) {
-                ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+                ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
                 if (img.empty()) {
                     img = getErrorTipsMat();
                 }
             }
             else {
                 fileBuf = std::move(picBuff);
-                if (extName == "heic" || extName == "heif")
+                if (extName == "heic" || extName == "heif") {
                     img = loadHeic(path, fileBuf);
-                else if (extName == ".jpg" || extName == "jpeg")
+                    ext = L".heic";
+                }
+                else if (extName == ".jpg" || extName == "jpeg") {
                     img = loadMat(path, fileBuf);
+                    ext = L".jpg";
+                }
             }
         }else if (ext == L".heic" || ext == L".heif") {
             img = loadHeic(path, fileBuf);
@@ -2291,7 +2321,7 @@ public:
 
         if (ret.exifStr.empty()) {
             auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-            if (ext != L".heic" && ext != L".heif" && ext != L".livp") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
+            if (ext != L".heic" && ext != L".heif") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
                 const size_t idx = exifTmp.find("\n方向: ");
                 if (idx != string::npos) {
                     handleExifOrientation(exifTmp[idx + 9] - '0', img);
