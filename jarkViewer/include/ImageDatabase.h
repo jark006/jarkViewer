@@ -26,6 +26,11 @@
 #include "stb_image.h"
 #endif // !STB_IMAGE_IMPLEMENTATION
 
+#ifndef QOI_IMPLEMENTATION
+#define QOI_IMPLEMENTATION
+#include "qoi.h"
+#endif
+
 #pragma comment(lib, "IlmImf.lib")
 #pragma comment(lib, "ippiw.lib")
 #pragma comment(lib, "ippicvmt.lib")
@@ -97,7 +102,7 @@ public:
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
         L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
         L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm", L".bpg",L".livp",
+        L".jxr", L".wp2", L".pfm", L".bpg", L".livp", L".qoi",
     };
 
     static inline const unordered_set<wstring> supportRaw {
@@ -1844,6 +1849,30 @@ public:
     }
 
 
+    cv::Mat loadQOI(const wstring& path, const vector<uchar>& buf) {
+        cv::Mat mat;
+        qoi_desc desc;
+        auto pixels = qoi_decode(buf.data(), buf.size(), &desc, 0);
+        if (!pixels)
+            return mat;
+
+        switch (desc.channels) {
+        case 3:  // RGB
+            mat = cv::Mat(desc.height, desc.width, CV_8UC3, pixels);
+            cvtColor(mat, mat, cv::COLOR_RGB2BGR);  // QOI使用RGB格式，OpenCV默认使用BGR
+            break;
+        case 4:  // RGBA
+            mat = cv::Mat(desc.height, desc.width, CV_8UC4, pixels);
+            cvtColor(mat, mat, cv::COLOR_RGBA2BGRA);  // 转换RGBA到BGRA
+            break;
+        }
+
+        auto ret = mat.clone();
+        free(pixels);// 释放QOI解码分配的内存
+        return ret;
+    }
+
+
     std::pair<std::vector<uint8_t>,std::string> unzipLivp(std::vector<uint8_t>& livpFileBuff) {
         // 创建内存文件句柄
         zlib_filefunc_def memory_filefunc;
@@ -2287,6 +2316,13 @@ public:
         }
         else if (ext == L".svg") {
             img = loadSVG(path, fileBuf);
+            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+            if (img.empty()) {
+                img = getErrorTipsMat();
+            }
+        }
+        else if (ext == L".qoi") {
+            img = loadQOI(path, fileBuf);
             ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
             if (img.empty()) {
                 img = getErrorTipsMat();
