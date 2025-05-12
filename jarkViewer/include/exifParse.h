@@ -313,7 +313,7 @@ public:
 
             idx = prompt.find("Negative prompt");
             if (idx != string::npos) {
-                prompt.replace(idx, 16, "\n反提示词");
+                prompt.replace(idx, 16, "\n反提示词: ");
             }
 
             idx = prompt.find("\nSteps:");
@@ -343,7 +343,7 @@ public:
 
             idx = prompt.find("\nNegative prompt");
             if (idx != string::npos) {
-                prompt.replace(idx, 16, "\n\n反提示词");
+                prompt.replace(idx, 16, "\n\n反提示词: ");
             }
 
             idx = prompt.find("\nSteps:");

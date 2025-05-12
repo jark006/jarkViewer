@@ -2088,46 +2088,96 @@ public:
             return frames;
         }
 
-        // 处理每一帧
-        for (png_uint_32 frame = 0; frame < num_frames; ++frame) {
-            png_read_frame_head(png, info); // 若是静态图像(num_frames==1)，这里有会问题
+        cv::Mat previous_frame(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        cv::Mat canvas(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        cv::Mat current_tile;   // 存储当前帧的局部图像（可能小于画布）
+        cv::Mat output_frame;
+
+        for (png_uint_32 frameIdx = 0; frameIdx < num_frames; ++frameIdx) {
+            png_read_frame_head(png, info);
 
             png_uint_32 frame_width = 0, frame_height = 0;
             png_uint_32 frame_x_offset = 0, frame_y_offset = 0;
             png_uint_16 delay_num = 0, delay_den = 0;
             png_byte dispose_op = 0, blend_op = 0;
 
-            png_get_next_frame_fcTL(png, info, &frame_width, &frame_height, &frame_x_offset, &frame_y_offset, &delay_num, &delay_den, &dispose_op, &blend_op);
+            png_get_next_frame_fcTL(png, info, &frame_width, &frame_height, &frame_x_offset, &frame_y_offset,
+                &delay_num, &delay_den, &dispose_op, &blend_op);
 
-            // 计算延迟时间（毫秒）
-            int delay = delay_num * 1000 / (delay_den ? delay_den : 100);
+            int delay_ms = delay_num * 1000 / (delay_den ? delay_den : 100);
 
-            // 创建完整尺寸的Mat
-            cv::Mat full_frame(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+            // 保存渲染前的画布状态（用于DISPOSE_OP_PREVIOUS情况）
+            cv::Mat canvas_before_frame;
+            if (dispose_op == 2) { // PNG_DISPOSE_OP_PREVIOUS
+                canvas.copyTo(canvas_before_frame);
+            }
 
-            // 读取当前帧数据
+            // 读取当前帧的数据到current_tile
+            current_tile = cv::Mat(frame_height, frame_width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+
+            // 为当前帧创建行指针数组
             std::vector<png_bytep> row_pointers(frame_height);
             for (png_uint_32 y = 0; y < frame_height; ++y) {
-                row_pointers[y] = new png_byte[png_get_rowbytes(png, info)];
+                row_pointers[y] = current_tile.data + y * current_tile.step;
             }
 
+            // 读取当前帧的图像数据
             png_read_image(png, row_pointers.data());
 
-            // 将帧数据复制到完整尺寸的Mat中
-            for (png_uint_32 y = 0; y < frame_height; ++y) {
-                std::memcpy(full_frame.ptr(frame_y_offset + y) + frame_x_offset * 4, row_pointers[y], 4ULL * frame_width);
+            // 根据blend_op处理当前帧和画布的混合
+            cv::Rect frame_rect(frame_x_offset, frame_y_offset, frame_width, frame_height);
+
+            if (blend_op == 0) { // PNG_BLEND_OP_SOURCE - 直接替换
+                // 创建ROI并直接复制
+                cv::Mat roi = canvas(frame_rect);
+                current_tile.copyTo(roi);
+            }
+            else { // PNG_BLEND_OP_OVER - Alpha混合
+                // 对每个像素进行Alpha混合
+                for (png_uint_32 y = 0; y < frame_height; ++y) {
+                    for (png_uint_32 x = 0; x < frame_width; ++x) {
+                        // 跳过画布边界外的像素
+                        if (frame_x_offset + x >= width || frame_y_offset + y >= height)
+                            continue;
+
+                        cv::Vec4b& canvas_pixel = canvas.at<cv::Vec4b>(frame_y_offset + y, frame_x_offset + x);
+                        const cv::Vec4b& tile_pixel = current_tile.at<cv::Vec4b>(y, x);
+
+                        // Alpha混合 RGBA格式：R=0, G=1, B=2, A=3
+                        float alpha_src = tile_pixel[3] / 255.0f;
+                        float alpha_dst = canvas_pixel[3] / 255.0f;
+                        float alpha_out = alpha_src + alpha_dst * (1 - alpha_src);
+
+                        if (alpha_out > 0) {
+                            for (int c = 0; c < 3; ++c) { // RGB通道
+                                canvas_pixel[c] = static_cast<uchar>(
+                                    (tile_pixel[c] * alpha_src + canvas_pixel[c] * alpha_dst * (1 - alpha_src)) / alpha_out
+                                    );
+                            }
+                            // 更新Alpha通道
+                            canvas_pixel[3] = static_cast<uchar>(alpha_out * 255);
+                        }
+                    }
+                }
             }
 
-            // 释放行指针
-            for (png_uint_32 y = 0; y < frame_height; ++y) {
-                delete[] row_pointers[y];
+            // 保存当前帧作为输出
+            canvas.copyTo(output_frame);
+
+            // 根据dispose_op为下一帧准备画布
+            if (dispose_op == 1) { // PNG_DISPOSE_OP_BACKGROUND
+                // 清除当前帧区域为透明
+                cv::Mat roi = canvas(frame_rect);
+                roi = cv::Scalar(0, 0, 0, 0);
             }
+            else if (dispose_op == 2) { // PNG_DISPOSE_OP_PREVIOUS
+                // 恢复到渲染当前帧之前的状态
+                canvas_before_frame.copyTo(canvas);
+            }
+            // dispose_op == 0 (PNG_DISPOSE_OP_NONE)情况下什么都不做，保留当前画布
 
-            // 将RGBA转换为BGRA
-            cv::cvtColor(full_frame, full_frame, cv::COLOR_RGBA2BGRA);
-
-            // 添加到结果vector
-            frames.push_back({ full_frame, delay });
+            cv::cvtColor(output_frame, output_frame, cv::COLOR_RGBA2BGRA);
+            frames.push_back({ output_frame.clone(), delay_ms }); // 注意要clone以保持独立副本
         }
 
         // 清理

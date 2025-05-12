@@ -21,7 +21,7 @@
 1. xpm和bpm格式
 */
 
-const wstring appName = L"JarkViewer v1.24";
+const wstring appName = L"JarkViewer v1.25";
 
 
 
@@ -510,10 +510,22 @@ public:
             switch (keyValue)
             {
             case 'O': { // Ctrl + O
-                auto path = Utils::SelectFile(m_hWnd);
-                if (!path.empty()) {
-                    initOpenFile(path);
+                wstring filePath = Utils::SelectFile(m_hWnd);
+                if (!filePath.empty()) {
+                    initOpenFile(filePath);
                     operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }break;
+            case 'S': { // Ctrl + S
+                const auto& imgs = curPar.framesPtr->imgList;
+                wstring& filePath = imgFileList[curFileIdx];
+                if (imgs.size() > 1) {
+                    auto dotIdx = filePath.find_last_of(L".");
+                    if (dotIdx == string::npos)
+                        dotIdx = filePath.size();
+                    for (int i = 0; i < imgs.size(); i++) {
+                        cv::imwrite(Utils::wstringToAnsi(std::format(L"{}_{:02}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+                    }
                 }
             }break;
             }
