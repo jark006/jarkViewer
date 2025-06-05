@@ -524,7 +524,7 @@ public:
                     if (dotIdx == string::npos)
                         dotIdx = filePath.size();
                     for (int i = 0; i < imgs.size(); i++) {
-                        cv::imwrite(Utils::wstringToAnsi(std::format(L"{}_{:02}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+                        cv::imwrite(Utils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
                     }
                 }
             }break;
