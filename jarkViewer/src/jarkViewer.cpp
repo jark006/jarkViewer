@@ -528,6 +528,10 @@ public:
                     }
                 }
             }break;
+            case 'C': {
+                const auto& imgs = curPar.framesPtr->imgList;
+                Utils::copyImageToClipboard(imgs.front().img);
+            }break;
             }
         }
         else {

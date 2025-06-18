@@ -427,6 +427,192 @@ public:
         return true;
     }
 
+
+    static void copyImageToClipboard(const cv::Mat& image) {
+        if (image.empty()) {
+            MessageBoxW(NULL, L"图像为空，无法复制到剪贴板", L"错误", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        cv::Mat processedImage;
+
+        // 转换为BGRA格式
+        try {
+            if (image.channels() == 1) {
+                cv::cvtColor(image, processedImage, cv::COLOR_GRAY2BGRA);
+            }
+            else if (image.channels() == 3) {
+                cv::cvtColor(image, processedImage, cv::COLOR_BGR2BGRA);
+            }
+            else if (image.channels() == 4) {
+                processedImage = image.clone();
+            }
+            else {
+                MessageBoxW(NULL, std::format(L"图像通道: {}", processedImage.channels()).c_str(), L"不支持的图像格式", MB_OK | MB_ICONERROR);
+                return;
+            }
+        }
+        catch (const cv::Exception& e) {
+            MessageBoxW(NULL, Utils::utf8ToWstring(e.what()).c_str(), L"图像格式转换失败", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        // 检查并缩放图像（保持宽高比）
+        if (processedImage.cols > 16384 || processedImage.rows > 16384) {
+            try {
+                double scale = std::min(16384.0 / processedImage.cols, 16384.0 / processedImage.rows);
+                int newWidth = static_cast<int>(processedImage.cols * scale);
+                int newHeight = static_cast<int>(processedImage.rows * scale);
+                cv::resize(processedImage, processedImage, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
+                MessageBoxW(NULL, std::format(L"图像分辨率太大，将缩放到 {}x{}", processedImage.cols, processedImage.rows).c_str(), L"提示", MB_OK | MB_ICONWARNING);
+            }
+            catch (const cv::Exception& e) {
+                MessageBoxW(NULL, L"图像缩放失败", L"错误", MB_OK | MB_ICONERROR);
+                return;
+            }
+        }
+
+        const int width = processedImage.cols;
+        const int height = processedImage.rows;
+
+
+        // 打开剪贴板
+        if (!OpenClipboard(NULL)) {
+            MessageBoxW(NULL, L"无法打开剪贴板", L"错误", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        // 清空剪贴板
+        if (!EmptyClipboard()) {
+            CloseClipboard();
+            MessageBoxW(NULL, L"清空剪贴板失败", L"错误", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        size_t dibStride = width * 4ULL;
+        int imageDataSize = dibStride * height;
+
+        // 创建CF_DIBV5格式数据
+        int dibv5Size = sizeof(BITMAPV5HEADER) + imageDataSize;
+        HGLOBAL hDibV5 = GlobalAlloc(GMEM_MOVEABLE, dibv5Size);
+        if (hDibV5) {
+            LPVOID pDibV5 = GlobalLock(hDibV5);
+            if (pDibV5) {
+                // 填充BITMAPV5HEADER
+                BITMAPV5HEADER* pBmpV5Header = static_cast<BITMAPV5HEADER*>(pDibV5);
+                ZeroMemory(pBmpV5Header, sizeof(BITMAPV5HEADER));
+
+                pBmpV5Header->bV5Size = sizeof(BITMAPV5HEADER);
+                pBmpV5Header->bV5Width = width;
+                pBmpV5Header->bV5Height = height;
+                pBmpV5Header->bV5Planes = 1;
+                pBmpV5Header->bV5BitCount = 32;
+                pBmpV5Header->bV5Compression = BI_BITFIELDS;
+                pBmpV5Header->bV5SizeImage = imageDataSize;
+                pBmpV5Header->bV5XPelsPerMeter = 0;
+                pBmpV5Header->bV5YPelsPerMeter = 0;
+                pBmpV5Header->bV5ClrUsed = 0;
+                pBmpV5Header->bV5ClrImportant = 0;
+
+                // 设置颜色掩码 (BGRA格式)
+                pBmpV5Header->bV5RedMask = 0x00FF0000;
+                pBmpV5Header->bV5GreenMask = 0x0000FF00;
+                pBmpV5Header->bV5BlueMask = 0x000000FF;
+                pBmpV5Header->bV5AlphaMask = 0xFF000000;
+
+                // 设置颜色空间
+                pBmpV5Header->bV5CSType = LCS_sRGB;
+                pBmpV5Header->bV5Intent = LCS_GM_GRAPHICS;
+
+                // 复制图像数据
+                BYTE* pImageData = static_cast<BYTE*>(pDibV5) + sizeof(BITMAPV5HEADER);
+                for (int y = 0; y < height; y++) {
+                    const BYTE* srcRow = processedImage.ptr<BYTE>(height - 1 - y);
+                    BYTE* dstRow = pImageData + y * dibStride;
+                    memcpy(dstRow, srcRow, width * 4ULL);
+                }
+
+                GlobalUnlock(hDibV5);
+
+                // 设置到剪贴板
+                if (!SetClipboardData(CF_DIBV5, hDibV5)) {
+                    GlobalFree(hDibV5);
+                }
+            }
+            else {
+                GlobalFree(hDibV5);
+            }
+        }
+
+        // 将透明背景混合白色背景
+        for (int y = 0; y < height; y++) {
+            BYTE* srcRow = processedImage.ptr<BYTE>(y);
+
+            for (int x = 0; x < width; x++) {
+                BYTE b = srcRow[x * 4];
+                BYTE g = srcRow[x * 4 + 1];
+                BYTE r = srcRow[x * 4 + 2];
+                BYTE a = srcRow[x * 4 + 3];
+
+                if (a == 0) {
+                    srcRow[x * 4] = 255;
+                    srcRow[x * 4 + 1] = 255;
+                    srcRow[x * 4 + 2] = 255;
+                    srcRow[x * 4 + 3] = 255;
+                }
+                else if (a != 255) {
+                    // Alpha混合白色背景 (255, 255, 255)
+                    srcRow[x * 4] = static_cast<BYTE>((b * a + 255 * (255 - a) + 255) >> 8);     // B
+                    srcRow[x * 4 + 1] = static_cast<BYTE>((g * a + 255 * (255 - a) + 255) >> 8); // G
+                    srcRow[x * 4 + 2] = static_cast<BYTE>((r * a + 255 * (255 - a) + 255) >> 8); // R
+                    srcRow[x * 4 + 3] = 255; // Alpha设为不透明
+                }
+            }
+        }
+
+        // 创建CF_DIB格式数据
+        int dibSize = sizeof(BITMAPINFOHEADER) + imageDataSize;
+        HGLOBAL hDib = GlobalAlloc(GMEM_MOVEABLE, dibSize);
+        if (hDib) {
+            LPVOID pDib = GlobalLock(hDib);
+            if (pDib) {
+                // 填充BITMAPINFOHEADER
+                BITMAPINFOHEADER* pBmpHeader = static_cast<BITMAPINFOHEADER*>(pDib);
+                ZeroMemory(pBmpHeader, sizeof(BITMAPINFOHEADER));
+
+                pBmpHeader->biSize = sizeof(BITMAPINFOHEADER);
+                pBmpHeader->biWidth = width;
+                pBmpHeader->biHeight = height;
+                pBmpHeader->biPlanes = 1;
+                pBmpHeader->biBitCount = 32;
+                pBmpHeader->biCompression = BI_RGB; // CF_DIB通常使用BI_RGB
+                pBmpHeader->biSizeImage = imageDataSize;
+
+                // 复制图像数据
+                BYTE* pImageData = static_cast<BYTE*>(pDib) + sizeof(BITMAPINFOHEADER);
+                for (int y = 0; y < height; y++) {
+                    const BYTE* srcRow = processedImage.ptr<BYTE>(height - 1 - y);
+                    BYTE* dstRow = pImageData + y * dibStride;
+                    memcpy(dstRow, srcRow, width * 4ULL);
+                }
+
+                GlobalUnlock(hDib);
+
+                // 设置到剪贴板
+                if (!SetClipboardData(CF_DIB, hDib)) {
+                    GlobalFree(hDib);
+                }
+            }
+            else {
+                GlobalFree(hDib);
+            }
+        }
+
+        // 关闭剪贴板
+        CloseClipboard();
+    }
+
+
     template<class Interface>
     static inline void SafeRelease(Interface*& pInterfaceToRelease) {
         if (pInterfaceToRelease == nullptr)
