@@ -159,7 +159,7 @@ public:
 class ExtraUIRes
 {
 public:
-    cv::Mat imgData, leftArrow, RightArrow, leftRotate, rightRotate;
+    cv::Mat imgData, leftArrow, RightArrow, leftRotate, rightRotate, printer;
 
     ExtraUIRes() {
         rcFileInfo rc;
@@ -179,6 +179,10 @@ public:
         rc = Utils::GetResource(IDB_PNG5, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         rightRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+
+        rc = Utils::GetResource(IDB_PNG6, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        printer = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
     }
     ~ExtraUIRes() {}
 };
@@ -313,6 +317,8 @@ public:
                 operateQueue.push({ ActionENUM::rotateLeft });
             else if (cursorPos == CursorPos::rightUp)
                 operateQueue.push({ ActionENUM::rotateRight });
+            else if (cursorPos == CursorPos::leftDown)
+                operateQueue.push({ ActionENUM::printImage });
             return;
         }
 
@@ -436,7 +442,7 @@ public:
                 break;
 
             case CursorPos::leftDown:
-                extraUIFlag = ShowExtraUI::none;
+                extraUIFlag = ShowExtraUI::printer;
                 operateQueue.push({ ActionENUM::normalFresh });
                 break;
 
@@ -531,6 +537,10 @@ public:
             case 'C': {
                 const auto& imgs = curPar.framesPtr->imgList;
                 Utils::copyImageToClipboard(imgs.front().img);
+            }break;
+            case 'P': {
+                const auto& imgs = curPar.framesPtr->imgList;
+                Utils::PrintMatImage(imgs.front().img);
             }break;
             }
         }
@@ -964,6 +974,15 @@ public:
             }
         } break;
 
+        case ShowExtraUI::printer: {
+            if (canvasWidth > 100 && canvasHeight > 100) {
+                auto& img = extraUIRes.printer;
+                int imgHeight = img.rows;
+                int imgWidth = img.cols;
+                Utils::overlayImg(canvas, img, 0, (canvasHeight * 7 / 4 - imgHeight) / 2);
+            }
+        } break;
+
         case ShowExtraUI::none:
             break;
 
@@ -1004,6 +1023,12 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 return;
             }
+        }
+
+        if (operateAction.action == ActionENUM::printImage) {
+            const auto& imgs = curPar.framesPtr->imgList;
+            Utils::PrintMatImage(imgs.front().img);
+            return;
         }
 
         switch (operateAction.action)
