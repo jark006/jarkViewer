@@ -695,7 +695,7 @@ public:
             cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
             cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
             for (int i = 0; i < 3; i++)
-                ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) / 4;
+                ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) >> 2;
 
             return ret.u32;
         }
@@ -714,26 +714,21 @@ public:
         intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
             GRID_DARK : GRID_LIGHT;
 
-        if (srcPx[3] == 0) return bgPx.u32;
-
-        intUnion px;
         if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
             intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
             intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
             intUnion srcPx3 = srcPtr[srcW * srcY + srcX - 1];
             for (int i = 0; i < 4; i++)
-                px[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) / 4;
-        }
-        else {
-            px = srcPx;
+                srcPx[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) >> 2;
         }
 
-        if (px[3] == 255) return px.u32;
+        if (srcPx[3] == 0) return bgPx.u32;
+        if (srcPx[3] == 255) return srcPx.u32;
 
-        const int alpha = px[3];
-        intUnion ret = alpha;
+        const int alpha = srcPx[3];
+        intUnion ret = 255;
         for (int i = 0; i < 3; i++)
-            ret[i] = (bgPx[i] * (255 - alpha) + px[i] * alpha) / 256;
+            ret[i] = (bgPx[i] * (255 - alpha) + srcPx[i] * alpha + 128) >> 8;
         return ret.u32;
     }
 

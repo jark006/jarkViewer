@@ -604,6 +604,7 @@ public:
         isFullScreen = !isFullScreen;
     }
 
+    // 假设 canvas 完全没有透明像素
     static void overlayImg(cv::Mat& canvas, cv::Mat& img, int xOffset, int yOffset) {
         if (canvas.type() != CV_8UC4 || img.type() != CV_8UC4)
             return;
@@ -623,14 +624,19 @@ public:
                 if ((xOffset + x) <= 0 || canvasWidth <= (xOffset + x))
                     continue;
 
+                auto& canvasPx = canvasPtr[xOffset + x];
                 auto imgPx = imgPtr[x];
-                int alpha = imgPx[3];
-                if (alpha) {
-                    auto& canvasPx = canvasPtr[xOffset + x];
+                uint32_t alpha = imgPx[3];
+
+                if (alpha == 255) {
+                    canvasPx = imgPx;
+                }
+                else if (alpha) {
+                    uint32_t inv_alpha = 255 - alpha;
                     canvasPx = {
-                        (uint8_t)((canvasPx[0] * (255 - alpha) + imgPx[0] * alpha) / 255),
-                        (uint8_t)((canvasPx[1] * (255 - alpha) + imgPx[1] * alpha) / 255),
-                        (uint8_t)((canvasPx[2] * (255 - alpha) + imgPx[2] * alpha) / 255),
+                        (uint8_t)(((canvasPx[0] * inv_alpha + imgPx[0] * alpha) + 128) >> 8), // +128 四舍五入
+                        (uint8_t)(((canvasPx[1] * inv_alpha + imgPx[1] * alpha) + 128) >> 8),
+                        (uint8_t)(((canvasPx[2] * inv_alpha + imgPx[2] * alpha) + 128) >> 8),
                         255 };
                 }
             }
