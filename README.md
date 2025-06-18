@@ -14,6 +14,8 @@
 1. **🖱️ 平移图片**：鼠标拖动 / `W/A/S/D` 键
 1. **ℹ️ 图像信息**：点击滚轮 / `I` 键
 1. **🖥️ 切换全屏**：双击窗口 / `F11` 键
+1. **📋 复制图像**：`Ctrl + C`
+1. **🖨 打印图像**：窗口左下角 `单击` / `Ctrl + P`
 1. **❌ 快捷退出**：右键单击 / `ESC` 键
 
 ---
@@ -30,9 +32,9 @@
 
 ## 📂 支持的图像格式
 
-- **静态图像**：`avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr pbm pfm pgm pic png pnm ppm psd pxm ras sr svg tga tif tiff webp wp2` 等
+- **静态图像**：`apng avif avifs bmp bpg dib exr gif hdr heic heif ico icon jfif jp2 jpe jpeg jpg jxl jxr livp pbm pfm pgm pic png pnm ppm psd pxm qoi ras sr svg tga tif tiff webp wp2`
 - **动态图像**：`gif webp png apng jxl bpg`  
-- **RAW格式**：`crw pef sr2 cr2 cr3 nef arw 3fr srf orf rw2 dng raf raw kdc x3f mrw` 等  
+- **RAW格式**：`3fr ari arw bay cap cr2 cr3 crw dcr dcs dng drf eip erf fff gpr iiq k25 kdc mdc mef mos mrw nef nrw orf pef ptx r3d raf raw rw2 rwl rwz sr2 srf srw x3f`
 
 ## ⚓ 关联文件格式
 

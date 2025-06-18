@@ -1292,6 +1292,16 @@ int WINAPI wWinMain(
 void test() {
     return;
 
+    //set<wstring> sortRaw(ImageDatabase::supportRaw.begin(), ImageDatabase::supportRaw.end());
+    //for (auto& ext : sortRaw)
+    //    std::wcout << ext.substr(1) << ' ';
+    //std::wcout << endl;
+
+    //set<wstring> sortExt(ImageDatabase::supportExt.begin(), ImageDatabase::supportExt.end());
+    //for (auto& ext : sortExt)
+    //    std::wcout << ext.substr(1) << ' ';
+    //std::wcout << endl;
+
     std::ifstream file("D:\\Downloads\\test\\22.wp2", std::ios::binary);
     auto buf = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
 
