@@ -168,6 +168,7 @@
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\lunasvg.h" />
     <ClInclude Include="include\png.h" />
+    <ClInclude Include="include\printer.h" />
     <ClInclude Include="include\psdsdk.h" />
     <ClInclude Include="include\psdsdk\Psd.h" />
     <ClInclude Include="include\psdsdk\PsdAllocator.h" />

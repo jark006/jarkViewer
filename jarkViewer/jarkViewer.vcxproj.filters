@@ -624,6 +624,9 @@
     <ClInclude Include="include\libheif\heif_items.h">
       <Filter>libheif</Filter>
     </ClInclude>
+    <ClInclude Include="include\printer.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">

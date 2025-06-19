@@ -13,6 +13,7 @@
 #include<map>
 #include<unordered_set>
 #include<unordered_map>
+#include<stdexcept>
 
 using std::vector;
 using std::string;
@@ -329,21 +330,21 @@ public:
     static rcFileInfo GetResource(unsigned int idi, const wchar_t* type) {
         rcFileInfo rc;
 
-        HMODULE ghmodule = GetModuleHandle(NULL);
-        if (ghmodule == NULL) {
-            log("ghmodule null");
+        HMODULE ghmodule = GetModuleHandleW(nullptr);
+        if (!ghmodule) {
+            log("ghmodule nullptr");
             return rc;
         }
 
-        HRSRC hrsrc = FindResource(ghmodule, MAKEINTRESOURCE(idi), type);
-        if (hrsrc == NULL) {
-            log("hrstc null");
+        HRSRC hrsrc = FindResourceW(ghmodule, MAKEINTRESOURCEW(idi), type);
+        if (!hrsrc) {
+            log("hrstc nullptr");
             return rc;
         }
 
         HGLOBAL hg = LoadResource(ghmodule, hrsrc);
-        if (hg == NULL) {
-            log("hg null");
+        if (!hg) {
+            log("hg nullptr");
             return rc;
         }
 
@@ -428,10 +429,61 @@ public:
         return true;
     }
 
+    static bool limitSizeTo16K(cv::Mat& image) {
+        // 检查并缩放图像（保持宽高比）
+        if (image.cols > 16384 || image.rows > 16384) {
+            try {
+                double scale = std::min(16384.0 / image.cols, 16384.0 / image.rows);
+                int newWidth = static_cast<int>(image.cols * scale);
+                int newHeight = static_cast<int>(image.rows * scale);
+                cv::resize(image, image, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
+                MessageBoxW(nullptr, std::format(L"图像分辨率太大，将缩放到 {}x{}", image.cols, image.rows).c_str(), L"提示", MB_OK | MB_ICONWARNING);
+                return true;
+            }
+            catch (const cv::Exception& e) {
+                MessageBoxW(nullptr, L"图像缩放失败", L"错误", MB_OK | MB_ICONERROR);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Alpha透明通道混合白色背景
+    static void flattenRGBAonWhite(cv::Mat& image) {
+        if (image.empty() || image.type() != CV_8UC4)
+            return;
+
+        const int width = image.cols;
+        const int height = image.rows;
+
+        for (int y = 0; y < height; y++) {
+            BYTE* srcRow = image.ptr<BYTE>(y);
+
+            for (int x = 0; x < width; x++) {
+                BYTE b = srcRow[x * 4];
+                BYTE g = srcRow[x * 4 + 1];
+                BYTE r = srcRow[x * 4 + 2];
+                BYTE a = srcRow[x * 4 + 3];
+
+                if (a == 0) {
+                    srcRow[x * 4] = 255;
+                    srcRow[x * 4 + 1] = 255;
+                    srcRow[x * 4 + 2] = 255;
+                    srcRow[x * 4 + 3] = 255;
+                }
+                else if (a != 255) {
+                    srcRow[x * 4] = static_cast<BYTE>((b * a + 255 * (255 - a) + 255) >> 8);
+                    srcRow[x * 4 + 1] = static_cast<BYTE>((g * a + 255 * (255 - a) + 255) >> 8);
+                    srcRow[x * 4 + 2] = static_cast<BYTE>((r * a + 255 * (255 - a) + 255) >> 8);
+                    srcRow[x * 4 + 3] = 255;
+                }
+            }
+        }
+    }
 
     static void copyImageToClipboard(const cv::Mat& image) {
         if (image.empty()) {
-            MessageBoxW(NULL, L"图像为空，无法复制到剪贴板", L"错误", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"图像为空，无法复制到剪贴板", L"错误", MB_OK | MB_ICONERROR);
             return;
         }
 
@@ -449,44 +501,33 @@ public:
                 processedImage = image.clone();
             }
             else {
-                MessageBoxW(NULL, std::format(L"图像通道: {}", processedImage.channels()).c_str(), L"不支持的图像格式", MB_OK | MB_ICONERROR);
+                MessageBoxW(nullptr, std::format(L"图像通道: {}", processedImage.channels()).c_str(), L"不支持的图像格式", MB_OK | MB_ICONERROR);
                 return;
             }
         }
         catch (const cv::Exception& e) {
-            MessageBoxW(NULL, Utils::utf8ToWstring(e.what()).c_str(), L"图像格式转换失败", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, Utils::utf8ToWstring(e.what()).c_str(), L"图像格式转换失败", MB_OK | MB_ICONERROR);
             return;
         }
 
         // 检查并缩放图像（保持宽高比）
-        if (processedImage.cols > 16384 || processedImage.rows > 16384) {
-            try {
-                double scale = std::min(16384.0 / processedImage.cols, 16384.0 / processedImage.rows);
-                int newWidth = static_cast<int>(processedImage.cols * scale);
-                int newHeight = static_cast<int>(processedImage.rows * scale);
-                cv::resize(processedImage, processedImage, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
-                MessageBoxW(NULL, std::format(L"图像分辨率太大，将缩放到 {}x{}", processedImage.cols, processedImage.rows).c_str(), L"提示", MB_OK | MB_ICONWARNING);
-            }
-            catch (const cv::Exception& e) {
-                MessageBoxW(NULL, L"图像缩放失败", L"错误", MB_OK | MB_ICONERROR);
-                return;
-            }
-        }
+        if (!limitSizeTo16K(processedImage))
+            return;
 
         const int width = processedImage.cols;
         const int height = processedImage.rows;
 
 
         // 打开剪贴板
-        if (!OpenClipboard(NULL)) {
-            MessageBoxW(NULL, L"无法打开剪贴板", L"错误", MB_OK | MB_ICONERROR);
+        if (!OpenClipboard(nullptr)) {
+            MessageBoxW(nullptr, L"无法打开剪贴板", L"错误", MB_OK | MB_ICONERROR);
             return;
         }
 
         // 清空剪贴板
         if (!EmptyClipboard()) {
             CloseClipboard();
-            MessageBoxW(NULL, L"清空剪贴板失败", L"错误", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"清空剪贴板失败", L"错误", MB_OK | MB_ICONERROR);
             return;
         }
 
@@ -501,7 +542,7 @@ public:
             if (pDibV5) {
                 // 填充BITMAPV5HEADER
                 BITMAPV5HEADER* pBmpV5Header = static_cast<BITMAPV5HEADER*>(pDibV5);
-                ZeroMemory(pBmpV5Header, sizeof(BITMAPV5HEADER));
+                memset(pBmpV5Header, 0, sizeof(BITMAPV5HEADER));
 
                 pBmpV5Header->bV5Size = sizeof(BITMAPV5HEADER);
                 pBmpV5Header->bV5Width = width;
@@ -545,31 +586,8 @@ public:
             }
         }
 
-        // 将透明背景混合白色背景
-        for (int y = 0; y < height; y++) {
-            BYTE* srcRow = processedImage.ptr<BYTE>(y);
-
-            for (int x = 0; x < width; x++) {
-                BYTE b = srcRow[x * 4];
-                BYTE g = srcRow[x * 4 + 1];
-                BYTE r = srcRow[x * 4 + 2];
-                BYTE a = srcRow[x * 4 + 3];
-
-                if (a == 0) {
-                    srcRow[x * 4] = 255;
-                    srcRow[x * 4 + 1] = 255;
-                    srcRow[x * 4 + 2] = 255;
-                    srcRow[x * 4 + 3] = 255;
-                }
-                else if (a != 255) {
-                    // Alpha混合白色背景 (255, 255, 255)
-                    srcRow[x * 4] = static_cast<BYTE>((b * a + 255 * (255 - a) + 255) >> 8);     // B
-                    srcRow[x * 4 + 1] = static_cast<BYTE>((g * a + 255 * (255 - a) + 255) >> 8); // G
-                    srcRow[x * 4 + 2] = static_cast<BYTE>((r * a + 255 * (255 - a) + 255) >> 8); // R
-                    srcRow[x * 4 + 3] = 255; // Alpha设为不透明
-                }
-            }
-        }
+        // 将透明像素混合白色背景
+        flattenRGBAonWhite(processedImage);
 
         // 创建CF_DIB格式数据
         int dibSize = sizeof(BITMAPINFOHEADER) + imageDataSize;
@@ -611,173 +629,6 @@ public:
 
         // 关闭剪贴板
         CloseClipboard();
-    }
-
-
-    // 将cv::Mat转换为HBITMAP
-    static HBITMAP MatToHBITMAP(const cv::Mat& mat) {
-
-        const int width = mat.cols;
-        const int height = mat.rows;
-
-        cv::Mat bgrMat;
-        if (mat.channels() == 1) {
-            cv::cvtColor(mat, bgrMat, cv::COLOR_GRAY2BGR);
-        }
-        else if (mat.channels() == 4) {
-            bgrMat = cv::Mat(height, width, CV_8UC3);
-            for (int y = 0; y < height; y++) {
-                const BYTE* srcRow = mat.ptr<BYTE>(y);
-                BYTE* desRow = bgrMat.ptr<BYTE>(y);
-
-                for (int x = 0; x < width; x++) {
-                    BYTE b = srcRow[x * 4];
-                    BYTE g = srcRow[x * 4 + 1];
-                    BYTE r = srcRow[x * 4 + 2];
-                    BYTE a = srcRow[x * 4 + 3];
-
-                    if (a == 0) {
-                        desRow[x * 3] = 255;
-                        desRow[x * 3 + 1] = 255;
-                        desRow[x * 3 + 2] = 255;
-                    }
-                    else if (a == 255) {
-                        desRow[x * 3] = b;
-                        desRow[x * 3 + 1] = g;
-                        desRow[x * 3 + 2] = r;
-                    }
-                    else {
-                        // Alpha混合白色背景 (255, 255, 255)
-                        desRow[x * 3] = static_cast<BYTE>((b * a + 255 * (255 - a) + 255) >> 8);     // B
-                        desRow[x * 3 + 1] = static_cast<BYTE>((g * a + 255 * (255 - a) + 255) >> 8); // G
-                        desRow[x * 3 + 2] = static_cast<BYTE>((r * a + 255 * (255 - a) + 255) >> 8); // R
-                    }
-                }
-            }
-        }
-
-        const int stride = (width * 3 + 3) & ~3;  // 4字节对齐
-        const size_t dataSize = static_cast<size_t>(stride) * height;
-
-        // 准备BITMAPINFO结构
-        BITMAPINFO bmi;
-        ZeroMemory(&bmi, sizeof(BITMAPINFO));
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = width;
-        bmi.bmiHeader.biHeight = height;
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 24;          // 24位RGB
-        bmi.bmiHeader.biCompression = BI_RGB;
-        bmi.bmiHeader.biSizeImage = dataSize;
-
-        // 创建DIB并复制数据
-        HDC hdcScreen = GetDC(NULL);
-        void* pBits;
-        HBITMAP hBitmap = CreateDIBSection(
-            hdcScreen, &bmi, DIB_RGB_COLORS, &pBits, NULL, 0);
-        ReleaseDC(NULL, hdcScreen);
-
-        if (hBitmap) {
-            for (int y = 0; y < height; y++) {
-                const BYTE* srcRow = bgrMat.ptr<BYTE>(height - 1 - y);
-                BYTE* dstRow = static_cast<BYTE*>(pBits) + y * stride;
-                memcpy(dstRow, srcRow, stride);
-            }
-        }
-
-        return hBitmap;
-    }
-
-    // 打印图像函数
-    static bool PrintMatImage(const cv::Mat& image) {
-        // 转换cv::Mat为HBITMAP
-        HBITMAP hBitmap = MatToHBITMAP(image);
-        if (!hBitmap) {
-            return false;
-        }
-
-        // 初始化打印对话框
-        PRINTDLG pd;
-        ZeroMemory(&pd, sizeof(pd));
-        pd.lStructSize = sizeof(pd);
-        pd.Flags = PD_RETURNDC | PD_NOPAGENUMS | PD_NOSELECTION;
-
-        // 显示打印对话框
-        if (!PrintDlg(&pd)) {
-            DeleteObject(hBitmap);
-            return false;
-        }
-
-        // 准备文档信息
-        DOCINFO di;
-        ZeroMemory(&di, sizeof(di));
-        di.cbSize = sizeof(di);
-        di.lpszDocName = L"JarkViewer Printed Image";
-        di.lpszOutput = nullptr;
-
-        // 开始打印作业
-        if (StartDoc(pd.hDC, &di) <= 0) {
-            DeleteObject(hBitmap);
-            DeleteDC(pd.hDC);
-            return false;
-        }
-
-        // 开始新页面
-        if (StartPage(pd.hDC) <= 0) {
-            EndDoc(pd.hDC);
-            DeleteObject(hBitmap);
-            DeleteDC(pd.hDC);
-            return false;
-        }
-
-        // 获取打印机和图像尺寸
-        int pageWidth = GetDeviceCaps(pd.hDC, HORZRES);
-        int pageHeight = GetDeviceCaps(pd.hDC, VERTRES);
-
-        BITMAP bm;
-        GetObject(hBitmap, sizeof(BITMAP), &bm);
-        int imgWidth = bm.bmWidth;
-        int imgHeight = bm.bmHeight;
-
-        // 计算缩放比例（保持宽高比）
-        double scale = std::min(
-            static_cast<double>(pageWidth) / imgWidth,
-            static_cast<double>(pageHeight) / imgHeight
-        );
-
-        scale *= (pageHeight > pageWidth ? 0.893 : 0.879); // 按标准A4边距 1.0-31.8/297  1.0-2.54/210
-
-        int scaledWidth = static_cast<int>(imgWidth * scale);
-        int scaledHeight = static_cast<int>(imgHeight * scale);
-
-        // 居中位置
-        int xPos = (pageWidth - scaledWidth) / 2;
-        int yPos = (pageHeight - scaledHeight) / 2;
-
-        // 创建内存DC
-        HDC hdcMem = CreateCompatibleDC(pd.hDC);
-        SelectObject(hdcMem, hBitmap);
-
-        // 高质量缩放
-        SetStretchBltMode(pd.hDC, HALFTONE);
-        SetBrushOrgEx(pd.hDC, 0, 0, nullptr);
-
-        // 绘制到打印机DC
-        StretchBlt(
-            pd.hDC, xPos, yPos, scaledWidth, scaledHeight,
-            hdcMem, 0, 0, imgWidth, imgHeight, SRCCOPY
-        );
-
-        // 清理资源
-        DeleteDC(hdcMem);
-        DeleteObject(hBitmap);
-
-        // 结束页面和文档
-        EndPage(pd.hDC);
-        EndDoc(pd.hDC);
-        DeleteDC(pd.hDC);
-
-        return true;
     }
 
 
@@ -893,12 +744,12 @@ public:
     // 创建路径几何图形
     static ID2D1PathGeometry* GetPathGeometry(ID2D1Factory4* pD2DFactory, D2D1_POINT_2F* points, UINT pointsCount)
     {
-        ID2D1PathGeometry* geometry = NULL;
+        ID2D1PathGeometry* geometry = nullptr;
         HRESULT hr = pD2DFactory->CreatePathGeometry(&geometry);
 
         if (SUCCEEDED(hr))
         {
-            ID2D1GeometrySink* pSink = NULL;
+            ID2D1GeometrySink* pSink = nullptr;
             hr = geometry->Open(&pSink); // 获取Sink对象
 
             if (SUCCEEDED(hr))
@@ -915,7 +766,7 @@ public:
             return geometry;
         }
 
-        return NULL;
+        return nullptr;
     }
 
     static void ToggleFullScreen(HWND hwnd) {
@@ -929,7 +780,7 @@ public:
             // 退出全屏模式，恢复之前的窗口状态
             SetWindowLong(hwnd, GWL_STYLE, preStyle);
             SetWindowLong(hwnd, GWL_EXSTYLE, preExStyle);
-            SetWindowPos(hwnd, NULL, preRect.left, preRect.top,
+            SetWindowPos(hwnd, nullptr, preRect.left, preRect.top,
                 preRect.right - preRect.left,
                 preRect.bottom - preRect.top,
                 SWP_NOZORDER | SWP_FRAMECHANGED);
@@ -972,7 +823,7 @@ public:
             if ((yOffset + y) <= 0 || canvasHeight <= (yOffset + y))
                 continue;
 
-            auto canvasPtr = (intUnion*)(canvas.ptr() + canvas.step1() * (yOffset + y));
+            auto canvasPtr = (intUnion*)(canvas.ptr() + canvas.step1() * (static_cast<size_t>(yOffset) + y));
             auto imgPtr = (intUnion*)(img.ptr() + img.step1() * y);
             for (int x = 0; x < imgWidth; x++) {
                 if ((xOffset + x) <= 0 || canvasWidth <= (xOffset + x))
@@ -1008,9 +859,9 @@ public:
         ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
         ofn.lpstrFilter = L"All Files\0*.*\0"; // 过滤器
         ofn.nFilterIndex = 1;
-        ofn.lpstrFileTitle = NULL;
+        ofn.lpstrFileTitle = nullptr;
         ofn.nMaxFileTitle = 0;
-        ofn.lpstrInitialDir = NULL;
+        ofn.lpstrInitialDir = nullptr;
         ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
         if (GetOpenFileNameW(&ofn) == TRUE) {

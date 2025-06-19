@@ -2,6 +2,7 @@
 
 #include "stbText.h"
 #include "ImageDatabase.h"
+#include "printer.h"
 
 #include "D2D1App.h"
 #include <wrl.h>
@@ -540,7 +541,7 @@ public:
             }break;
             case 'P': {
                 const auto& imgs = curPar.framesPtr->imgList;
-                Utils::PrintMatImage(imgs.front().img);
+                Printer printer(imgs.front().img);
             }break;
             }
         }
@@ -1027,7 +1028,7 @@ public:
 
         if (operateAction.action == ActionENUM::printImage) {
             const auto& imgs = curPar.framesPtr->imgList;
-            Utils::PrintMatImage(imgs.front().img);
+            Printer printer(imgs.front().img);
             return;
         }
 
