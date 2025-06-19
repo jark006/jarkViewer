@@ -382,6 +382,7 @@
     <Image Include="file\leftArrow.png" />
     <Image Include="file\leftRotate.png" />
     <Image Include="file\printer.png" />
+    <Image Include="file\printer01.png" />
     <Image Include="file\rightArrow.png" />
     <Image Include="file\RightRotate.png" />
     <Image Include="file\tips.png" />

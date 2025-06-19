@@ -9,22 +9,31 @@ struct PrintParams {
     //double leftMargin = 5.0;      // 左边距百分比
     //double rightMargin = 5.0;     // 右边距百分比
     //int layoutMode = 0;           // 0=适应, 1=填充, 2=原始比例
-    //int brightness = 0;           // 亮度调整 (-100 ~ 100)
+    int brightness = 0;           // 亮度调整 (-100 ~ 100)
     int contrast = 0;             // 对比度调整 (-100 ~ 100)
     bool isParamsChange = false;
-    bool grayscale = true;       // 是否黑白打印
+    bool grayscale = true;        // 是否黑白打印
     bool confirmed = false;       // 用户点击确认
     cv::Mat previewImage;         // 预览图像
 };
 
 class Printer {
 private:
+    const char* windowsName = "Print Preview";
     PrintParams params{};
+    cv::Mat buttonUI;
 
+    void Init() {
+        auto rc = Utils::GetResource(IDB_PNG7, L"PNG");
+        buttonUI = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+    }
 public:
-    Printer() {}
+    Printer() {
+        Init();
+    }
 
     Printer(const cv::Mat& image) {
+        Init();
         PrintMatImage(image);
     }
 
@@ -124,13 +133,33 @@ public:
     }
 
 
+    void adjustBrightnessContrast(cv::Mat& src, double contrast, double brightness) {
+        if (src.type() != CV_8UC3)
+            return;
+
+        for (int y = 0; y < src.rows; y++) {
+            for (int x = 0; x < src.cols; x++) {
+                cv::Vec3b pixel = src.at<cv::Vec3b>(y, x);
+                for (int c = 0; c < 3; c++) {
+                    // 以128为中心进行对比度调整
+                    double adjusted = (pixel[c] - 128.0) * contrast + 128.0;
+
+                    // 添加亮度偏移
+                    adjusted = pow(adjusted / 255, brightness) * 255;
+
+                    // 确保值在0-255范围内
+                    pixel[c] = cv::saturate_cast<uchar>(adjusted);
+                }
+                src.at<cv::Vec3b>(y, x) = pixel;
+            }
+        }
+    }
+
     // 图像处理 调整对比度 彩色 黑白
-    void ApplyImageAdjustments(cv::Mat& image, int contrast, bool grayscale) {
+    void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale) {
         if (image.empty()) return;
 
-        double alpha = 1.0;//contrast / 100.0; // 范围：0.0-2.0  1.0是中间值
-        double beta =  100 - contrast;  // 范围： -100 到 +100  0是中间值
-        image.convertTo(image, image.type(), alpha, beta);
+        adjustBrightnessContrast(image, pow(contrast / 100.0, 2), (200 - brightness) / 100.0);
 
         if (grayscale) {
             cv::Mat gray;
@@ -145,7 +174,7 @@ public:
         PrintParams* params = static_cast<PrintParams*>(userdata);
 
         cv::Mat adjusted = params->previewImage.clone();
-        ApplyImageAdjustments(adjusted, params->contrast, params->grayscale);
+        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->grayscale);
 
         // 扩展为正方形画布
         int outputSize = std::max(adjusted.rows, adjusted.cols);
@@ -156,13 +185,9 @@ public:
         cv::Mat roi = squareMat(cv::Rect(x, y, adjusted.cols, adjusted.rows));
         adjusted.copyTo(roi);
 
-        cv::imshow("Print Preview", squareMat);
-    }
-
-    void onTrackbarContrast(int value, void* userdata) {
-        PrintParams* params = static_cast<PrintParams*>(userdata);
-        params->contrast = value;
-        refreshPreview(userdata);
+        cv::cvtColor(squareMat, squareMat, CV_BGR2BGRA);
+        Utils::overlayImg(squareMat, buttonUI, squareMat.cols - buttonUI.cols, squareMat.rows - buttonUI.rows);
+        cv::imshow(windowsName, squareMat);
     }
 
 
@@ -184,21 +209,44 @@ public:
         }
 
         // 创建UI窗口
-        cv::namedWindow("Print Preview", cv::WINDOW_AUTOSIZE);
-        cv::resizeWindow("Print Preview", previewMaxSize, static_cast<int>(previewMaxSize * 1.2));
+        cv::namedWindow(windowsName, cv::WINDOW_AUTOSIZE);
+        cv::resizeWindow(windowsName, previewMaxSize, static_cast<int>(previewMaxSize * 1.2));
 
-        cv::createTrackbar("Contrast", "Print Preview", nullptr, 200, [](int value, void* userdata) {
+        cv::setMouseCallback(windowsName, [](int event, int x, int y, int flags, void* userdata) {
+            if (event == cv::EVENT_LBUTTONUP) {
+                if ((400 < x) && (x < 500) && (550 < y)) { // 切换 彩色/ 黑白
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    params->grayscale = !params->grayscale;
+                    params->isParamsChange = true;
+                }
+                if ((500 < x) && (x < 600) && (550 < y)) { // 确定按钮
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    params->confirmed = true;
+                    params->isParamsChange = true;
+                    cv::destroyWindow("Print Preview");
+                }
+            }
+            }, &params);
+
+        cv::createTrackbar("Brightness", windowsName, nullptr, 200, [](int value, void* userdata) {
+            PrintParams* params = static_cast<PrintParams*>(userdata);
+            params->brightness = value;
+            params->isParamsChange = true;
+            }, &params);
+        cv::setTrackbarPos("Brightness", windowsName, params.brightness + 100);
+
+        cv::createTrackbar("Contrast", windowsName, nullptr, 200, [](int value, void* userdata) {
             PrintParams* params = static_cast<PrintParams*>(userdata);
             params->contrast = value;
             params->isParamsChange = true;
             }, &params);
-        cv::setTrackbarPos("Contrast", "Print Preview", params.contrast + 100);
+        cv::setTrackbarPos("Contrast", windowsName, params.contrast + 100);
 
         // 初始预览
         refreshPreview(&params);
 
         // 事件循环
-        while (cv::getWindowProperty("Print Preview", cv::WND_PROP_VISIBLE) > 0) {
+        while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {
             if (params.isParamsChange) {
                 params.isParamsChange = false;
                 refreshPreview(&params);
@@ -208,11 +256,11 @@ public:
         }
 
         // 用户取消处理
-        //if (!params.confirmed) return cv::Mat();
+        if (!params.confirmed) return cv::Mat();
 
         // 应用参数到原始图像
         cv::Mat finalImage = image.clone();
-        ApplyImageAdjustments(finalImage, params.contrast, params.grayscale);
+        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.grayscale);
         return finalImage;
     }
 

@@ -729,6 +729,9 @@
     <Image Include="file\printer.png">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="file\printer01.png">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Font Include="file\MSYHMONO.ttf" />
