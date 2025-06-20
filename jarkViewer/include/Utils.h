@@ -65,6 +65,21 @@ using std::endl;
 #define END_TIME_COUNT_US auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start_clock).count();\
                                             Utils::log("{}(): {} us", __FUNCTION__, duration_us)
 
+struct SettingParameter {
+    uint8_t header[32];
+    RECT rect{};
+    uint32_t showCmd = SW_MAXIMIZE;
+
+    int printerBrightness = 100;         // 亮度调整 (0 ~ 200)
+    int printerContrast = 100;           // 对比度调整 (0 ~ 200)
+    bool printerGrayscale = true;        // 是否黑白打印
+    bool printerInvertColors = false;    // 是否反相
+
+    uint32_t padding[48];
+};
+
+static_assert(sizeof(SettingParameter) == 256, "sizeof(SettingParameter) != 256");
+
 struct rcFileInfo {
     uint8_t* addr = nullptr;
     size_t size = 0;

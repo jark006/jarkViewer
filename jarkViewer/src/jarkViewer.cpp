@@ -541,7 +541,7 @@ public:
             }break;
             case 'P': {
                 const auto& imgs = curPar.framesPtr->imgList;
-                Printer printer(imgs.front().img);
+                Printer printer(imgs.front().img, &settingPar);
             }break;
             }
         }
@@ -1028,7 +1028,7 @@ public:
 
         if (operateAction.action == ActionENUM::printImage) {
             const auto& imgs = curPar.framesPtr->imgList;
-            Printer printer(imgs.front().img);
+            Printer printer(imgs.front().img, &settingPar);
             return;
         }
 
