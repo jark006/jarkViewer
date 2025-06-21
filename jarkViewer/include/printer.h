@@ -13,6 +13,7 @@ struct PrintParams {
     int contrast = 100;           // 对比度调整 (0 ~ 200)
     bool grayscale = true;        // 是否黑白打印
     bool invertColors = false;    // 是否反相
+    bool balancedBrightness = false; // 是否均衡亮度
 
     bool isParamsChange = false;
     bool confirmed = false;       // 用户点击确认
@@ -34,6 +35,7 @@ private:
         params.contrast = settingParameter->printerContrast;
         params.grayscale = settingParameter->printerGrayscale;
         params.invertColors = settingParameter->printerInvertColors;
+        params.balancedBrightness = settingParameter->printerBalancedBrightness;
 
         // 异常情况则恢复默认值
         if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200) {
@@ -41,6 +43,7 @@ private:
             params.contrast = 100;
             params.grayscale = true;
             params.invertColors = false;
+            params.balancedBrightness = false;
         }
     }
 
@@ -59,6 +62,7 @@ public:
         settingParameter->printerContrast = params.contrast;
         settingParameter->printerGrayscale = params.grayscale;
         settingParameter->printerInvertColors = params.invertColors;
+        settingParameter->printerBalancedBrightness = params.balancedBrightness;
     }
 
     // 灰度/BGR/BGRA统一到BGR
@@ -108,6 +112,44 @@ public:
         }
 
         return bgrMat;
+    }
+
+    // 均衡全图亮度 再调整亮度对比度 适合打印文档
+    cv::Mat balancedImageBrightness(const cv::Mat& input_img, int kernel_size = 51) {
+        if (input_img.type() != CV_8UC3) {
+            MessageBoxW(nullptr, L"balancedImageBrightness转换图像错误: 只接受BGR/CV_8UC3类型图像", L"错误", MB_OK | MB_ICONERROR);
+            return {};
+        }
+
+        // 确保核大小为奇数
+        if (kernel_size % 2 == 0) {
+            kernel_size += 1;
+        }
+
+        // 转换为灰度图像
+        cv::Mat gray;
+        if (input_img.channels() == 3) {
+            cvtColor(input_img, gray, cv::COLOR_BGR2GRAY);
+        }
+        else {
+            gray = input_img.clone();
+        }
+
+        // 估计背景（使用大核模糊）
+        cv::Mat background;
+        GaussianBlur(gray, background, cv::Size(kernel_size, kernel_size), 0);
+
+        // 从原始图像中减去背景
+        cv::Mat corrected;
+        // 相当于：corrected = gray * 1 + background * (-1) + 128
+        addWeighted(gray, 1.0, background, -1.0, 128, corrected);
+
+        // 增强对比度（归一化到0-255范围）
+        normalize(corrected, corrected, 0, 255, cv::NORM_MINMAX);
+        corrected.convertTo(corrected, CV_8U);
+
+        cvtColor(corrected, corrected, cv::COLOR_GRAY2BGR);
+        return corrected;
     }
 
 
@@ -175,7 +217,8 @@ public:
         double brightness = brightnessInt / 100.0;
         double contrast = contrastInt / 100.0;
 
-        contrast = pow(contrast, 2); // 增大对比度比例
+        brightness = pow(2.0 - brightness, 3); // 增大对比度比例
+        contrast = pow(contrast, 3); // 增大对比度比例
 
         for (int y = 0; y < src.rows; y++) {
             for (int x = 0; x < src.cols; x++) {
@@ -185,7 +228,7 @@ public:
                     double adjusted = (pixel[c] - 128.0) * contrast + 128.0;
 
                     // 添加亮度偏移
-                    adjusted = pow(adjusted / 255.0, 2.0 - brightness) * 255;
+                    adjusted = pow(adjusted / 255.0, brightness) * 255;
 
                     // 确保值在0-255范围内
                     pixel[c] = cv::saturate_cast<uchar>(adjusted);
@@ -196,8 +239,12 @@ public:
     }
 
     // 图像处理 调整对比度 彩色 黑白
-    void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale, bool invertColors) {
+    void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale, bool invertColors, bool balancedBrightness) {
         if (image.empty()) return;
+
+        if (balancedBrightness) {
+            image = balancedImageBrightness(image);
+        }
 
         if (invertColors) {
             cv::bitwise_not(image, image);
@@ -220,7 +267,7 @@ public:
         PrintParams* params = static_cast<PrintParams*>(userdata);
 
         cv::Mat adjusted = params->previewImage.clone();
-        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->grayscale, params->invertColors);
+        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->grayscale, params->invertColors, params->balancedBrightness);
 
         // 扩展为正方形画布
         int outputSize = std::max(adjusted.rows, adjusted.cols);
@@ -244,7 +291,7 @@ public:
         }
 
         // 创建预览图像
-        const int previewMaxSize = 600;
+        const int previewMaxSize = 800;
 
         double scale = (double)previewMaxSize / std::max(image.rows, image.cols);
         cv::resize(image, params.previewImage, cv::Size(), scale, scale);
@@ -260,17 +307,22 @@ public:
 
         cv::setMouseCallback(windowsName, [](int event, int x, int y, int flags, void* userdata) {
             if (event == cv::EVENT_LBUTTONUP) {
-                if ((300 < x) && (x < 400) && (550 < y)) { // 切换 反色
+                if ((400 < x) && (x < 500) && (750 < y)) { // 切换 亮度均衡
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    params->balancedBrightness = !params->balancedBrightness;
+                    params->isParamsChange = true;
+                }
+                if ((500 < x) && (x < 600) && (750 < y)) { // 切换 反色
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->invertColors = !params->invertColors;
                     params->isParamsChange = true;
                 }
-                if ((400 < x) && (x < 500) && (550 < y)) { // 切换 彩色/ 黑白
+                if ((600 < x) && (x < 700) && (750 < y)) { // 切换 彩色/ 黑白
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->grayscale = !params->grayscale;
                     params->isParamsChange = true;
                 }
-                if ((500 < x) && (x < 600) && (550 < y)) { // 确定按钮
+                if ((700 < x) && (x < 800) && (750 < y)) { // 确定按钮
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->confirmed = true;
                     params->isParamsChange = true;
@@ -311,7 +363,7 @@ public:
 
         // 应用参数到原始图像
         cv::Mat finalImage = image.clone();
-        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.grayscale, params.invertColors);
+        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.grayscale, params.invertColors, params.balancedBrightness);
         return finalImage;
     }
 

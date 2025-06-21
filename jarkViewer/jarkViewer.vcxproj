@@ -351,6 +351,7 @@
     <ClInclude Include="Resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="include\videoDecoder.h" />
     <ClCompile Include="libavcodec\cabac.cpp" />
     <ClCompile Include="libavcodec\golomb.cpp" />
     <ClCompile Include="libavcodec\hevc.cpp" />

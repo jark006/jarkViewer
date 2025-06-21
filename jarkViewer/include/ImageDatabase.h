@@ -20,6 +20,7 @@
 #include "src/wp2/decode.h"
 #include "libbpg.h"
 #include "minizip/unzip.h"
+#include "videoDecoder.h"
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION

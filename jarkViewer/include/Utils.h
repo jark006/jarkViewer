@@ -42,6 +42,13 @@ using std::endl;
 #include <shellapi.h>
 #include <winspool.h>
 
+#include <mfapi.h>
+#include <mfidl.h>
+#include <shlwapi.h>
+#include <mfreadwrite.h>
+#include <mferror.h>
+#include <wmcodecdsp.h>
+
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dwrite.lib" )
@@ -52,6 +59,13 @@ using std::endl;
 #pragma comment(lib, "Winmm.lib")
 #pragma comment(lib ,"imm32.lib")
 #pragma comment(lib, "dwmapi.lib")
+
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfuuid.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "wmcodecdspuuid.lib")
 
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
@@ -70,10 +84,11 @@ struct SettingParameter {
     RECT rect{};
     uint32_t showCmd = SW_MAXIMIZE;
 
-    int printerBrightness = 100;         // 亮度调整 (0 ~ 200)
-    int printerContrast = 100;           // 对比度调整 (0 ~ 200)
-    bool printerGrayscale = true;        // 是否黑白打印
-    bool printerInvertColors = false;    // 是否反相
+    int printerBrightness = 100;           // 亮度调整 (0 ~ 200)
+    int printerContrast = 100;             // 对比度调整 (0 ~ 200)
+    bool printerGrayscale = true;          // 是否黑白打印
+    bool printerInvertColors = false;      // 是否反相
+    bool printerBalancedBrightness = false;// 是否均衡亮度 文档优化
 
     uint32_t padding[48];
 };
