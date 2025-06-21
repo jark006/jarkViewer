@@ -68,7 +68,7 @@ public:
     // 灰度/BGR/BGRA统一到BGR
     cv::Mat matToBGR(const cv::Mat& image) {
         if (image.empty())
-            return cv::Mat();
+            return {};
 
         cv::Mat bgrMat;
         if (image.channels() == 1) {
@@ -115,16 +115,18 @@ public:
     }
 
     // 均衡全图亮度 再调整亮度对比度 适合打印文档
-    cv::Mat balancedImageBrightness(const cv::Mat& input_img, int kernel_size = 51) {
+    cv::Mat balancedImageBrightness(const cv::Mat& input_img) {
         if (input_img.type() != CV_8UC3) {
             MessageBoxW(nullptr, L"balancedImageBrightness转换图像错误: 只接受BGR/CV_8UC3类型图像", L"错误", MB_OK | MB_ICONERROR);
             return {};
         }
 
+        int kernel_size = std::max(input_img.cols, input_img.rows) / 20;
+        if (kernel_size < 3)
+            kernel_size = 3;
+
         // 确保核大小为奇数
-        if (kernel_size % 2 == 0) {
-            kernel_size += 1;
-        }
+        kernel_size |= 1;
 
         // 转换为灰度图像
         cv::Mat gray;
@@ -287,7 +289,7 @@ public:
     // 打印前预处理
     cv::Mat ImagePreprocessingForPrint(const cv::Mat& image) {
         if (image.empty() || image.type() != CV_8UC3) {
-            return cv::Mat();
+            return {};
         }
 
         // 创建预览图像
@@ -298,7 +300,7 @@ public:
 
         // 若长宽差距很极端，超长或超宽，缩放可能异常
         if (params.previewImage.empty() || params.previewImage.rows <= 0 || params.previewImage.cols <= 0) {
-            return cv::Mat();
+            return {};
         }
 
         // 创建UI窗口
@@ -359,7 +361,7 @@ public:
         }
 
         // 用户取消处理
-        if (!params.confirmed) return cv::Mat();
+        if (!params.confirmed) return {};
 
         // 应用参数到原始图像
         cv::Mat finalImage = image.clone();

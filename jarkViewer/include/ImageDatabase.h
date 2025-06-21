@@ -172,7 +172,7 @@ public:
     // vcpkg install libheif[hevc]:x64-windows-static
     cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf) {
         if (buf.empty())
-            return cv::Mat();
+            return {};
 
         auto exifStr = std::format("路径: {}\n大小: {}",
             Utils::wstringToUtf8(path), Utils::size2Str(buf.size()));
@@ -180,19 +180,19 @@ public:
         auto filetype_check = heif_check_filetype(buf.data(), 12);
         if (filetype_check == heif_filetype_no) {
             Utils::log("Input file is not an HEIF/AVIF file: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         if (filetype_check == heif_filetype_yes_unsupported) {
             Utils::log("Input file is an unsupported HEIF/AVIF file type: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         heif_context* ctx = heif_context_alloc();
         auto err = heif_context_read_from_memory_without_copy(ctx, buf.data(), buf.size(), nullptr);
         if (err.code) {
             Utils::log("heif_context_read_from_memory_without_copy error: {} {}", Utils::wstringToUtf8(path), err.message);
-            return cv::Mat();
+            return {};
         }
 
         // get a handle to the primary image
@@ -202,7 +202,7 @@ public:
             Utils::log("heif_context_get_primary_image_handle error: {} {}", Utils::wstringToUtf8(path), err.message);
             if (ctx) heif_context_free(ctx);
             if (handle) heif_image_handle_release(handle);
-            return cv::Mat();
+            return {};
         }
 
         // decode the image and convert colorspace to RGB, saved as 24bit interleaved
@@ -214,7 +214,7 @@ public:
             if (ctx) heif_context_free(ctx);
             if (handle) heif_image_handle_release(handle);
             if (img) heif_image_release(img);
-            return cv::Mat();
+            return {};
         }
 
         int stride = 0;
@@ -241,14 +241,14 @@ public:
         avifImage* image = avifImageCreateEmpty();
         if (image == nullptr) {
             Utils::log("avifImageCreateEmpty failure: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         avifDecoder* decoder = avifDecoderCreate();
         if (decoder == nullptr) {
             Utils::log("avifDecoderCreate failure: {}", Utils::wstringToUtf8(path));
             avifImageDestroy(image);
-            return cv::Mat();
+            return {};
         }
 
         decoder->strictFlags = AVIF_STRICT_DISABLED;  // 严格模式下，老旧的不标准格式会解码失败
@@ -258,7 +258,7 @@ public:
             Utils::log("avifDecoderReadMemory failure: {} {}", Utils::wstringToUtf8(path), avifResultToString(result));
             avifImageDestroy(image);
             avifDecoderDestroy(decoder);
-            return cv::Mat();
+            return {};
         }
 
         avifRGBImage rgb;
@@ -268,7 +268,7 @@ public:
             Utils::log("avifRGBImageAllocatePixels failure: {} {}", Utils::wstringToUtf8(path), avifResultToString(result));
             avifImageDestroy(image);
             avifDecoderDestroy(decoder);
-            return cv::Mat();
+            return {};
         }
 
         rgb.format = AVIF_RGB_FORMAT_BGRA; // OpenCV is BGRA
@@ -278,7 +278,7 @@ public:
             avifImageDestroy(image);
             avifDecoderDestroy(decoder);
             avifRGBImageFreePixels(&rgb);
-            return cv::Mat();
+            return {};
         }
 
         avifImageDestroy(image);
@@ -320,7 +320,7 @@ public:
     cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf) {
         if (buf.empty()) {
             Utils::log("Buf is empty: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         auto rawProcessor = std::make_unique<LibRaw>();
@@ -328,25 +328,25 @@ public:
         int ret = rawProcessor->open_buffer(buf.data(), buf.size());
         if (ret != LIBRAW_SUCCESS) {
             Utils::log("Cannot open RAW file: {} {}", Utils::wstringToUtf8(path), libraw_strerror(ret));
-            return cv::Mat();
+            return {};
         }
 
         ret = rawProcessor->unpack();
         if (ret != LIBRAW_SUCCESS) {
             Utils::log("Cannot unpack RAW file: {} {}", Utils::wstringToUtf8(path), libraw_strerror(ret));
-            return cv::Mat();
+            return {};
         }
 
         ret = rawProcessor->dcraw_process();
         if (ret != LIBRAW_SUCCESS) {
             Utils::log("Cannot process RAW file: {} {}", Utils::wstringToUtf8(path), libraw_strerror(ret));
-            return cv::Mat();
+            return {};
         }
 
         libraw_processed_image_t* image = rawProcessor->dcraw_make_mem_image(&ret);
         if (image == nullptr) {
             Utils::log("Cannot make image from RAW data: {} {}", Utils::wstringToUtf8(path), libraw_strerror(ret));
-            return cv::Mat();
+            return {};
         }
 
         cv::Mat retImg;
@@ -555,7 +555,7 @@ public:
         // 确保有足够的数据用于DIB头
         if (size < sizeof(DibHeader)) {
             Utils::log("Insufficient data for DIB header. {}", size);
-            return cv::Mat();
+            return {};
         }
 
         // 读取DIB头
@@ -564,7 +564,7 @@ public:
         // 验证头大小是否符合预期
         if (header.headerSize != sizeof(DibHeader)) {
             Utils::log("Unsupported DIB header size {}", header.headerSize);
-            return cv::Mat();
+            return {};
         }
 
         // 计算调色板大小（如果存在）
@@ -578,7 +578,7 @@ public:
         //if (size < requireSize) {
         //    Utils::log("Insufficient data for image.");
         //    Utils::log("requireSize {} givenSize {}", requireSize, size);
-        //    return cv::Mat();
+        //    return {};
         //}
 
         // 读取调色板（如果存在）
@@ -670,7 +670,7 @@ public:
         }
         default:
             Utils::log("Unsupported bit count {}", header.bitCount);
-            return cv::Mat();
+            return {};
         }
 
         // 如果存在透明度掩码
@@ -918,14 +918,14 @@ public:
 
         if (!file.OpenRead(path.c_str())) {
             Utils::log("Cannot open file {}", Utils::wstringToUtf8(path));
-            return img;
+            return {};
         }
 
         psd::Document* document = CreateDocument(&file, &allocator);
         if (!document) {
             Utils::log("Cannot create document {}", Utils::wstringToUtf8(path));
             file.Close();
-            return img;
+            return {};
         }
 
         // the sample only supports RGB colormode
@@ -934,7 +934,7 @@ public:
             Utils::log("Document is not in RGB color mode {}", Utils::wstringToUtf8(path));
             DestroyDocument(document, &allocator);
             file.Close();
-            return img;
+            return {};
         }
 
         // extract all layers and masks.
@@ -1145,7 +1145,7 @@ public:
 
         if (!img) {
             Utils::log("Failed to load image: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         // 确定OpenCV的色彩空间
@@ -1157,7 +1157,7 @@ public:
         default:
             stbi_image_free(img);
             Utils::log("Unsupported number of channels:{} {}", channels, Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         auto result = cv::Mat(height, width, cv_type, img).clone();
@@ -1183,7 +1183,7 @@ public:
         auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
         if (!document) {
             Utils::log("Failed to load SVG data {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         // 宽高比例
@@ -1205,7 +1205,7 @@ public:
         auto bitmap = document->renderToBitmap(width, height);
         if (bitmap.isNull()) {
             Utils::log("Failed to render SVG to bitmap {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
@@ -1215,7 +1215,7 @@ public:
         HRESULT hr = CoInitialize(NULL);
         if (FAILED(hr)) {
             std::cerr << "Failed to initialize COM library." << std::endl;
-            return cv::Mat();
+            return {};
         }
 
         IWICImagingFactory* pFactory = NULL;
@@ -1223,7 +1223,7 @@ public:
         if (FAILED(hr)) {
             std::cerr << "Failed to create WIC Imaging Factory." << std::endl;
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         IStream* pStream = NULL;
@@ -1232,7 +1232,7 @@ public:
             std::cerr << "Failed to create stream." << std::endl;
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         ULONG bytesWritten;
@@ -1242,7 +1242,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         LARGE_INTEGER li = { 0 };
@@ -1252,7 +1252,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         IWICBitmapDecoder* pDecoder = NULL;
@@ -1262,7 +1262,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         IWICBitmapFrameDecode* pFrame = NULL;
@@ -1273,7 +1273,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         UINT width, height;
@@ -1285,7 +1285,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         IWICFormatConverter* pConverter = NULL;
@@ -1297,7 +1297,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
@@ -1309,7 +1309,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         cv::Mat mat(height, width, CV_8UC4);
@@ -1322,7 +1322,7 @@ public:
             pStream->Release();
             pFactory->Release();
             CoUninitialize();
-            return cv::Mat();
+            return {};
         }
 
         pConverter->Release();
@@ -1399,12 +1399,12 @@ public:
         }
         catch (cv::Exception e) {
             Utils::log("cvMat cannot decode: {} [{}]", Utils::wstringToUtf8(path), e.what());
-            return cv::Mat();
+            return {};
         }
 
         if (img.empty()) {
             Utils::log("cvMat cannot decode: {}", Utils::wstringToUtf8(path));
-            return cv::Mat();
+            return {};
         }
 
         if (img.channels() == 1)
@@ -1412,7 +1412,7 @@ public:
 
         if (img.channels() != 3 && img.channels() != 4) {
             Utils::log("cvMat unsupport channel: {}", img.channels());
-            return cv::Mat();
+            return {};
         }
 
         // enum { CV_8U=0, CV_8S=1, CV_16U=2, CV_16S=3, CV_32S=4, CV_32F=5, CV_64F=6 }
@@ -1431,7 +1431,7 @@ public:
         }
         Utils::log("Special: {}, img.depth(): {}, img.channels(): {}",
             Utils::wstringToUtf8(path), img.depth(), img.channels());
-        return cv::Mat();
+        return {};
     }
 
 
@@ -1825,7 +1825,7 @@ public:
         // 解析 PFM 头信息
         if (!parsePFMHeader(buf, width, height, scaleFactor, isColor, dataOffset)) {
             std::cerr << "Failed to parse PFM header!" << endl;
-            return cv::Mat();
+            return {};
         }
 
         // 创建 OpenCV Mat，格式为 CV_32FC3（或 CV_32FC1 对于灰度图）
