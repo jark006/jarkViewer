@@ -70,7 +70,6 @@ using std::endl;
 #include<opencv2/core.hpp>
 #include<opencv2/opencv.hpp>
 #include<opencv2/highgui.hpp>
-#include<opencv2/highgui/highgui_c.h>
 
 
 #define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
@@ -396,19 +395,6 @@ public:
         std::stringstream ss;
         ss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S UTC+8");
         return ss.str();
-    }
-
-    static HWND getCvWindow(LPCSTR lpWndName) {
-        HWND hWnd = (HWND)cvGetWindowHandle(lpWndName);
-        if (IsWindow(hWnd)) {
-            HWND hParent = GetParent(hWnd);
-            DWORD dwPid = 0;
-            GetWindowThreadProcessId(hWnd, &dwPid);
-            if (dwPid == GetCurrentProcessId()) {
-                return hParent;
-            }
-        }
-        return hWnd;
     }
 
     static WinSize getWindowSize(HWND hwnd) {
@@ -900,6 +886,40 @@ public:
         else {
             return L"";
         }
+    }
+
+    // 图像另存为 选取文件路径 ANSI/GBK
+    static std::string saveImageDialog() {
+        OPENFILENAMEA ofn{};
+        CHAR szFile[260] = { 0 };
+
+        string strTitleAnsi = utf8ToAnsi("保存图像文件");
+
+        // 配置对话框参数
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = NULL;
+        ofn.lpstrFile = szFile;
+        ofn.nMaxFile = sizeof(szFile);
+        ofn.lpstrFilter = "PNG\0*.png\0JPEG\0*.jpg\0All\0*.*\0";
+        ofn.nFilterIndex = 1;
+        ofn.lpstrTitle = strTitleAnsi.c_str();
+        ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+        // 显示保存对话框
+        if (!GetSaveFileNameA(&ofn)) {
+            return "";  // 用户取消操作
+        }
+
+        // 确保文件扩展名正确
+        std::string filePath = szFile;
+        if (ofn.nFilterIndex == 1 && (!filePath.ends_with(".png") || !filePath.ends_with(".PNG"))) {
+            filePath += ".png";  // 默认添加.png扩展名
+        }
+        else if (ofn.nFilterIndex == 2 && (!filePath.ends_with(".jpg") || !filePath.ends_with(".JPG") || !filePath.ends_with(".jpeg") || !filePath.ends_with(".JPEG"))) {
+            filePath += ".jpg";  // 默认添加.jpg扩展名
+        }
+
+        return filePath;
     }
 
 };

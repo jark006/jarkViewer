@@ -17,6 +17,7 @@ struct PrintParams {
 
     bool isParamsChange = false;
     bool confirmed = false;       // 用户点击确认
+    bool saveToFile = false;      // 保存到文件
     cv::Mat previewImage;         // 预览图像
 };
 
@@ -115,7 +116,7 @@ public:
     }
 
     // 均衡全图亮度 再调整亮度对比度 适合打印文档
-    cv::Mat balancedImageBrightness(const cv::Mat& input_img) {
+    static cv::Mat balancedImageBrightness(const cv::Mat& input_img) {
         if (input_img.type() != CV_8UC3) {
             MessageBoxW(nullptr, L"balancedImageBrightness转换图像错误: 只接受BGR/CV_8UC3类型图像", L"错误", MB_OK | MB_ICONERROR);
             return {};
@@ -200,7 +201,7 @@ public:
         return hBitmap;
     }
 
-    void adjustBrightnessContrast(cv::Mat& src, int brightnessInt, int contrastInt) {
+    static void adjustBrightnessContrast(cv::Mat& src, int brightnessInt, int contrastInt) {
         if (src.empty() || src.type() != CV_8UC3)
             return;
 
@@ -241,7 +242,7 @@ public:
     }
 
     // 图像处理 调整对比度 彩色 黑白
-    void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale, bool invertColors, bool balancedBrightness) {
+    static void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale, bool invertColors, bool balancedBrightness) {
         if (image.empty()) return;
 
         if (balancedBrightness) {
@@ -280,7 +281,7 @@ public:
         cv::Mat roi = squareMat(cv::Rect(x, y, adjusted.cols, adjusted.rows));
         adjusted.copyTo(roi);
 
-        cv::cvtColor(squareMat, squareMat, CV_BGR2BGRA);
+        cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
         Utils::overlayImg(squareMat, buttonUI, squareMat.cols - buttonUI.cols, squareMat.rows - buttonUI.rows);
         cv::imshow(windowsName, squareMat);
     }
@@ -309,7 +310,11 @@ public:
 
         cv::setMouseCallback(windowsName, [](int event, int x, int y, int flags, void* userdata) {
             if (event == cv::EVENT_LBUTTONUP) {
-                if ((400 < x) && (x < 500) && (750 < y)) { // 切换 亮度均衡
+                if ((300 < x) && (x < 400) && (750 < y)) { //另存为
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    params->saveToFile = true;
+                }
+                if ((400 < x) && (x < 500) && (750 < y)) { // 切换 亮度均衡 优化文档打印效果
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->balancedBrightness = !params->balancedBrightness;
                     params->isParamsChange = true;
@@ -322,6 +327,7 @@ public:
                 if ((600 < x) && (x < 700) && (750 < y)) { // 切换 彩色/ 黑白
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->grayscale = !params->grayscale;
+                    params->balancedBrightness = false; // 关掉亮度均衡
                     params->isParamsChange = true;
                 }
                 if ((700 < x) && (x < 800) && (750 < y)) { // 确定按钮
@@ -358,6 +364,20 @@ public:
             }
             int key = cv::waitKey(30);
             if (params.confirmed) break;
+
+            // 保存到文件
+            if (params.saveToFile) {
+                params.saveToFile = false;
+
+                std::thread saveImageThread([](cv::Mat image, PrintParams params) {
+                    auto path = Utils::saveImageDialog();
+                    if (path.length() > 2) {
+                        ApplyImageAdjustments(image, params.brightness, params.contrast, params.grayscale, params.invertColors, params.balancedBrightness);
+                        cv::imwrite(path.c_str(), image);
+                    }
+                    }, image, params);
+                saveImageThread.detach();
+            }
         }
 
         // 用户取消处理
