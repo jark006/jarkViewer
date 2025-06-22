@@ -13,6 +13,7 @@
 class stbText {
 public:
     const uint32_t IDR_TTF_DEFAULT = IDR_MSYHMONO_TTF;
+    std::vector<std::vector<uint8_t>> asciiCache;
 
     stbText() {}
 
@@ -28,6 +29,8 @@ public:
         auto newBufferSize = 2ULL * fontSize * fontSize;
         wordBuff.resize(newBufferSize);
         memset(wordBuff.data(), 0, newBufferSize);
+        asciiCache.clear();
+        asciiCache.resize(256);
     }
 
 
@@ -214,6 +217,8 @@ private:
         auto newBufferSize = 2ULL * fontSize * fontSize;
         wordBuff.resize(newBufferSize);
         memset(wordBuff.data(), 0, newBufferSize);
+        asciiCache.clear();
+        asciiCache.resize(256);
     }
 
     int putWord(cv::Mat& img, int x, int y, const int codePoint, const cv::Vec4b& color) {
@@ -222,7 +227,19 @@ private:
 
         int wordWidth = c_x1 - c_x0;
         int wordHigh = c_y1 - c_y0;
-        stbtt_MakeCodepointBitmap(&info, wordBuff.data(), wordWidth, wordHigh, fontSize, scale, scale, codePoint);
+
+        uint8_t* wordBuffPtr = nullptr;
+        if (codePoint < 256) {
+            if (asciiCache[codePoint].empty()) {
+                asciiCache[codePoint].resize(wordBuff.size());
+                stbtt_MakeCodepointBitmap(&info, asciiCache[codePoint].data(), wordWidth, wordHigh, fontSize, scale, scale, codePoint);
+            }
+            wordBuffPtr = asciiCache[codePoint].data();
+        }
+        else {
+            stbtt_MakeCodepointBitmap(&info, wordBuff.data(), wordWidth, wordHigh, fontSize, scale, scale, codePoint);
+            wordBuffPtr = wordBuff.data();
+        }
 
         y += fontSize + c_y0;
         x += c_x0;
@@ -238,12 +255,12 @@ private:
                     break;
 
                 auto& orgColor = ptr[x + xx];
-                int alpha = wordBuff[yy * fontSize + xx] * color[3] / 255;
+                int alpha = wordBuffPtr[yy * fontSize + xx] * color[3] / 255;
                 if (alpha)
                     orgColor = {
-                        (uint8_t)((orgColor[0] * (255 - alpha) + color[0] * alpha) / 255),
-                        (uint8_t)((orgColor[1] * (255 - alpha) + color[1] * alpha) / 255),
-                        (uint8_t)((orgColor[2] * (255 - alpha) + color[2] * alpha) / 255),
+                        (uint8_t)((orgColor[0] * (255 - alpha) + color[0] * alpha + 255) >> 8),
+                        (uint8_t)((orgColor[1] * (255 - alpha) + color[1] * alpha + 255) >> 8),
+                        (uint8_t)((orgColor[2] * (255 - alpha) + color[2] * alpha + 255) >> 8),
                         255 };
             }
         }

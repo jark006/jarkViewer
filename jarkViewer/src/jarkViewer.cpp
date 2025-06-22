@@ -20,6 +20,7 @@
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 1. svg动画
 1. xpm和bpm格式
+1. 切图动画 左移右移
 */
 
 const wstring appName = L"JarkViewer v1.25";
@@ -353,6 +354,7 @@ public:
                     Utils::ToggleFullScreen(m_hWnd);
                 }
             }
+            operateQueue.push({ ActionENUM::normalFresh });
             return;
         }
 
@@ -831,6 +833,13 @@ public:
                         }
                     }
                 }
+
+                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                    if ((++y) < yEnd) {
+                        memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    }
+                }
             }
         }
         else if (srcImg.type() == CV_8UC4) {
@@ -858,6 +867,13 @@ public:
                             ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
                             break;
                         }
+                    }
+                }
+
+                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                    if ((++y) < yEnd) {
+                        memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
             }
@@ -888,10 +904,13 @@ public:
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         drawCanvas(srcImg, tmpCanvas);
+        cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
         bool needDelay = (maxEdge <= 1920);
-        for (int i = 0; i <= 90; i += ((100 - i) / 4)) {
-            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 2, (maxEdge - winHeight) / 2, winWidth, winHeight));
+        for (int i = 0; i <= 90; i += ((100 - i) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
+            cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
             handleExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
@@ -906,7 +925,7 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
-            if (needDelay)
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
@@ -919,10 +938,12 @@ public:
 
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         drawCanvas(srcImg, tmpCanvas);
+        cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
-        bool needDelay = (maxEdge <= 1920);
-        for (int i = 0; i >= -90; i += ((-100 - i) / 4)) {
-            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 2, (maxEdge - winHeight) / 2, winWidth, winHeight));
+        for (int i = 0; i >= -90; i -= ((100 + i) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
+            cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
             handleExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
@@ -937,7 +958,7 @@ public:
             m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
             m_pD2DDeviceContext->EndDraw();
             m_pSwapChain->Present(0, 0);
-            if (needDelay)
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
 
@@ -1013,15 +1034,12 @@ public:
         static int64_t delayRemain = 0;
         static auto lastTimestamp = std::chrono::steady_clock::now();
 
-        if (m_pD2DDeviceContext == nullptr)
-            return;
-
         auto operateAction = operateQueue.get();
         if (operateAction.action == ActionENUM::none) {
             if (curPar.zoomCur == curPar.zoomTarget &&
                 curPar.slideCur == curPar.slideTarget &&
                 !curPar.isAnimation) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                Sleep(1); // Windows机制限制，实际时长最小只能 15.6ms
                 return;
             }
         }

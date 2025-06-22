@@ -351,20 +351,14 @@ void D2D1App::DiscardDeviceResources()
     Utils::SafeRelease(m_pD3DDeviceContext);
 }
 
-void D2D1App::Run()
-{
-    while (m_fRunning)
-    {
-        // 如果接收到Window消息，则处理这些消息
+void D2D1App::Run() {
+    while (m_fRunning) {
         MSG msg;
-        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        // 否则，则运行动画/游戏
-        else
-        {
+        else {
             DrawScene();
         }
     }

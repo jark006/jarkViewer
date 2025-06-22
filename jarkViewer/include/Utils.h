@@ -72,11 +72,10 @@ using std::endl;
 #include<opencv2/highgui.hpp>
 
 
-#define START_TIME_COUNT auto start_clock = std::chrono::system_clock::now()
-#define END_TIME_COUNT auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count();\
-                                            Utils::log("{}(): {} ms", __FUNCTION__, duration_ms)
-#define END_TIME_COUNT_US auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start_clock).count();\
-                                            Utils::log("{}(): {} us", __FUNCTION__, duration_us)
+#define TIME_COUNT_START auto start_clock = std::chrono::system_clock::now()
+#define TIME_COUNT_END Utils::log("{}(): {} ms", __FUNCTION__, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count())
+#define TIME_COUNT_END_US Utils::log("{}(): {} us", __FUNCTION__, std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start_clock).count())
+#define TIME_COUNT_END_NS Utils::log("{}(): {} ns", __FUNCTION__, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now() - start_clock).count())
 
 struct SettingParameter {
     uint8_t header[32];
