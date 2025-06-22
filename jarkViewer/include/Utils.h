@@ -85,11 +85,11 @@ struct SettingParameter {
 
     int printerBrightness = 100;           // 亮度调整 (0 ~ 200)
     int printerContrast = 100;             // 对比度调整 (0 ~ 200)
-    bool printerGrayscale = true;          // 是否黑白打印
+    int printercolorMode = 1;              // 颜色模式
     bool printerInvertColors = false;      // 是否反相
     bool printerBalancedBrightness = false;// 是否均衡亮度 文档优化
 
-    uint32_t padding[48];
+    uint32_t padding[47];
 };
 
 static_assert(sizeof(SettingParameter) == 256, "sizeof(SettingParameter) != 256");

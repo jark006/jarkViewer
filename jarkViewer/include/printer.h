@@ -11,48 +11,55 @@ struct PrintParams {
     //int layoutMode = 0;           // 0=适应, 1=填充, 2=原始比例
     int brightness = 100;         // 亮度调整 (0 ~ 200)
     int contrast = 100;           // 对比度调整 (0 ~ 200)
-    bool grayscale = true;        // 是否黑白打印
+    int colorMode = 1;            // 颜色模式 0:彩色  1:黑白  2:文档优化 亮度均衡
     bool invertColors = false;    // 是否反相
-    bool balancedBrightness = false; // 是否均衡亮度
 
     bool isParamsChange = false;
     bool confirmed = false;       // 用户点击确认
     bool saveToFile = false;      // 保存到文件
     cv::Mat previewImage;         // 预览图像
+
+    const char* windowsName = "Print Preview";
 };
 
 class Printer {
 private:
     const char* windowsName = "Print Preview";
     PrintParams params{};
-    cv::Mat buttonUI;
+    cv::Mat buttonPrint, buttonDocument, buttonNormal, buttonInvert, buttonColor, buttonGray;
     SettingParameter *settingParameter = nullptr;
 
     void Init() {
-        auto rc = Utils::GetResource(IDB_PNG7, L"PNG");
-        buttonUI = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rcFileInfo rc;
+        rc = Utils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
+        buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
+        buttonDocument = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_BUTTON_NORMAL, L"PNG");
+        buttonNormal = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_BUTTON_INVERT, L"PNG");
+        buttonInvert = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
+        buttonColor = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
+        buttonGray = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;
-        params.grayscale = settingParameter->printerGrayscale;
+        params.colorMode = settingParameter->printercolorMode;
         params.invertColors = settingParameter->printerInvertColors;
-        params.balancedBrightness = settingParameter->printerBalancedBrightness;
-
+        
         // 异常情况则恢复默认值
-        if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200) {
+        if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200 ||
+            params.colorMode < 0 || params.colorMode >2) {
             params.brightness = 100;
             params.contrast = 100;
-            params.grayscale = true;
+            params.colorMode = 1;
             params.invertColors = false;
-            params.balancedBrightness = false;
         }
     }
 
 public:
-    Printer(SettingParameter* settingParameter) : settingParameter(settingParameter) {
-        Init();
-    }
-
     Printer(const cv::Mat& image, SettingParameter* settingParameter) : settingParameter(settingParameter) {
         Init();
         PrintMatImage(image);
@@ -61,9 +68,8 @@ public:
     ~Printer() {
         settingParameter->printerBrightness = params.brightness;
         settingParameter->printerContrast = params.contrast;
-        settingParameter->printerGrayscale = params.grayscale;
+        settingParameter->printercolorMode = params.colorMode;
         settingParameter->printerInvertColors = params.invertColors;
-        settingParameter->printerBalancedBrightness = params.balancedBrightness;
     }
 
     // 灰度/BGR/BGRA统一到BGR
@@ -242,26 +248,24 @@ public:
     }
 
     // 图像处理 调整对比度 彩色 黑白
-    static void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, bool grayscale, bool invertColors, bool balancedBrightness) {
+    static void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, int colorMode, bool invertColors) {
         if (image.empty()) return;
-
-        if (balancedBrightness) {
-            image = balancedImageBrightness(image);
-        }
 
         if (invertColors) {
             cv::bitwise_not(image, image);
         }
 
-        // brightness: 0 ~ 200, 100是中间值，亮度不增不减
-        // contrast:   0 ~ 200, 100是中间值，对比度不增不减
-        adjustBrightnessContrast(image, brightness, contrast);
-
-        if (grayscale) {
+        if (colorMode == 1) {
             cv::Mat gray;
             cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
             cv::cvtColor(gray, image, cv::COLOR_GRAY2BGR);
+        }else if (colorMode == 2) {
+            image = balancedImageBrightness(image);
         }
+
+        // brightness: 0 ~ 200, 100是中间值，亮度不增不减
+        // contrast:   0 ~ 200, 100是中间值，对比度不增不减
+        adjustBrightnessContrast(image, brightness, contrast);
     }
 
 
@@ -270,19 +274,23 @@ public:
         PrintParams* params = static_cast<PrintParams*>(userdata);
 
         cv::Mat adjusted = params->previewImage.clone();
-        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->grayscale, params->invertColors, params->balancedBrightness);
+        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->colorMode, params->invertColors);
 
         // 扩展为正方形画布
         int outputSize = std::max(adjusted.rows, adjusted.cols);
         int x = (outputSize - adjusted.cols) / 2;
         int y = (outputSize - adjusted.rows) / 2;
 
-        cv::Mat squareMat(outputSize, outputSize, CV_8UC3, cv::Scalar(255, 255, 255));
+        // 画布高度+50 放置底栏按钮
+        cv::Mat squareMat(outputSize + 50, outputSize, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::Mat roi = squareMat(cv::Rect(x, y, adjusted.cols, adjusted.rows));
         adjusted.copyTo(roi);
 
         cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
-        Utils::overlayImg(squareMat, buttonUI, squareMat.cols - buttonUI.cols, squareMat.rows - buttonUI.rows);
+
+        Utils::overlayImg(squareMat, params->colorMode ? (params->colorMode == 1 ? buttonGray : buttonDocument) : buttonColor, 100, 800);
+        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 800);
+        Utils::overlayImg(squareMat, buttonPrint, squareMat.cols - buttonPrint.cols, squareMat.rows - buttonPrint.rows);
         cv::imshow(windowsName, squareMat);
     }
 
@@ -310,27 +318,65 @@ public:
 
         cv::setMouseCallback(windowsName, [](int event, int x, int y, int flags, void* userdata) {
             if (event == cv::EVENT_LBUTTONUP) {
-                if ((300 < x) && (x < 400) && (750 < y)) { //另存为
+                if ((100 < x) && (x < 200) && (800 < y)) { // 彩色
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    if (params->colorMode != 0) {
+                        if (params->colorMode == 2) { // 若之前是文档优化，则恢复默认亮度对比度
+                            params->brightness = 100;
+                            params->contrast = 100;
+                        }
+                        params->colorMode = 0;
+                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
+                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
+                        params->isParamsChange = true;
+                    }
+                }
+
+                if ((200 < x) && (x < 300) && (800 < y)) { // 黑白
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    if (params->colorMode != 1) {
+                        if (params->colorMode == 2) { // 若之前是文档优化，则恢复默认亮度对比度
+                            params->brightness = 100;
+                            params->contrast = 100;
+                        }
+                        params->colorMode = 1;
+                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
+                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
+                        params->isParamsChange = true;
+                    }
+                }
+
+                if ((300 < x) && (x < 400) && (800 < y)) { // 文档优化
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    if (params->colorMode != 2) {
+                        params->colorMode = 2;
+                        params->brightness = 160;
+                        params->contrast = 180;
+                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
+                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
+                        params->isParamsChange = true;
+                    }
+                }
+
+                if ((400 < x) && (x < 500) && (800 < y)) { // 正色
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    if (params->invertColors) {
+                        params->invertColors = false;
+                        params->isParamsChange = true;
+                    }
+                }
+                if ((500 < x) && (x < 600) && (800 < y)) { // 反色
+                    PrintParams* params = static_cast<PrintParams*>(userdata);
+                    if (!params->invertColors) {
+                        params->invertColors = true;
+                        params->isParamsChange = true;
+                    }
+                }
+                if ((600 < x) && (x < 700) && (800 < y)) { //另存为
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->saveToFile = true;
                 }
-                if ((400 < x) && (x < 500) && (750 < y)) { // 切换 亮度均衡 优化文档打印效果
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    params->balancedBrightness = !params->balancedBrightness;
-                    params->isParamsChange = true;
-                }
-                if ((500 < x) && (x < 600) && (750 < y)) { // 切换 反色
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    params->invertColors = !params->invertColors;
-                    params->isParamsChange = true;
-                }
-                if ((600 < x) && (x < 700) && (750 < y)) { // 切换 彩色/ 黑白
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    params->grayscale = !params->grayscale;
-                    params->balancedBrightness = false; // 关掉亮度均衡
-                    params->isParamsChange = true;
-                }
-                if ((700 < x) && (x < 800) && (750 < y)) { // 确定按钮
+                if ((700 < x) && (x < 800) && (800 < y)) { // 确定按钮
                     PrintParams* params = static_cast<PrintParams*>(userdata);
                     params->confirmed = true;
                     params->isParamsChange = true;
@@ -372,7 +418,7 @@ public:
                 std::thread saveImageThread([](cv::Mat image, PrintParams params) {
                     auto path = Utils::saveImageDialog();
                     if (path.length() > 2) {
-                        ApplyImageAdjustments(image, params.brightness, params.contrast, params.grayscale, params.invertColors, params.balancedBrightness);
+                        ApplyImageAdjustments(image, params.brightness, params.contrast, params.colorMode, params.invertColors);
                         cv::imwrite(path.c_str(), image);
                     }
                     }, image, params);
@@ -385,7 +431,7 @@ public:
 
         // 应用参数到原始图像
         cv::Mat finalImage = image.clone();
-        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.grayscale, params.invertColors, params.balancedBrightness);
+        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.colorMode, params.invertColors);
         return finalImage;
     }
 

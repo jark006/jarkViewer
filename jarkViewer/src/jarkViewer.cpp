@@ -165,23 +165,23 @@ public:
     ExtraUIRes() {
         rcFileInfo rc;
 
-        rc = Utils::GetResource(IDB_PNG2, L"PNG");
+        rc = Utils::GetResource(IDB_PNG_LEFT_ARROW, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         leftArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG3, L"PNG");
+        rc = Utils::GetResource(IDB_PNG_LEFT_ROTATE, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         leftRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG4, L"PNG");
+        rc = Utils::GetResource(IDB_PNG_RIGHT_ARROW, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         RightArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG5, L"PNG");
+        rc = Utils::GetResource(IDB_PNG_RIGHT_ROTATE, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         rightRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG6, L"PNG");
+        rc = Utils::GetResource(IDB_PNG_PRINTER, L"PNG");
         imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
         printer = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
     }

@@ -150,7 +150,7 @@ public:
 
     cv::Mat& getErrorTipsMat() {
         if (errorTipsMat.empty()) {
-            auto rc = Utils::GetResource(IDB_PNG, L"PNG");
+            auto rc = Utils::GetResource(IDB_PNG_TIPS, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
             errorTipsMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
         }
@@ -159,7 +159,7 @@ public:
 
     cv::Mat& getHomeMat() {
         if (homeMat.empty()) {
-            auto rc = Utils::GetResource(IDB_PNG1, L"PNG");
+            auto rc = Utils::GetResource(IDB_PNG_HOME, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
             homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
         }

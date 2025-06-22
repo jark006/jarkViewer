@@ -732,7 +732,28 @@
     <Image Include="file\printer.png">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="file\printer01.png">
+    <Image Include="file\button_color.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_document_off.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_document_on.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_gray.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_invert.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_normal.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\printerButton.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="file\button_document.png">
       <Filter>资源文件</Filter>
     </Image>
   </ItemGroup>
