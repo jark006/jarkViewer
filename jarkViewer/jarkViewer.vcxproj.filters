@@ -760,4 +760,7 @@
   <ItemGroup>
     <Font Include="file\MSYHMONO.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
+  </ItemGroup>
 </Project>

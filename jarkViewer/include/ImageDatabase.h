@@ -286,13 +286,13 @@ public:
 
         auto ret = cv::Mat(rgb.height, rgb.width, CV_8UC4);
         if (rgb.depth == 8) {
-            if (rgb.rowBytes == ret.step1() && rgb.rowBytes == rgb.width * 4) {
+            if (rgb.rowBytes == ret.step && rgb.rowBytes == rgb.width * 4) {
                 memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
             }
             else {
-                size_t minStep = rgb.rowBytes < ret.step1() ? rgb.rowBytes : ret.step1();
+                size_t minStep = rgb.rowBytes < ret.step ? rgb.rowBytes : ret.step;
                 for (uint32_t y = 0; y < rgb.height; y++) {
-                    memcpy(ret.ptr() + ret.step1() * y, rgb.pixels + rgb.rowBytes * y, minStep);
+                    memcpy(ret.ptr() + ret.step * y, rgb.pixels + rgb.rowBytes * y, minStep);
                 }
             }
         }
@@ -306,7 +306,7 @@ public:
 
             for (uint32_t y = 0; y < rgb.height; y++) {
                 const uint16_t* src = (uint16_t*)(rgb.pixels + rgb.rowBytes * y);
-                uint8_t* dst = (uint8_t*)(ret.ptr() + ret.step1() * y);
+                uint8_t* dst = (uint8_t*)(ret.ptr() + ret.step * y);
                 for (uint32_t x = 0; x < rgb.width * 4; x++) {
                     dst[x] = (uint8_t)(src[x] >> bitShift);
                 }
@@ -1512,7 +1512,7 @@ public:
                         continue;
                     }
                     GifColorType& color = colorMap->Colors[colorIndex];
-                    int pixelIdx = (gifY * gif->SWidth + gifX) * 4;
+                    size_t pixelIdx = ((size_t)gifY * gif->SWidth + gifX) * 4ULL;
                     tmpCanvas[pixelIdx] = color.Blue;
                     tmpCanvas[pixelIdx + 1] = color.Green;
                     tmpCanvas[pixelIdx + 2] = color.Red;

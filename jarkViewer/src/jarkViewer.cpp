@@ -20,10 +20,10 @@
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 1. svg动画
 1. xpm和bpm格式
-1. 切图动画 左移右移
+1. 图像预读取
 */
 
-const wstring appName = L"JarkViewer v1.25";
+const wstring appName = L"JarkViewer v1.26";
 
 
 
@@ -812,9 +812,10 @@ public:
 #endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
+                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
                     if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
                         switch (curPar.rotation)
                         {
@@ -836,7 +837,7 @@ public:
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
                 if (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    if ((++y) < yEnd) {
+                    if ((srcY & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
@@ -848,9 +849,10 @@ public:
 #endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
+                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+
                 for (int x = xStart; x < xEnd; x++) {
                     const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
                     if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
                         switch (curPar.rotation)
                         {
@@ -872,7 +874,11 @@ public:
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
                 if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    if ((++y) < yEnd) {
+                    //if ((y & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
+                    //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    //}
+                    //上下只能二选一
+                    if ((srcY & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
@@ -907,11 +913,12 @@ public:
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
         bool needDelay = (maxEdge <= 1920);
-        for (int i = 0; i <= 90; i += ((100 - i) / 8)) {
+        for (int i = 0; i <= 90; i += ((100 - i) / 6)) {
             auto start_clock = std::chrono::system_clock::now();
             auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
             cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
-            handleExtraUI(tmp);
+            drawExifInfo(tmp);
+            drawExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
                 bitmapSize,
@@ -940,11 +947,12 @@ public:
         drawCanvas(srcImg, tmpCanvas);
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
-        for (int i = 0; i >= -90; i -= ((100 + i) / 8)) {
+        for (int i = 0; i >= -90; i -= ((100 + i) / 6)) {
             auto start_clock = std::chrono::system_clock::now();
             auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
             cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
-            handleExtraUI(tmp);
+            drawExifInfo(tmp);
+            drawExtraUI(tmp);
 
             m_pD2DDeviceContext->CreateBitmap(
                 bitmapSize,
@@ -961,18 +969,244 @@ public:
             if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
-
     }
 
-    void handleExtraUI(cv::Mat& canvas) {
+    // 添加水平运动模糊
+    void applyHorizontalMotionBlur(cv::Mat& src, cv::Mat& dst, int kernelSize = 15, int direction = 1) {
+        // 创建水平运动模糊核 (1行 x kernelSize列)
+        cv::Mat kernel = cv::Mat::zeros(1, kernelSize, CV_32F);
 
+        // 设置方向 (1.0 = 右移模糊, -1.0 = 左移模糊)
+        int start = (direction > 0) ? 0 : kernelSize - 1;
+        int end = (direction > 0) ? kernelSize : -1;
+        int step = (direction > 0) ? 1 : -1;
+
+        // 填充核 (线性衰减效果)
+        float sum = 0.0f;
+        for (int i = start; i != end; i += step) {
+            float weight = 1.0f - std::abs(static_cast<float>(i - start) / (kernelSize - 1));
+            kernel.at<float>(0, i) = weight;
+            sum += weight;
+        }
+        // 归一化核
+        kernel /= sum;
+        // 应用水平卷积 (仅水平方向)
+        cv::filter2D(src, dst, -1, kernel, cv::Point(-1, -1), 0, cv::BORDER_REPLICATE);
+    }
+
+    // 添加竖直运动模糊
+    void applyVerticalMotionBlur(cv::Mat& src, cv::Mat& dst, int kernelSize = 15, float direction = 1.0f) {
+        // 创建水平运动模糊核 (1行 x kernelSize列)
+        cv::Mat kernel = cv::Mat::zeros(kernelSize, 1, CV_32F);
+
+        // 设置方向 (1.0 = 下移模糊, -1.0 = 上移模糊)
+        int start = (direction > 0) ? 0 : kernelSize - 1;
+        int end = (direction > 0) ? kernelSize : -1;
+        int step = (direction > 0) ? 1 : -1;
+
+        // 填充核 (线性衰减效果)
+        float sum = 0.0f;
+        for (int i = start; i != end; i += step) {
+            float weight = 1.0f - std::abs(static_cast<float>(i - start) / (kernelSize - 1));
+            kernel.at<float>(i, 0) = weight;
+            sum += weight;
+        }
+        // 归一化核
+        kernel /= sum;
+        // 应用水平卷积 (仅水平方向)
+        cv::filter2D(src, dst, -1, kernel, cv::Point(-1, -1), 0, cv::BORDER_REPLICATE);
+    }
+
+    // 水平滑动 上一张图
+    void mainCanvasSlideToPreAnimationHorizontal() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
+        drawCanvas(srcImg, nextmainCanvas);
+        drawExifInfo(nextmainCanvas);
+
+        cv::Mat smallMainCanvas;
+        cv::resize(mainCanvas, smallMainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+        cv::resize(nextmainCanvas, nextmainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+
+        cv::Mat panorama(nextmainCanvas.rows, nextmainCanvas.cols * 2, nextmainCanvas.type());
+        nextmainCanvas.copyTo(panorama(cv::Rect(0, 0, smallMainCanvas.cols, smallMainCanvas.rows)));
+        smallMainCanvas.copyTo(panorama(cv::Rect(smallMainCanvas.cols, 0, nextmainCanvas.cols, nextmainCanvas.rows)));
+
+        cv::Mat blurred;
+        applyHorizontalMotionBlur(panorama, blurred, 15, 1);
+        panorama = blurred;
+
+        const int frame_width = nextmainCanvas.cols;
+        const int frame_height = nextmainCanvas.rows;
+        for (int x = frame_width; x > 0; x -= ((frame_width * 1.5 - x) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+
+            cv::Mat view = panorama(cv::Rect(x, 0, frame_width, frame_height));
+            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(view);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                view.ptr(),
+                (UINT32)view.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+                Sleep(1);
+        }
+    }
+
+    // 水平滑动 下一张图
+    void mainCanvasSlideToNextAnimationHorizontal() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
+        drawCanvas(srcImg, nextmainCanvas);
+        drawExifInfo(nextmainCanvas);
+
+        cv::Mat smallMainCanvas;
+        cv::resize(mainCanvas, smallMainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+        cv::resize(nextmainCanvas, nextmainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+
+        cv::Mat panorama(nextmainCanvas.rows, nextmainCanvas.cols * 2, nextmainCanvas.type());
+        smallMainCanvas.copyTo(panorama(cv::Rect(0, 0, smallMainCanvas.cols, smallMainCanvas.rows)));
+        nextmainCanvas.copyTo(panorama(cv::Rect(smallMainCanvas.cols, 0, nextmainCanvas.cols, nextmainCanvas.rows)));
+
+        cv::Mat blurred;
+        applyHorizontalMotionBlur(panorama, blurred, 15, -1);
+        panorama = blurred;
+
+        const int frame_width = nextmainCanvas.cols;
+        const int frame_height = nextmainCanvas.rows;
+        for (int x = 0; x <= frame_width; x += ((frame_width*1.5 - x) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+
+            cv::Mat view = panorama(cv::Rect(x, 0, frame_width, frame_height));
+            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(view);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                view.ptr(),
+                (UINT32)view.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+                Sleep(1);
+        }
+    }
+
+    // 竖直滑动 上一张图
+    void mainCanvasSlideToPreAnimationVertical() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
+        drawCanvas(srcImg, nextmainCanvas);
+        drawExifInfo(nextmainCanvas);
+
+        cv::Mat smallMainCanvas;
+        cv::resize(mainCanvas, smallMainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+        cv::resize(nextmainCanvas, nextmainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+
+        cv::Mat panorama(nextmainCanvas.rows * 2, nextmainCanvas.cols, nextmainCanvas.type());
+        nextmainCanvas.copyTo(panorama(cv::Rect(0, 0, smallMainCanvas.cols, smallMainCanvas.rows)));
+        smallMainCanvas.copyTo(panorama(cv::Rect(0, smallMainCanvas.rows, nextmainCanvas.cols, nextmainCanvas.rows)));
+
+        cv::Mat blurred;
+        applyVerticalMotionBlur(panorama, blurred, 15, 1);
+        panorama = blurred;
+
+        const int frame_width = nextmainCanvas.cols;
+        const int frame_height = nextmainCanvas.rows;
+        for (int y = frame_height; y >= 0; y -= ((frame_height * 1.5 - y) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+
+            cv::Mat view = panorama(cv::Rect(0, y, frame_width, frame_height));
+            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(view);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                view.ptr(),
+                (UINT32)view.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+                Sleep(1);
+        }
+    }
+    
+    // 竖直滑动 下一张图
+    void mainCanvasSlideToNextAnimationVertical() {
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
+        drawCanvas(srcImg, nextmainCanvas);
+        drawExifInfo(nextmainCanvas);
+
+        cv::Mat smallMainCanvas;
+        cv::resize(mainCanvas, smallMainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+        cv::resize(nextmainCanvas, nextmainCanvas, cv::Size(winWidth / 4, winHeight / 4), 0, 0, cv::INTER_NEAREST);
+
+        cv::Mat panorama(nextmainCanvas.rows*2, nextmainCanvas.cols, nextmainCanvas.type());
+        smallMainCanvas.copyTo(panorama(cv::Rect(0, 0, smallMainCanvas.cols, smallMainCanvas.rows)));
+        nextmainCanvas.copyTo(panorama(cv::Rect(0, smallMainCanvas.rows, nextmainCanvas.cols, nextmainCanvas.rows)));
+
+        cv::Mat blurred;
+        applyVerticalMotionBlur(panorama, blurred, 15, -1);
+        panorama = blurred;
+
+        const int frame_width = nextmainCanvas.cols;
+        const int frame_height = nextmainCanvas.rows;
+        for (int y = 0; y <= frame_height; y += ((frame_height * 1.5 - y) / 8)) {
+            auto start_clock = std::chrono::system_clock::now();
+
+            cv::Mat view = panorama(cv::Rect(0, y, frame_width, frame_height));
+            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(view);
+
+            m_pD2DDeviceContext->CreateBitmap(
+                bitmapSize,
+                view.ptr(),
+                (UINT32)view.step,
+                &bitmapProperties,
+                &pBitmap
+            );
+
+            m_pD2DDeviceContext->BeginDraw();
+            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+            m_pD2DDeviceContext->EndDraw();
+            m_pSwapChain->Present(0, 0);
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+                Sleep(1);
+        }
+    }
+
+    void drawExifInfo(cv::Mat& canvas) {
         if (showExif) {
             const int padding = 10;
             const int rightEdge = (canvas.cols - 2 * padding) / 4 + padding;
             RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, canvas.rows - padding };
             stb.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
+    }
 
+    void drawExtraUI(cv::Mat& canvas) {
         int canvasHeight = canvas.rows;
         int canvasWidth = canvas.cols;
 
@@ -1078,19 +1312,39 @@ public:
         } break;
 
         case ActionENUM::preImg: {
+            if (imgFileList.size() <= 1)
+                break;
+            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+            drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+            drawExifInfo(mainCanvas);
+
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
+
+            //mainCanvasSlideToPreAnimationHorizontal();    // 水平滑动
+            mainCanvasSlideToPreAnimationVertical();      // 竖直滑动
+
             lastTimestamp = std::chrono::steady_clock::now();
             delayRemain = 0;
         } break;
 
         case ActionENUM::nextImg: {
+            if (imgFileList.size() <= 1)
+                break;
+            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+            drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+            drawExifInfo(mainCanvas);
+
             if (++curFileIdx >= (int)imgFileList.size())
                 curFileIdx = 0;
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
+
+            //mainCanvasSlideToNextAnimationHorizontal(); // 水平滑动
+            mainCanvasSlideToNextAnimationVertical();   // 竖直滑动
+
             lastTimestamp = std::chrono::steady_clock::now();
             delayRemain = 0;
         } break;
@@ -1216,7 +1470,8 @@ public:
         }
 
         drawCanvas(srcImg, mainCanvas);
-        handleExtraUI(mainCanvas);
+        drawExifInfo(mainCanvas);
+        drawExtraUI(mainCanvas);
 
         wstring str = std::format(L" [{}/{}] {}% ",
             curFileIdx + 1, imgFileList.size(),
