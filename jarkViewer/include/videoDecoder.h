@@ -20,14 +20,14 @@ public:
     HRESULT Initialize(const std::vector<uint8_t>& videoBuffer) {
         HRESULT hr = S_OK;
 
-        // ³õÊ¼»¯Media Foundation
+        // åˆå§‹åŒ–Media Foundation
         hr = MFStartup(MF_VERSION);
         if (FAILED(hr)) {
             std::cerr << "Failed to initialize Media Foundation" << std::endl;
             return hr;
         }
 
-        // ´´½¨ÄÚ´æ×Ö½ÚÁ÷
+        // åˆ›å»ºå†…å­˜å­—èŠ‚æµ
         IMFByteStream* pByteStream = nullptr;
         hr = MFCreateTempFile(MF_ACCESSMODE_READWRITE, MF_OPENMODE_DELETE_IF_EXIST,
             MF_FILEFLAGS_NONE, &pByteStream);
@@ -36,7 +36,7 @@ public:
             return hr;
         }
 
-        // ½«ÊÓÆµÊı¾İĞ´Èë×Ö½ÚÁ÷
+        // å°†è§†é¢‘æ•°æ®å†™å…¥å­—èŠ‚æµ
         ULONG bytesWritten = 0;
         hr = pByteStream->Write(videoBuffer.data(), static_cast<ULONG>(videoBuffer.size()), &bytesWritten);
         if (FAILED(hr)) {
@@ -44,7 +44,7 @@ public:
             return hr;
         }
 
-        // ÖØÖÃÁ÷Î»ÖÃµ½¿ªÊ¼
+        // é‡ç½®æµä½ç½®åˆ°å¼€å§‹
         QWORD currentPosition = 0;
         hr = pByteStream->Seek(msoBegin, 0, MFBYTESTREAM_SEEK_FLAG_CANCEL_PENDING_IO, &currentPosition);
         if (FAILED(hr)) {
@@ -52,11 +52,11 @@ public:
             return hr;
         }
 
-        // ´´½¨Ô´¶ÁÈ¡Æ÷
+        // åˆ›å»ºæºè¯»å–å™¨
         IMFAttributes* pAttributes = nullptr;
         hr = MFCreateAttributes(&pAttributes, 1);
         if (SUCCEEDED(hr)) {
-            // ÆôÓÃÓ²¼ş½âÂë£¨¿ÉÑ¡£©
+            // å¯ç”¨ç¡¬ä»¶è§£ç ï¼ˆå¯é€‰ï¼‰
             hr = pAttributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
         }
 
@@ -74,7 +74,7 @@ public:
             return hr;
         }
 
-        // ÅäÖÃ½âÂëÆ÷Êä³ö¸ñÊ½ÎªRGB24
+        // é…ç½®è§£ç å™¨è¾“å‡ºæ ¼å¼ä¸ºRGB24
         hr = ConfigureDecoder();
         if (FAILED(hr)) {
             return hr;
@@ -87,7 +87,7 @@ public:
     HRESULT ConfigureDecoder() {
         HRESULT hr = S_OK;
 
-        // Ê×ÏÈ³¢ÊÔ»ñÈ¡Ô­Ê¼Ã½ÌåÀàĞÍ
+        // é¦–å…ˆå°è¯•è·å–åŸå§‹åª’ä½“ç±»å‹
         IMFMediaType* pNativeType = nullptr;
         hr = m_pSourceReader->GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &pNativeType);
         if (FAILED(hr)) {
@@ -95,7 +95,7 @@ public:
             return hr;
         }
 
-        // Êä³öÔ­Ê¼¸ñÊ½ĞÅÏ¢ÓÃÓÚµ÷ÊÔ
+        // è¾“å‡ºåŸå§‹æ ¼å¼ä¿¡æ¯ç”¨äºè°ƒè¯•
         GUID subtype;
         if (SUCCEEDED(pNativeType->GetGUID(MF_MT_SUBTYPE, &subtype))) {
             std::wcout << L"Native subtype: ";
@@ -109,7 +109,7 @@ public:
 
         pNativeType->Release();
 
-        // ´´½¨Êä³öÃ½ÌåÀàĞÍ£¬Ê¹ÓÃNV12»òYUY2¸ñÊ½£¨¸ü¼æÈİ£©
+        // åˆ›å»ºè¾“å‡ºåª’ä½“ç±»å‹ï¼Œä½¿ç”¨NV12æˆ–YUY2æ ¼å¼ï¼ˆæ›´å…¼å®¹ï¼‰
         hr = MFCreateMediaType(&m_pDecoderOutputType);
         if (FAILED(hr)) {
             return hr;
@@ -120,14 +120,14 @@ public:
             return hr;
         }
 
-        // Ê×ÏÈ³¢ÊÔNV12¸ñÊ½
+        // é¦–å…ˆå°è¯•NV12æ ¼å¼
         hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
         if (SUCCEEDED(hr)) {
             hr = m_pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                 nullptr, m_pDecoderOutputType);
         }
 
-        // Èç¹ûNV12Ê§°Ü£¬³¢ÊÔYUY2
+        // å¦‚æœNV12å¤±è´¥ï¼Œå°è¯•YUY2
         if (FAILED(hr)) {
             std::cout << "NV12 failed, trying YUY2..." << std::endl;
             hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_YUY2);
@@ -137,7 +137,7 @@ public:
             }
         }
 
-        // Èç¹ûYUY2Ò²Ê§°Ü£¬³¢ÊÔRGB32
+        // å¦‚æœYUY2ä¹Ÿå¤±è´¥ï¼Œå°è¯•RGB32
         if (FAILED(hr)) {
             std::cout << "YUY2 failed, trying RGB32..." << std::endl;
             hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
@@ -151,7 +151,7 @@ public:
             std::cerr << "Failed to set any supported output format, HRESULT: 0x" << std::hex << hr << std::endl;
         }
         else {
-            // »ñÈ¡²¢È·ÈÏ×îÖÕÉèÖÃµÄÃ½ÌåÀàĞÍ
+            // è·å–å¹¶ç¡®è®¤æœ€ç»ˆè®¾ç½®çš„åª’ä½“ç±»å‹
             IMFMediaType* pCurrentType = nullptr;
             hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pCurrentType);
             if (SUCCEEDED(hr)) {
@@ -190,7 +190,7 @@ public:
         LONGLONG timeStamp = 0;
         IMFSample* pSample = nullptr;
 
-        // »ñÈ¡ÊÓÆµĞÅÏ¢
+        // è·å–è§†é¢‘ä¿¡æ¯
         IMFMediaType* pMediaType = nullptr;
         hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pMediaType);
         if (FAILED(hr)) {
@@ -209,7 +209,7 @@ public:
 
         std::cout << "Video dimensions: " << width << "x" << height << std::endl;
 
-        // ½âÂëËùÓĞÖ¡
+        // è§£ç æ‰€æœ‰å¸§
         while (true) {
             hr = m_pSourceReader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                 0, nullptr, &streamFlags, &timeStamp, &pSample);
@@ -261,29 +261,29 @@ private:
 
         cv::Mat result;
 
-        // ¸ù¾İ±£´æµÄ¸ñÊ½½øĞĞ×ª»»
+        // æ ¹æ®ä¿å­˜çš„æ ¼å¼è¿›è¡Œè½¬æ¢
         if (m_outputFormat == MFVideoFormat_NV12) {
-            // NV12¸ñÊ½£ºYÆ½Ãæ + UV½»´íÆ½Ãæ
+            // NV12æ ¼å¼ï¼šYå¹³é¢ + UVäº¤é”™å¹³é¢
             cv::Mat yuvFrame(height * 3 / 2, width, CV_8UC1, pData);
             cv::cvtColor(yuvFrame, result, cv::COLOR_YUV2BGR_NV12);
         }
         else if (m_outputFormat == MFVideoFormat_YUY2) {
-            // YUY2¸ñÊ½£ºYUYV½»´í
+            // YUY2æ ¼å¼ï¼šYUYVäº¤é”™
             cv::Mat yuvFrame(height, width, CV_8UC2, pData);
             cv::cvtColor(yuvFrame, result, cv::COLOR_YUV2BGR_YUY2);
         }
         else if (m_outputFormat == MFVideoFormat_RGB32) {
-            // RGB32¸ñÊ½£ºBGRA
+            // RGB32æ ¼å¼ï¼šBGRA
             cv::Mat bgraFrame(height, width, CV_8UC4, pData);
             cv::cvtColor(bgraFrame, result, cv::COLOR_BGRA2BGR);
-            // ¿ÉÄÜĞèÒª´¹Ö±·­×ª
+            // å¯èƒ½éœ€è¦å‚ç›´ç¿»è½¬
             cv::flip(result, result, 0);
         }
         else {
             std::cerr << "Unsupported format for conversion" << std::endl;
         }
 
-        // ´´½¨¸±±¾£¬ÒòÎªÔ­Ê¼Êı¾İ½«±»ÊÍ·Å
+        // åˆ›å»ºå‰¯æœ¬ï¼Œå› ä¸ºåŸå§‹æ•°æ®å°†è¢«é‡Šæ”¾
         cv::Mat finalResult = result.clone();
 
         pBuffer->Unlock();
@@ -313,7 +313,6 @@ private:
 
 class VideoDecoder {
 public:
-    // Ê¹ÓÃÊ¾Àı
     static std::vector<ImageNode> DecodeVideoFrames(const std::vector<uint8_t>& videoFileBuf) {
         H264VideoDecoder decoder;
 

@@ -542,8 +542,7 @@ public:
                 Utils::copyImageToClipboard(imgs.front().img);
             }break;
             case 'P': {
-                const auto& imgs = curPar.framesPtr->imgList;
-                Printer printer(imgs.front().img, &settingPar);
+                operateQueue.push({ ActionENUM::printImage });
             }break;
             }
         }
@@ -1279,8 +1278,13 @@ public:
         }
 
         if (operateAction.action == ActionENUM::printImage) {
-            const auto& imgs = curPar.framesPtr->imgList;
-            Printer printer(imgs.front().img, &settingPar);
+            if (!Printer::isWorking) {
+                const auto& imgs = curPar.framesPtr->imgList;
+                std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
+                    Printer printer(image, settingParameter);
+                    }, imgs.front().img, &settingPar);
+                printerThread.detach();
+            }
             return;
         }
 
@@ -1421,6 +1425,7 @@ public:
         } break;
 
         case ActionENUM::requitExit: {
+            Printer::requitExit();
             PostMessageW(m_hWnd, WM_DESTROY, 0, 0);
         } break;
 

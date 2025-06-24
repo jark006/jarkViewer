@@ -1,35 +1,45 @@
 #pragma once
 
 #include "Utils.h"
+#include "stbText.h"
 
-// È«¾Ö±äÁ¿´æ´¢UI×´Ì¬
+// å…¨å±€å˜é‡å­˜å‚¨UIçŠ¶æ€
 struct PrintParams {
-    //double topMargin = 5.0;       // ÉÏ±ß¾à°Ù·Ö±È
-    //double bottomMargin = 5.0;    // ÏÂ±ß¾à°Ù·Ö±È
-    //double leftMargin = 5.0;      // ×ó±ß¾à°Ù·Ö±È
-    //double rightMargin = 5.0;     // ÓÒ±ß¾à°Ù·Ö±È
-    //int layoutMode = 0;           // 0=ÊÊÓ¦, 1=Ìî³ä, 2=Ô­Ê¼±ÈÀı
-    int brightness = 100;         // ÁÁ¶Èµ÷Õû (0 ~ 200)
-    int contrast = 100;           // ¶Ô±È¶Èµ÷Õû (0 ~ 200)
-    int colorMode = 1;            // ÑÕÉ«Ä£Ê½ 0:²ÊÉ«  1:ºÚ°×  2:ÎÄµµÓÅ»¯ ÁÁ¶È¾ùºâ
-    bool invertColors = false;    // ÊÇ·ñ·´Ïà
+    //double topMargin = 5.0;       // ä¸Šè¾¹è·ç™¾åˆ†æ¯”
+    //double bottomMargin = 5.0;    // ä¸‹è¾¹è·ç™¾åˆ†æ¯”
+    //double leftMargin = 5.0;      // å·¦è¾¹è·ç™¾åˆ†æ¯”
+    //double rightMargin = 5.0;     // å³è¾¹è·ç™¾åˆ†æ¯”
+    //int layoutMode = 0;           // 0=é€‚åº”, 1=å¡«å……, 2=åŸå§‹æ¯”ä¾‹
+    int brightness = 100;         // äº®åº¦è°ƒæ•´ (0 ~ 200)
+    int contrast = 100;           // å¯¹æ¯”åº¦è°ƒæ•´ (0 ~ 200)
+    int colorMode = 1;            // é¢œè‰²æ¨¡å¼ 0:å½©è‰²  1:é»‘ç™½  2:é»‘ç™½æ–‡æ¡£(ä½¿ç”¨äº®åº¦å‡è¡¡çªå‡ºç»†èŠ‚è½®å»“)
+    bool invertColors = false;    // æ˜¯å¦åç›¸
 
     bool isParamsChange = false;
-    bool confirmed = false;       // ÓÃ»§µã»÷È·ÈÏ
-    bool saveToFile = false;      // ±£´æµ½ÎÄ¼ş
-    cv::Mat previewImage;         // Ô¤ÀÀÍ¼Ïñ
+    bool confirmed = false;       // ç”¨æˆ·ç‚¹å‡»ç¡®è®¤
+    bool saveToFile = false;      // ä¿å­˜åˆ°æ–‡ä»¶
+    bool mousePressing = false;   // é¼ æ ‡å·¦é”®æ˜¯å¦æŒ‰ä½çŠ¶æ€
+    bool mousePressingBrightnessBar = false;
+    bool mousePressingContrastBar = false;
+    cv::Mat previewImage;         // é¢„è§ˆå›¾åƒ
 
-    const char* windowsName = "Print Preview";
+    const char* windowsName = nullptr;
 };
 
 class Printer {
 private:
-    const char* windowsName = "Print Preview";
+    string windowsNameAnsi = Utils::utf8ToAnsi("æ‰“å°");
+    const char* windowsName = windowsNameAnsi.c_str();
+
     PrintParams params{};
-    cv::Mat buttonPrint, buttonDocument, buttonNormal, buttonInvert, buttonColor, buttonGray;
+    stbText stb;
+    cv::Mat buttonPrint, buttonDocument, buttonNormal, buttonInvert, buttonColor, buttonGray, trackbarBg;
     SettingParameter *settingParameter = nullptr;
 
     void Init() {
+        stb.setSize(24);
+        params.windowsName = windowsNameAnsi.c_str();
+
         rcFileInfo rc;
         rc = Utils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
         buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
@@ -43,13 +53,15 @@ private:
         buttonColor = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
         rc = Utils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
         buttonGray = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = Utils::GetResource(IDB_PNG_TRACKBAR, L"PNG");
+        trackbarBg = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;
         params.colorMode = settingParameter->printercolorMode;
         params.invertColors = settingParameter->printerInvertColors;
         
-        // Òì³£Çé¿öÔò»Ö¸´Ä¬ÈÏÖµ
+        // å¼‚å¸¸æƒ…å†µåˆ™æ¢å¤é»˜è®¤å€¼
         if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200 ||
             params.colorMode < 0 || params.colorMode >2) {
             params.brightness = 100;
@@ -60,19 +72,30 @@ private:
     }
 
 public:
+    static inline volatile bool requitExitFlag = false;
+    static inline volatile bool isWorking = false;
+
     Printer(const cv::Mat& image, SettingParameter* settingParameter) : settingParameter(settingParameter) {
+        requitExitFlag = false; 
+        isWorking = true;
+
         Init();
         PrintMatImage(image);
-    }
-
-    ~Printer() {
         settingParameter->printerBrightness = params.brightness;
         settingParameter->printerContrast = params.contrast;
         settingParameter->printercolorMode = params.colorMode;
         settingParameter->printerInvertColors = params.invertColors;
+
+        isWorking = false;
     }
 
-    // »Ò¶È/BGR/BGRAÍ³Ò»µ½BGR
+    ~Printer() { }
+
+    static void requitExit() {
+        requitExitFlag = true;
+    }
+
+    // ç°åº¦/BGR/BGRAç»Ÿä¸€åˆ°BGR
     cv::Mat matToBGR(const cv::Mat& image) {
         if (image.empty())
             return {};
@@ -85,7 +108,7 @@ public:
             bgrMat = image.clone();
         }
         else if (image.channels() == 4) {
-            // Alpha»ìºÏ°×É«±³¾° (255, 255, 255)
+            // Alphaæ··åˆç™½è‰²èƒŒæ™¯ (255, 255, 255)
             const int width = image.cols;
             const int height = image.rows;
             bgrMat = cv::Mat(height, width, CV_8UC3);
@@ -121,10 +144,10 @@ public:
         return bgrMat;
     }
 
-    // ¾ùºâÈ«Í¼ÁÁ¶È ÔÙµ÷ÕûÁÁ¶È¶Ô±È¶È ÊÊºÏ´òÓ¡ÎÄµµ
+    // å‡è¡¡å…¨å›¾äº®åº¦ å†è°ƒæ•´äº®åº¦å¯¹æ¯”åº¦ é€‚åˆæ‰“å°æ–‡æ¡£
     static cv::Mat balancedImageBrightness(const cv::Mat& input_img) {
         if (input_img.type() != CV_8UC3) {
-            MessageBoxW(nullptr, L"balancedImageBrightness×ª»»Í¼Ïñ´íÎó: Ö»½ÓÊÜBGR/CV_8UC3ÀàĞÍÍ¼Ïñ", L"´íÎó", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"balancedImageBrightnessè½¬æ¢å›¾åƒé”™è¯¯: åªæ¥å—BGR/CV_8UC3ç±»å‹å›¾åƒ", L"é”™è¯¯", MB_OK | MB_ICONERROR);
             return {};
         }
 
@@ -132,10 +155,10 @@ public:
         if (kernel_size < 3)
             kernel_size = 3;
 
-        // È·±£ºË´óĞ¡ÎªÆæÊı
+        // ç¡®ä¿æ ¸å¤§å°ä¸ºå¥‡æ•°
         kernel_size |= 1;
 
-        // ×ª»»Îª»Ò¶ÈÍ¼Ïñ
+        // è½¬æ¢ä¸ºç°åº¦å›¾åƒ
         cv::Mat gray;
         if (input_img.channels() == 3) {
             cvtColor(input_img, gray, cv::COLOR_BGR2GRAY);
@@ -144,16 +167,16 @@ public:
             gray = input_img.clone();
         }
 
-        // ¹À¼Æ±³¾°£¨Ê¹ÓÃ´óºËÄ£ºı£©
+        // ä¼°è®¡èƒŒæ™¯ï¼ˆä½¿ç”¨å¤§æ ¸æ¨¡ç³Šï¼‰
         cv::Mat background;
         GaussianBlur(gray, background, cv::Size(kernel_size, kernel_size), 0);
 
-        // ´ÓÔ­Ê¼Í¼ÏñÖĞ¼õÈ¥±³¾°
+        // ä»åŸå§‹å›¾åƒä¸­å‡å»èƒŒæ™¯
         cv::Mat corrected;
-        // Ïàµ±ÓÚ£ºcorrected = gray * 1 + background * (-1) + 128
+        // ç›¸å½“äºï¼šcorrected = gray * 1 + background * (-1) + 128
         addWeighted(gray, 1.0, background, -1.0, 128, corrected);
 
-        // ÔöÇ¿¶Ô±È¶È£¨¹éÒ»»¯µ½0-255·¶Î§£©
+        // å¢å¼ºå¯¹æ¯”åº¦ï¼ˆå½’ä¸€åŒ–åˆ°0-255èŒƒå›´ï¼‰
         normalize(corrected, corrected, 0, 255, cv::NORM_MINMAX);
         corrected.convertTo(corrected, CV_8U);
 
@@ -162,34 +185,34 @@ public:
     }
 
 
-    // ½«cv::Mat×ª»»ÎªHBITMAP
+    // å°†cv::Matè½¬æ¢ä¸ºHBITMAP
     HBITMAP MatToHBITMAP(const cv::Mat& image) {
         if (image.empty()) {
-            MessageBoxW(nullptr, L"MatToHBITMAP×ª»»Í¼Ïñ´íÎó: ¿ÕÍ¼Ïñ", L"´íÎó", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"MatToHBITMAPè½¬æ¢å›¾åƒé”™è¯¯: ç©ºå›¾åƒ", L"é”™è¯¯", MB_OK | MB_ICONERROR);
             return nullptr;
         }
         if (image.type() != CV_8UC3) {
-            MessageBoxW(nullptr, L"MatToHBITMAP×ª»»Í¼Ïñ´íÎó: Ö»½ÓÊÜBGR/CV_8UC3ÀàĞÍÍ¼Ïñ", L"´íÎó", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"MatToHBITMAPè½¬æ¢å›¾åƒé”™è¯¯: åªæ¥å—BGR/CV_8UC3ç±»å‹å›¾åƒ", L"é”™è¯¯", MB_OK | MB_ICONERROR);
             return nullptr;
         }
 
         const int width = image.cols;
         const int height = image.rows;
 
-        const int stride = (width * 3 + 3) & ~3;  // 4×Ö½Ú¶ÔÆë
+        const int stride = (width * 3 + 3) & ~3;  // 4å­—èŠ‚å¯¹é½
         const size_t dataSize = static_cast<size_t>(stride) * height;
 
-        // ×¼±¸BITMAPINFO½á¹¹
+        // å‡†å¤‡BITMAPINFOç»“æ„
         BITMAPINFO bmi{};
         bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         bmi.bmiHeader.biWidth = width;
         bmi.bmiHeader.biHeight = height;
         bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 24;          // 24Î»RGB
+        bmi.bmiHeader.biBitCount = 24;          // 24ä½RGB
         bmi.bmiHeader.biCompression = BI_RGB;
         bmi.bmiHeader.biSizeImage = dataSize;
 
-        // ´´½¨DIB²¢¸´ÖÆÊı¾İ
+        // åˆ›å»ºDIBå¹¶å¤åˆ¶æ•°æ®
         HDC hdcScreen = GetDC(nullptr);
         void* pBits;
         HBITMAP hBitmap = CreateDIBSection(
@@ -221,25 +244,25 @@ public:
         else if (contrastInt > 200)
             contrastInt = 200;
 
-        // brightness: 0 ~ 200 Ó³Éäµ½ 0 ~ 2.0
-        // contrast:   0 ~ 200 Ó³Éäµ½ 0 ~ 2.0
+        // brightness: 0 ~ 200 æ˜ å°„åˆ° 0 ~ 2.0
+        // contrast:   0 ~ 200 æ˜ å°„åˆ° 0 ~ 2.0
         double brightness = brightnessInt / 100.0;
         double contrast = contrastInt / 100.0;
 
-        brightness = pow(2.0 - brightness, 3); // Ôö´ó¶Ô±È¶È±ÈÀı
-        contrast = pow(contrast, 3); // Ôö´ó¶Ô±È¶È±ÈÀı
+        brightness = pow(2.0 - brightness, 3); // å¢å¤§å¯¹æ¯”åº¦æ¯”ä¾‹
+        contrast = pow(contrast, 3); // å¢å¤§å¯¹æ¯”åº¦æ¯”ä¾‹
 
         for (int y = 0; y < src.rows; y++) {
             for (int x = 0; x < src.cols; x++) {
                 cv::Vec3b pixel = src.at<cv::Vec3b>(y, x);
                 for (int c = 0; c < 3; c++) {
-                    // ÒÔ128ÎªÖĞĞÄ½øĞĞ¶Ô±È¶Èµ÷Õû
+                    // ä»¥128ä¸ºä¸­å¿ƒè¿›è¡Œå¯¹æ¯”åº¦è°ƒæ•´
                     double adjusted = (pixel[c] - 128.0) * contrast + 128.0;
 
-                    // Ìí¼ÓÁÁ¶ÈÆ«ÒÆ
+                    // æ·»åŠ äº®åº¦åç§»
                     adjusted = pow(adjusted / 255.0, brightness) * 255;
 
-                    // È·±£ÖµÔÚ0-255·¶Î§ÄÚ
+                    // ç¡®ä¿å€¼åœ¨0-255èŒƒå›´å†…
                     pixel[c] = cv::saturate_cast<uchar>(adjusted);
                 }
                 src.at<cv::Vec3b>(y, x) = pixel;
@@ -247,7 +270,7 @@ public:
         }
     }
 
-    // Í¼Ïñ´¦Àí µ÷Õû¶Ô±È¶È ²ÊÉ« ºÚ°×
+    // å›¾åƒå¤„ç† è°ƒæ•´å¯¹æ¯”åº¦ å½©è‰² é»‘ç™½
     static void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, int colorMode, bool invertColors) {
         if (image.empty()) return;
 
@@ -263,230 +286,291 @@ public:
             image = balancedImageBrightness(image);
         }
 
-        // brightness: 0 ~ 200, 100ÊÇÖĞ¼äÖµ£¬ÁÁ¶È²»Ôö²»¼õ
-        // contrast:   0 ~ 200, 100ÊÇÖĞ¼äÖµ£¬¶Ô±È¶È²»Ôö²»¼õ
+        // brightness: 0 ~ 200, 100æ˜¯ä¸­é—´å€¼ï¼Œäº®åº¦ä¸å¢ä¸å‡
+        // contrast:   0 ~ 200, 100æ˜¯ä¸­é—´å€¼ï¼Œå¯¹æ¯”åº¦ä¸å¢ä¸å‡
         adjustBrightnessContrast(image, brightness, contrast);
     }
 
 
-    // OpenCV »Øµ÷º¯Êı
+    void drawProgressBar(cv::Mat& image, int xBegin, int xEnd, int yBegin, int yEnd, double progress) {
+        cv::rectangle(image,
+            cv::Point(xBegin, yBegin),
+            cv::Point(xEnd, yEnd),
+            cv::Scalar(255, 0, 0, 255),
+            2);
+
+        int fillWidth = static_cast<int>((xEnd - xBegin) * progress);
+        if (0 < fillWidth && fillWidth <= (xEnd - xBegin)) {
+            cv::rectangle(image,
+                cv::Point(xBegin, yBegin),
+                cv::Point(xBegin + fillWidth, yEnd),
+                cv::Scalar(204, 72, 63, 255),
+                -1); // -1è¡¨ç¤ºå®Œå…¨å¡«å……
+        }
+    }
+
+
     void refreshPreview(void* userdata) {
         PrintParams* params = static_cast<PrintParams*>(userdata);
 
         cv::Mat adjusted = params->previewImage.clone();
         ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->colorMode, params->invertColors);
 
-        // À©Õ¹ÎªÕı·½ĞÎ»­²¼
+        // æ‰©å±•ä¸ºæ­£æ–¹å½¢ç”»å¸ƒ
         int outputSize = std::max(adjusted.rows, adjusted.cols);
         int x = (outputSize - adjusted.cols) / 2;
         int y = (outputSize - adjusted.rows) / 2;
 
-        // »­²¼¸ß¶È+50 ·ÅÖÃµ×À¸°´Å¥
-        cv::Mat squareMat(outputSize + 50, outputSize, CV_8UC3, cv::Scalar(255, 255, 255));
+        // ç”»å¸ƒé«˜åº¦+150 æ”¾ç½®ä¸‰è¡Œåº•æ ï¼šä¸¤è¡Œæ‹–åŠ¨æ¡ï¼Œä¸€è¡ŒæŒ‰é’®
+        cv::Mat squareMat(outputSize + 150, outputSize, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::Mat roi = squareMat(cv::Rect(x, y, adjusted.cols, adjusted.rows));
         adjusted.copyTo(roi);
 
         cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
 
-        Utils::overlayImg(squareMat, params->colorMode ? (params->colorMode == 1 ? buttonGray : buttonDocument) : buttonColor, 100, 800);
-        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 800);
+        Utils::overlayImg(squareMat, params->colorMode ? (params->colorMode == 1 ? buttonGray : buttonDocument) : buttonColor, 0, squareMat.rows - buttonColor.rows);
+        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 300, squareMat.rows - buttonNormal.rows);
+        Utils::overlayImg(squareMat, trackbarBg, 0, 800);
         Utils::overlayImg(squareMat, buttonPrint, squareMat.cols - buttonPrint.cols, squareMat.rows - buttonPrint.rows);
+        
+        stb.putAlignLeft(squareMat, { 120, 810, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
+        stb.putAlignLeft(squareMat, { 120, 860, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
+
+        drawProgressBar(squareMat, 250, 750, 810, 840, params->brightness / 200.0);
+        drawProgressBar(squareMat, 250, 750, 860, 890, params->contrast / 200.0);
+
         cv::imshow(windowsName, squareMat);
     }
 
 
-    // ´òÓ¡Ç°Ô¤´¦Àí
+    static void mouseCallback(int event, int x, int y, int flags, void* userdata) {
+        PrintParams* params = static_cast<PrintParams*>(userdata);
+
+        switch (event) {
+
+        case cv::EVENT_RBUTTONUP: { // å³é”®ç›´æ¥å…³é—­æ‰“å°çª—å£
+            cv::destroyWindow(params->windowsName);
+            return;
+        }break;
+
+        case cv::EVENT_MOUSEWHEEL: {
+            auto wheelValue = cv::getMouseWheelDelta(flags);
+
+            if ((100 < x) && (x < 800) && (800 < y) && (y < 850)) {
+                params->brightness += (wheelValue > 0) ? 1 : -1;
+                params->isParamsChange = true;
+                if (params->brightness < 0)params->brightness = 0;
+                if (params->brightness > 200)params->brightness = 200;
+            }
+            else if ((100 < x) && (x < 800) && (850 < y) && (y < 900)) {
+                params->contrast += (wheelValue > 0) ? 1 : -1;
+                params->isParamsChange = true;
+                if (params->contrast < 0)params->contrast = 0;
+                if (params->contrast > 200)params->contrast = 200;
+            }
+        }break;
+
+        case cv::EVENT_MOUSEMOVE: {
+            if (params->mousePressing) {
+                if (params->mousePressingBrightnessBar) {
+                    params->brightness = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
+                    params->isParamsChange = true;
+                }
+                else if (params->mousePressingContrastBar) {
+                    params->contrast = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
+                    params->isParamsChange = true;
+                }
+            }
+        }break;
+
+        case cv::EVENT_LBUTTONDOWN: {
+            params->mousePressing = true;
+
+            if ((200 < x) && (x <= 800) && (800 < y) && (y < 850)) {
+                params->mousePressingBrightnessBar = true;
+                params->brightness = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
+                params->isParamsChange = true;
+            }
+            if ((200 < x) && (x <= 800) && (850 < y) && (y < 900)) {
+                params->mousePressingContrastBar = true;
+                params->contrast = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
+                params->isParamsChange = true;
+            }
+        }break;
+
+        case cv::EVENT_LBUTTONUP: {
+            params->mousePressing = false;
+            params->mousePressingBrightnessBar = false;
+            params->mousePressingContrastBar = false;
+
+            if ((0 < x) && (x < 100) && (900 < y)) { // å½©è‰²
+                if (params->colorMode != 0) {
+                    if (params->colorMode == 2) { // è‹¥ä¹‹å‰æ˜¯é»‘ç™½æ–‡æ¡£æ¨¡å¼ï¼Œåˆ™æ¢å¤é»˜è®¤äº®åº¦å¯¹æ¯”åº¦
+                        params->brightness = 100;
+                        params->contrast = 100;
+                    }
+                    params->colorMode = 0;
+                    params->isParamsChange = true;
+                }
+            }
+
+            if ((100 < x) && (x < 200) && (900 < y)) { // é»‘ç™½
+                if (params->colorMode != 1) {
+                    if (params->colorMode == 2) { // è‹¥ä¹‹å‰æ˜¯é»‘ç™½æ–‡æ¡£æ¨¡å¼ï¼Œåˆ™æ¢å¤é»˜è®¤äº®åº¦å¯¹æ¯”åº¦
+                        params->brightness = 100;
+                        params->contrast = 100;
+                    }
+                    params->colorMode = 1;
+                    params->isParamsChange = true;
+                }
+            }
+
+            if ((200 < x) && (x < 300) && (900 < y)) { // é»‘ç™½æ–‡æ¡£
+                if (params->colorMode != 2) {
+                    params->colorMode = 2;
+                    params->brightness = 160;
+                    params->contrast = 180;
+                    params->isParamsChange = true;
+                }
+            }
+
+            if ((300 < x) && (x < 400) && (900 < y)) { // æ­£è‰²
+                if (params->invertColors) {
+                    params->invertColors = false;
+                    params->isParamsChange = true;
+                }
+            }
+            if ((400 < x) && (x < 500) && (900 < y)) { // åè‰²
+                if (!params->invertColors) {
+                    params->invertColors = true;
+                    params->isParamsChange = true;
+                }
+            }
+            if ((600 < x) && (x < 700) && (900 < y)) { //å¦å­˜ä¸º
+                params->saveToFile = true;
+            }
+            if ((700 < x) && (x < 800) && (900 < y)) { // ç¡®å®šæŒ‰é’®
+                params->confirmed = true;
+                params->isParamsChange = true;
+                cv::destroyWindow(params->windowsName);
+            }
+        }break;
+        }
+    }
+
+    // æ‰“å°å‰é¢„å¤„ç†
     cv::Mat ImagePreprocessingForPrint(const cv::Mat& image) {
         if (image.empty() || image.type() != CV_8UC3) {
             return {};
         }
 
-        // ´´½¨Ô¤ÀÀÍ¼Ïñ
-        const int previewMaxSize = 800;
+        // åˆ›å»ºé¢„è§ˆå›¾åƒ
+        const int previewWidth = 800;
+        const int previewHeight = 950;
 
-        double scale = (double)previewMaxSize / std::max(image.rows, image.cols);
+        double scale = (double)previewWidth / std::max(image.rows, image.cols);
         cv::resize(image, params.previewImage, cv::Size(), scale, scale);
 
-        // Èô³¤¿í²î¾àºÜ¼«¶Ë£¬³¬³¤»ò³¬¿í£¬Ëõ·Å¿ÉÄÜÒì³£
+        // è‹¥é•¿å®½å·®è·å¾ˆæç«¯ï¼Œè¶…é•¿æˆ–è¶…å®½ï¼Œç¼©æ”¾å¯èƒ½å¼‚å¸¸
         if (params.previewImage.empty() || params.previewImage.rows <= 0 || params.previewImage.cols <= 0) {
             return {};
         }
 
-        // ´´½¨UI´°¿Ú
+        // åˆ›å»ºUIçª—å£
         cv::namedWindow(windowsName, cv::WINDOW_AUTOSIZE);
-        cv::resizeWindow(windowsName, previewMaxSize, static_cast<int>(previewMaxSize * 1.2));
+        cv::resizeWindow(windowsName, previewWidth, previewHeight);
 
-        cv::setMouseCallback(windowsName, [](int event, int x, int y, int flags, void* userdata) {
-            if (event == cv::EVENT_LBUTTONUP) {
-                if ((100 < x) && (x < 200) && (800 < y)) { // ²ÊÉ«
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    if (params->colorMode != 0) {
-                        if (params->colorMode == 2) { // ÈôÖ®Ç°ÊÇÎÄµµÓÅ»¯£¬Ôò»Ö¸´Ä¬ÈÏÁÁ¶È¶Ô±È¶È
-                            params->brightness = 100;
-                            params->contrast = 100;
-                        }
-                        params->colorMode = 0;
-                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
-                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
-                        params->isParamsChange = true;
-                    }
-                }
+        cv::setMouseCallback(windowsName, mouseCallback, &params);
 
-                if ((200 < x) && (x < 300) && (800 < y)) { // ºÚ°×
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    if (params->colorMode != 1) {
-                        if (params->colorMode == 2) { // ÈôÖ®Ç°ÊÇÎÄµµÓÅ»¯£¬Ôò»Ö¸´Ä¬ÈÏÁÁ¶È¶Ô±È¶È
-                            params->brightness = 100;
-                            params->contrast = 100;
-                        }
-                        params->colorMode = 1;
-                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
-                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
-                        params->isParamsChange = true;
-                    }
-                }
-
-                if ((300 < x) && (x < 400) && (800 < y)) { // ÎÄµµÓÅ»¯
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    if (params->colorMode != 2) {
-                        params->colorMode = 2;
-                        params->brightness = 160;
-                        params->contrast = 180;
-                        cv::setTrackbarPos("Brightness", params->windowsName, params->brightness);
-                        cv::setTrackbarPos("Contrast", params->windowsName, params->contrast);
-                        params->isParamsChange = true;
-                    }
-                }
-
-                if ((400 < x) && (x < 500) && (800 < y)) { // ÕıÉ«
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    if (params->invertColors) {
-                        params->invertColors = false;
-                        params->isParamsChange = true;
-                    }
-                }
-                if ((500 < x) && (x < 600) && (800 < y)) { // ·´É«
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    if (!params->invertColors) {
-                        params->invertColors = true;
-                        params->isParamsChange = true;
-                    }
-                }
-                if ((600 < x) && (x < 700) && (800 < y)) { //Áí´æÎª
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    params->saveToFile = true;
-                }
-                if ((700 < x) && (x < 800) && (800 < y)) { // È·¶¨°´Å¥
-                    PrintParams* params = static_cast<PrintParams*>(userdata);
-                    params->confirmed = true;
-                    params->isParamsChange = true;
-                    cv::destroyWindow("Print Preview");
-                }
-            }
-            }, &params);
-
-        cv::createTrackbar("Brightness", windowsName, nullptr, 200, [](int value, void* userdata) {
-            PrintParams* params = static_cast<PrintParams*>(userdata);
-            params->brightness = value;
-            params->isParamsChange = true;
-            }, &params);
-        cv::setTrackbarPos("Brightness", windowsName, params.brightness);
-
-        cv::createTrackbar("Contrast", windowsName, nullptr, 200, [](int value, void* userdata) {
-            PrintParams* params = static_cast<PrintParams*>(userdata);
-            params->contrast = value;
-            params->isParamsChange = true;
-            }, &params);
-        cv::setTrackbarPos("Contrast", windowsName, params.contrast);
-
-        // ³õÊ¼Ô¤ÀÀ
+        // åˆå§‹é¢„è§ˆ
         refreshPreview(&params);
 
-        // ÊÂ¼şÑ­»·
+        // äº‹ä»¶å¾ªç¯
         while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {
             if (params.isParamsChange) {
                 params.isParamsChange = false;
                 refreshPreview(&params);
             }
-            int key = cv::waitKey(30);
+            int key = cv::waitKey(10);
             if (params.confirmed) break;
+            if (requitExitFlag) break;
 
-            // ±£´æµ½ÎÄ¼ş
+            // ä¿å­˜åˆ°æ–‡ä»¶
             if (params.saveToFile) {
                 params.saveToFile = false;
 
-                std::thread saveImageThread([](cv::Mat image, PrintParams params) {
+                std::thread saveImageThread([](cv::Mat image, PrintParams* params) {
                     auto path = Utils::saveImageDialog();
                     if (path.length() > 2) {
-                        ApplyImageAdjustments(image, params.brightness, params.contrast, params.colorMode, params.invertColors);
+                        ApplyImageAdjustments(image, params->brightness, params->contrast, params->colorMode, params->invertColors);
                         cv::imwrite(path.c_str(), image);
                     }
-                    }, image, params);
+                    }, image, &params);
                 saveImageThread.detach();
             }
         }
 
-        // ÓÃ»§È¡Ïû´¦Àí
+        // ç”¨æˆ·å–æ¶ˆå¤„ç†
         if (!params.confirmed) return {};
 
-        // Ó¦ÓÃ²ÎÊıµ½Ô­Ê¼Í¼Ïñ
+        // åº”ç”¨å‚æ•°åˆ°åŸå§‹å›¾åƒ
         cv::Mat finalImage = image.clone();
         ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.colorMode, params.invertColors);
         return finalImage;
     }
 
 
-    // ´òÓ¡Í¼Ïñº¯Êı
+    // æ‰“å°å›¾åƒå‡½æ•°
     bool PrintMatImage(const cv::Mat& image) {
         auto bgrMat = matToBGR(image);
 
         if (bgrMat.empty()) {
-            MessageBoxW(nullptr, L"Í¼Ïñ×ª»»µ½BGR·¢Éú´íÎó", L"´íÎó", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"å›¾åƒè½¬æ¢åˆ°BGRå‘ç”Ÿé”™è¯¯", L"é”™è¯¯", MB_OK | MB_ICONERROR);
             return false;
         }
 
         if (!Utils::limitSizeTo16K(bgrMat)) {
-            MessageBoxW(nullptr, L"µ÷ÕûÍ¼Ïñ³ß´ç·¢Éú´íÎó", L"´íÎó", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"è°ƒæ•´å›¾åƒå°ºå¯¸å‘ç”Ÿé”™è¯¯", L"é”™è¯¯", MB_OK | MB_ICONERROR);
             return false;
         }
 
         auto adjustMat = ImagePreprocessingForPrint(bgrMat);
 
-        if (adjustMat.empty()) { // È¡Ïû´òÓ¡
+        if (adjustMat.empty()) { // å–æ¶ˆæ‰“å°
             return true;
         }
 
-        // ³õÊ¼»¯´òÓ¡¶Ô»°¿ò
+        // åˆå§‹åŒ–æ‰“å°å¯¹è¯æ¡†
         PRINTDLGW pd{};
         pd.lStructSize = sizeof(pd);
         pd.Flags = PD_RETURNDC | PD_NOPAGENUMS | PD_NOSELECTION;
 
-        // ÏÔÊ¾´òÓ¡¶Ô»°¿ò
+        // æ˜¾ç¤ºæ‰“å°å¯¹è¯æ¡†
         if (!PrintDlgW(&pd))
             return false;
         if (!pd.hDC)
             return false;
 
-        // ×¼±¸ÎÄµµĞÅÏ¢
+        // å‡†å¤‡æ–‡æ¡£ä¿¡æ¯
         DOCINFOW di{};
         di.cbSize = sizeof(di);
         di.lpszDocName = L"JarkViewer Printed Image";
         di.lpszOutput = nullptr;
 
-        // ¿ªÊ¼´òÓ¡×÷Òµ
+        // å¼€å§‹æ‰“å°ä½œä¸š
         if (StartDocW(pd.hDC, &di) <= 0) {
             DeleteDC(pd.hDC);
             return false;
         }
 
-        // ¿ªÊ¼ĞÂÒ³Ãæ
+        // å¼€å§‹æ–°é¡µé¢
         if (StartPage(pd.hDC) <= 0) {
             EndDoc(pd.hDC);
             DeleteDC(pd.hDC);
             return false;
         }
 
-        // »ñÈ¡´òÓ¡»úºÍÍ¼Ïñ³ß´ç
+        // è·å–æ‰“å°æœºå’Œå›¾åƒå°ºå¯¸
         int pageWidth = GetDeviceCaps(pd.hDC, HORZRES);
         int pageHeight = GetDeviceCaps(pd.hDC, VERTRES);
 
@@ -500,40 +584,40 @@ public:
         int imgWidth = bm.bmWidth;
         int imgHeight = bm.bmHeight;
 
-        // ¼ÆËãËõ·Å±ÈÀı£¨±£³Ö¿í¸ß±È£©
+        // è®¡ç®—ç¼©æ”¾æ¯”ä¾‹ï¼ˆä¿æŒå®½é«˜æ¯”ï¼‰
         double scale = std::min(
             static_cast<double>(pageWidth) / imgWidth,
             static_cast<double>(pageHeight) / imgHeight
         );
 
-        scale *= (pageHeight > pageWidth ? 0.893 : 0.879); // °´±ê×¼A4±ß¾à 1.0-31.8/297  1.0-2.54/210
+        scale *= (pageHeight > pageWidth ? 0.893 : 0.879); // æŒ‰æ ‡å‡†A4è¾¹è· 1.0-31.8/297  1.0-2.54/210
 
         int scaledWidth = static_cast<int>(imgWidth * scale);
         int scaledHeight = static_cast<int>(imgHeight * scale);
 
-        // ¾ÓÖĞÎ»ÖÃ
+        // å±…ä¸­ä½ç½®
         int xPos = (pageWidth - scaledWidth) / 2;
         int yPos = (pageHeight - scaledHeight) / 2;
 
-        // ´´½¨ÄÚ´æDC
+        // åˆ›å»ºå†…å­˜DC
         HDC hdcMem = CreateCompatibleDC(pd.hDC);
         SelectObject(hdcMem, hBitmap);
 
-        // ¸ßÖÊÁ¿Ëõ·Å
+        // é«˜è´¨é‡ç¼©æ”¾
         SetStretchBltMode(pd.hDC, HALFTONE);
         SetBrushOrgEx(pd.hDC, 0, 0, nullptr);
 
-        // »æÖÆµ½´òÓ¡»úDC
+        // ç»˜åˆ¶åˆ°æ‰“å°æœºDC
         StretchBlt(
             pd.hDC, xPos, yPos, scaledWidth, scaledHeight,
             hdcMem, 0, 0, imgWidth, imgHeight, SRCCOPY
         );
 
-        // ÇåÀí×ÊÔ´
+        // æ¸…ç†èµ„æº
         DeleteDC(hdcMem);
         DeleteObject(hBitmap);
 
-        // ½áÊøÒ³ÃæºÍÎÄµµ
+        // ç»“æŸé¡µé¢å’Œæ–‡æ¡£
         EndPage(pd.hDC);
         EndDoc(pd.hDC);
         DeleteDC(pd.hDC);

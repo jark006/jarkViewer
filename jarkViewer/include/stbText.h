@@ -3,9 +3,6 @@
 // https://github.com/nothings/stb
 #include "Utils.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
-
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
@@ -33,11 +30,6 @@ public:
         asciiCache.resize(256);
     }
 
-
-    void saveTest(const char* pngPath, int code) {
-        stbtt_MakeCodepointBitmap(&info, wordBuff.data(), fontSize, fontSize, fontSize, scale, scale, code);
-        stbi_write_png(pngPath, fontSize, fontSize, 1, wordBuff.data(), fontSize);
-    }
 
     // str : UTF-8
     void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Vec4b& color) {
