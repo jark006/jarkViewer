@@ -759,6 +759,9 @@
     <Image Include="file\trackbar.png">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="file\button_dot.png">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Font Include="file\MSYHMONO.ttf" />

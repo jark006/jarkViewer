@@ -389,6 +389,7 @@
     <Image Include="file\button_document.png" />
     <Image Include="file\button_document_off.png" />
     <Image Include="file\button_document_on.png" />
+    <Image Include="file\button_dot.png" />
     <Image Include="file\button_gray.png" />
     <Image Include="file\button_invert.png" />
     <Image Include="file\button_normal.png" />

@@ -407,11 +407,22 @@ public:
         }
     }
 
-    static void setCvWindowIcon(HINSTANCE hInstance, HWND hWnd, WORD wIconId) {
-        if (IsWindow(hWnd)) {
-            HICON hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(wIconId));
-            SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-            SendMessageW(hWnd, (WPARAM)WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+    // 设置窗口图标
+    static void setWindowIcon(HWND hWnd, WORD wIconId) {
+        HICON hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCE(wIconId));
+        if (hIcon) {
+            SendMessageW(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+            SendMessageW(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        }
+    }
+    
+    // 禁止窗口调整尺寸
+    static void disableWindowResize(HWND hwnd) {
+        if (hwnd) {
+            LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+            style &= ~WS_THICKFRAME;   // 移除 WS_THICKFRAME 样式即可禁止拉伸
+            style &= ~WS_MAXIMIZEBOX;  // 移除最大化按钮
+            SetWindowLongW(hwnd, GWL_STYLE, style);
         }
     }
 

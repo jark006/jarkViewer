@@ -22,6 +22,7 @@
 #define IDB_PNG_BUTTON_INVERT           149
 #define IDB_PNG_BUTTON_NORMAL           150
 #define IDB_PNG_TRACKBAR                151
+#define IDB_PNG_BUTTON_DOT              152
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -29,7 +30,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        152
+#define _APS_NEXT_RESOURCE_VALUE        153
 #define _APS_NEXT_COMMAND_VALUE         32772
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           110

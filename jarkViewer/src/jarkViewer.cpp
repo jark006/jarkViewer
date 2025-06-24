@@ -245,13 +245,10 @@ public:
         if (!SUCCEEDED(D2D1App::Initialize(hInstance)))
             return S_FALSE;
 
-        if (m_pD2DDeviceContext == nullptr) {
-            MessageBoxW(NULL, L"窗口创建失败！", L"错误", MB_ICONERROR);
-            exit(-1);
-        }
+        if (m_pD2DDeviceContext == nullptr)
+            return S_FALSE;
 
-        if (hInstance)
-            Utils::setCvWindowIcon(hInstance, m_hWnd, IDI_JARKVIEWER);
+        Utils::setWindowIcon(m_hWnd, IDI_JARKVIEWER);
 
         return S_OK;
     }
@@ -1562,6 +1559,9 @@ int WINAPI wWinMain(
     if (SUCCEEDED(app.InitWindow(hInstance))) {
         app.initOpenFile(filePath);
         app.Run();
+    }
+    else {
+        MessageBoxW(NULL, L"窗口创建失败！", L"错误", MB_ICONERROR);
     }
 
     ::CoUninitialize();

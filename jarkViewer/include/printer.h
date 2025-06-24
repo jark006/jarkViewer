@@ -12,7 +12,7 @@ struct PrintParams {
     //int layoutMode = 0;           // 0=适应, 1=填充, 2=原始比例
     int brightness = 100;         // 亮度调整 (0 ~ 200)
     int contrast = 100;           // 对比度调整 (0 ~ 200)
-    int colorMode = 1;            // 颜色模式 0:彩色  1:黑白  2:黑白文档(使用亮度均衡突出细节轮廓)
+    int colorMode = 1;            // 颜色模式 0:彩色  1:黑白  2:黑白文档 3:黑白点阵(二值像素)
     bool invertColors = false;    // 是否反相
 
     bool isParamsChange = false;
@@ -33,7 +33,8 @@ private:
 
     PrintParams params{};
     stbText stb;
-    cv::Mat buttonPrint, buttonDocument, buttonNormal, buttonInvert, buttonColor, buttonGray, trackbarBg;
+    cv::Mat buttonPrint, buttonNormal, buttonInvert, trackbarBg;
+    std::vector<cv::Mat> buttonColorMode;
     SettingParameter *settingParameter = nullptr;
 
     void Init() {
@@ -43,27 +44,30 @@ private:
         rcFileInfo rc;
         rc = Utils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
         buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
-        buttonDocument = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
         rc = Utils::GetResource(IDB_PNG_BUTTON_NORMAL, L"PNG");
         buttonNormal = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
         rc = Utils::GetResource(IDB_PNG_BUTTON_INVERT, L"PNG");
         buttonInvert = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
-        buttonColor = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
-        buttonGray = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
         rc = Utils::GetResource(IDB_PNG_TRACKBAR, L"PNG");
         trackbarBg = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+
+        rc = Utils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
+        rc = Utils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
+        rc = Utils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
+        rc = Utils::GetResource(IDB_PNG_BUTTON_DOT, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;
         params.colorMode = settingParameter->printercolorMode;
         params.invertColors = settingParameter->printerInvertColors;
-        
+
         // 异常情况则恢复默认值
         if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200 ||
-            params.colorMode < 0 || params.colorMode >2) {
+            params.colorMode < 0 || params.colorMode > 3) {
             params.brightness = 100;
             params.contrast = 100;
             params.colorMode = 1;
@@ -274,11 +278,7 @@ public:
     static void ApplyImageAdjustments(cv::Mat& image, int brightness, int contrast, int colorMode, bool invertColors) {
         if (image.empty()) return;
 
-        if (invertColors) {
-            cv::bitwise_not(image, image);
-        }
-
-        if (colorMode == 1) {
+        if (colorMode == 1 || colorMode == 3) { // 黑白、黑白点阵也需要先灰度
             cv::Mat gray;
             cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
             cv::cvtColor(gray, image, cv::COLOR_GRAY2BGR);
@@ -289,6 +289,57 @@ public:
         // brightness: 0 ~ 200, 100是中间值，亮度不增不减
         // contrast:   0 ~ 200, 100是中间值，对比度不增不减
         adjustBrightnessContrast(image, brightness, contrast);
+
+        if (colorMode == 3) // 最后处理 黑白点阵
+            floydSteinbergDithering(image);
+
+        if (invertColors) {
+            cv::bitwise_not(image, image);
+        }
+    }
+
+    // 误差扩散抖动算法  制作二值点阵图
+    static void floydSteinbergDithering(cv::Mat& image) {
+        cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
+
+        int height = image.rows;
+        int width = image.cols;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                // 获取当前像素值
+                uchar oldVal = image.at<uchar>(y, x);
+                // 二值化：大于阈值设为255（白），否则0（黑）
+                uchar newVal = (oldVal < 128) ? 0 : 255;
+                image.at<uchar>(y, x) = newVal;
+
+                // 计算误差
+                int error = oldVal - newVal;
+
+                // 将误差按比例分配到周围像素（Floyd-Steinberg权重）
+                if (x + 1 < width) {
+                    image.at<uchar>(y, x + 1) = cv::saturate_cast<uchar>(
+                        image.at<uchar>(y, x + 1) + error * 7 / 16
+                    );
+                }
+                if (y + 1 < height) {
+                    if (x - 1 >= 0) {
+                        image.at<uchar>(y + 1, x - 1) = cv::saturate_cast<uchar>(
+                            image.at<uchar>(y + 1, x - 1) + error * 3 / 16
+                        );
+                    }
+                    image.at<uchar>(y + 1, x) = cv::saturate_cast<uchar>(
+                        image.at<uchar>(y + 1, x) + error * 5 / 16
+                    );
+                    if (x + 1 < width) {
+                        image.at<uchar>(y + 1, x + 1) = cv::saturate_cast<uchar>(
+                            image.at<uchar>(y + 1, x + 1) + error * 1 / 16
+                        );
+                    }
+                }
+            }
+        }
+        cv::cvtColor(image, image, cv::COLOR_GRAY2BGR);
     }
 
 
@@ -323,21 +374,21 @@ public:
 
         // 画布高度+150 放置三行底栏：两行拖动条，一行按钮
         cv::Mat squareMat(outputSize + 150, outputSize, CV_8UC3, cv::Scalar(255, 255, 255));
-        cv::Mat roi = squareMat(cv::Rect(x, y, adjusted.cols, adjusted.rows));
+        cv::Mat roi = squareMat(cv::Rect(x, y + 150, adjusted.cols, adjusted.rows));
         adjusted.copyTo(roi);
 
         cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
 
-        Utils::overlayImg(squareMat, params->colorMode ? (params->colorMode == 1 ? buttonGray : buttonDocument) : buttonColor, 0, squareMat.rows - buttonColor.rows);
-        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 300, squareMat.rows - buttonNormal.rows);
-        Utils::overlayImg(squareMat, trackbarBg, 0, 800);
-        Utils::overlayImg(squareMat, buttonPrint, squareMat.cols - buttonPrint.cols, squareMat.rows - buttonPrint.rows);
+        Utils::overlayImg(squareMat, buttonColorMode[params->colorMode], 0, 0);
+        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 0);
+        Utils::overlayImg(squareMat, buttonPrint, 600, 0);
+        Utils::overlayImg(squareMat, trackbarBg, 0, 50);
         
-        stb.putAlignLeft(squareMat, { 120, 810, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
-        stb.putAlignLeft(squareMat, { 120, 860, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
+        stb.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
+        stb.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
 
-        drawProgressBar(squareMat, 250, 750, 810, 840, params->brightness / 200.0);
-        drawProgressBar(squareMat, 250, 750, 860, 890, params->contrast / 200.0);
+        drawProgressBar(squareMat, 250, 750, 60, 90, params->brightness / 200.0);
+        drawProgressBar(squareMat, 250, 750, 110, 140, params->contrast / 200.0);
 
         cv::imshow(windowsName, squareMat);
     }
@@ -356,13 +407,13 @@ public:
         case cv::EVENT_MOUSEWHEEL: {
             auto wheelValue = cv::getMouseWheelDelta(flags);
 
-            if ((100 < x) && (x < 800) && (800 < y) && (y < 850)) {
+            if ((100 < x) && (x < 800) && (50 < y) && (y < 100)) {
                 params->brightness += (wheelValue > 0) ? 1 : -1;
                 params->isParamsChange = true;
                 if (params->brightness < 0)params->brightness = 0;
                 if (params->brightness > 200)params->brightness = 200;
             }
-            else if ((100 < x) && (x < 800) && (850 < y) && (y < 900)) {
+            else if ((100 < x) && (x < 800) && (100 < y) && (y < 150)) {
                 params->contrast += (wheelValue > 0) ? 1 : -1;
                 params->isParamsChange = true;
                 if (params->contrast < 0)params->contrast = 0;
@@ -386,12 +437,12 @@ public:
         case cv::EVENT_LBUTTONDOWN: {
             params->mousePressing = true;
 
-            if ((200 < x) && (x <= 800) && (800 < y) && (y < 850)) {
+            if ((200 < x) && (x <= 800) && (50 < y) && (y < 100)) {
                 params->mousePressingBrightnessBar = true;
                 params->brightness = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
                 params->isParamsChange = true;
             }
-            if ((200 < x) && (x <= 800) && (850 < y) && (y < 900)) {
+            if ((200 < x) && (x <= 800) && (100 < y) && (y < 150)) {
                 params->mousePressingContrastBar = true;
                 params->contrast = x < 250 ? 0 : (x > 750 ? 200 : ((x - 250) * 200 / 500));
                 params->isParamsChange = true;
@@ -403,9 +454,9 @@ public:
             params->mousePressingBrightnessBar = false;
             params->mousePressingContrastBar = false;
 
-            if ((0 < x) && (x < 100) && (900 < y)) { // 彩色
+            if ((0 < x) && (x < 100) && (y < 50)) { // 彩色
                 if (params->colorMode != 0) {
-                    if (params->colorMode == 2) { // 若之前是黑白文档模式，则恢复默认亮度对比度
+                    if (params->colorMode >= 2) { // 若之前是黑白文档/点阵模式，则恢复默认亮度对比度
                         params->brightness = 100;
                         params->contrast = 100;
                     }
@@ -414,9 +465,9 @@ public:
                 }
             }
 
-            if ((100 < x) && (x < 200) && (900 < y)) { // 黑白
+            if ((100 < x) && (x < 200) && (y < 50)) { // 黑白
                 if (params->colorMode != 1) {
-                    if (params->colorMode == 2) { // 若之前是黑白文档模式，则恢复默认亮度对比度
+                    if (params->colorMode >= 2) { // 若之前是黑白文档/点阵模式，则恢复默认亮度对比度
                         params->brightness = 100;
                         params->contrast = 100;
                     }
@@ -425,7 +476,7 @@ public:
                 }
             }
 
-            if ((200 < x) && (x < 300) && (900 < y)) { // 黑白文档
+            if ((200 < x) && (x < 300) && (y < 50)) { // 黑白文档
                 if (params->colorMode != 2) {
                     params->colorMode = 2;
                     params->brightness = 160;
@@ -434,22 +485,31 @@ public:
                 }
             }
 
-            if ((300 < x) && (x < 400) && (900 < y)) { // 正色
+            if ((300 < x) && (x < 400) && (y < 50)) { // 黑白点阵
+                if (params->colorMode != 3) {
+                    params->colorMode = 3;
+                    params->brightness = 80;
+                    params->contrast = 100;
+                    params->isParamsChange = true;
+                }
+            }
+
+            if ((400 < x) && (x < 500) && (y < 50)) { // 正色
                 if (params->invertColors) {
                     params->invertColors = false;
                     params->isParamsChange = true;
                 }
             }
-            if ((400 < x) && (x < 500) && (900 < y)) { // 反色
+            if ((500 < x) && (x < 600) && (y < 50)) { // 反色
                 if (!params->invertColors) {
                     params->invertColors = true;
                     params->isParamsChange = true;
                 }
             }
-            if ((600 < x) && (x < 700) && (900 < y)) { //另存为
+            if ((600 < x) && (x < 700) && (y < 50)) { //另存为
                 params->saveToFile = true;
             }
-            if ((700 < x) && (x < 800) && (900 < y)) { // 确定按钮
+            if ((700 < x) && (x < 800) && (y < 50)) { // 确定按钮
                 params->confirmed = true;
                 params->isParamsChange = true;
                 cv::destroyWindow(params->windowsName);
@@ -484,6 +544,17 @@ public:
 
         // 初始预览
         refreshPreview(&params);
+
+        HWND hwnd = FindWindowA(NULL, windowsName);
+        if (hwnd) {
+            Utils::disableWindowResize(hwnd);
+
+            HICON hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCE(IDI_JARKVIEWER));
+            if (hIcon) {
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+            }
+        }
 
         // 事件循环
         while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {
