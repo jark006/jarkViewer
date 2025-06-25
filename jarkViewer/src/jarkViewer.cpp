@@ -1,8 +1,8 @@
-#include "Utils.h"
+#include "jarkUtils.h"
 
-#include "stbText.h"
+#include "TextDrawer.h"
 #include "ImageDatabase.h"
-#include "printer.h"
+#include "Printer.h"
 
 #include "D2D1App.h"
 #include <wrl.h>
@@ -71,7 +71,7 @@ struct CurImageParameter {
             zoomCur = zoomTarget;
 
             zoomList = ZOOM_LIST;
-            if (!Utils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+            if (!jarkUtils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
                 zoomList.push_back(zoomFitWindow);
             std::sort(zoomList.begin(), zoomList.end());
             auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
@@ -98,7 +98,7 @@ struct CurImageParameter {
         int64_t zoomFitWindow = std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height);
 
         zoomList = ZOOM_LIST;
-        if (!Utils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+        if (!jarkUtils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
             zoomList.push_back(zoomFitWindow);
         else {
             if (zoomIndex >= zoomList.size())
@@ -166,24 +166,24 @@ public:
     ExtraUIRes() {
         rcFileInfo rc;
 
-        rc = Utils::GetResource(IDB_PNG_LEFT_ARROW, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rc = jarkUtils::GetResource(IDB_PNG_LEFT_ARROW, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
         leftArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG_LEFT_ROTATE, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rc = jarkUtils::GetResource(IDB_PNG_LEFT_ROTATE, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
         leftRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG_RIGHT_ARROW, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rc = jarkUtils::GetResource(IDB_PNG_RIGHT_ARROW, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
         RightArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG_RIGHT_ROTATE, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rc = jarkUtils::GetResource(IDB_PNG_RIGHT_ROTATE, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
         rightRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG_PRINTER, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr);
+        rc = jarkUtils::GetResource(IDB_PNG_PRINTER, L"PNG");
+        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
         printer = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
     }
     ~ExtraUIRes() {}
@@ -215,7 +215,7 @@ public:
     int curFileIdx = -1;         // 文件在路径列表的索引
     vector<wstring> imgFileList; // 工作目录下所有图像文件路径
 
-    stbText stb;                 // 给Mat绘制文字
+    TextDrawer textDrawer;                 // 给Mat绘制文字
     cv::Mat mainCanvas;          // 窗口内容画布
     D2D1_SIZE_U bitmapSize = D2D1::SizeU(600, 400);
 
@@ -234,7 +234,7 @@ public:
 
         UINT dpi = GetDpiForSystem(); // 100%: 96 150%: 144 200%: 192
         if (dpi >= 144) {
-            stb.setSize(dpi < 168 ? 24 : 32);
+            textDrawer.setSize(dpi < 168 ? 24 : 32);
         }
     }
 
@@ -248,7 +248,7 @@ public:
         if (m_pD2DDeviceContext == nullptr)
             return S_FALSE;
 
-        Utils::setWindowIcon(m_hWnd, IDI_JARKVIEWER);
+        jarkUtils::setWindowIcon(m_hWnd, IDI_JARKVIEWER);
 
         return S_OK;
     }
@@ -348,7 +348,7 @@ public:
                 lastClickTimestamp = now;
 
                 if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
-                    Utils::ToggleFullScreen(m_hWnd);
+                    jarkUtils::ToggleFullScreen(m_hWnd);
                 }
             }
             operateQueue.push({ ActionENUM::normalFresh });
@@ -516,7 +516,7 @@ public:
             switch (keyValue)
             {
             case 'O': { // Ctrl + O
-                wstring filePath = Utils::SelectFile(m_hWnd);
+                wstring filePath = jarkUtils::SelectFile(m_hWnd);
                 if (!filePath.empty()) {
                     initOpenFile(filePath);
                     operateQueue.push({ ActionENUM::normalFresh });
@@ -530,13 +530,13 @@ public:
                     if (dotIdx == string::npos)
                         dotIdx = filePath.size();
                     for (int i = 0; i < imgs.size(); i++) {
-                        cv::imwrite(Utils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+                        cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
                     }
                 }
             }break;
             case 'C': {
                 const auto& imgs = curPar.framesPtr->imgList;
-                Utils::copyImageToClipboard(imgs.front().img);
+                jarkUtils::copyImageToClipboard(imgs.front().img);
             }break;
             case 'P': {
                 operateQueue.push({ ActionENUM::printImage });
@@ -551,11 +551,11 @@ public:
             }break;
 
             case 'C': { // 复制图像信息到剪贴板
-                Utils::copyToClipboard(Utils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
+                jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
             }break;
 
             case VK_F11: {
-                Utils::ToggleFullScreen(m_hWnd);
+                jarkUtils::ToggleFullScreen(m_hWnd);
             }break;
 
             case 'Q': {
@@ -1198,7 +1198,7 @@ public:
             const int padding = 10;
             const int rightEdge = (canvas.cols - 2 * padding) / 4 + padding;
             RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, canvas.rows - padding };
-            stb.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
+            textDrawer.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
     }
 
@@ -1213,7 +1213,7 @@ public:
                 auto& img = extraUIRes.leftRotate;
                 int imgHeight = img.rows;
                 int imgWidth = img.cols;
-                Utils::overlayImg(canvas, img, 0, (canvasHeight / 4 - imgHeight) / 2);
+                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight / 4 - imgHeight) / 2);
             }
         } break;
 
@@ -1222,7 +1222,7 @@ public:
                 auto& img = extraUIRes.leftArrow;
                 int imgHeight = img.rows;
                 int imgWidth = img.cols;
-                Utils::overlayImg(canvas, img, 0, (canvasHeight - imgHeight) / 2);
+                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight - imgHeight) / 2);
             }
         } break;
 
@@ -1231,7 +1231,7 @@ public:
                 auto& img = extraUIRes.printer;
                 int imgHeight = img.rows;
                 int imgWidth = img.cols;
-                Utils::overlayImg(canvas, img, 0, (canvasHeight * 7 / 4 - imgHeight) / 2);
+                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight * 7 / 4 - imgHeight) / 2);
             }
         } break;
 
@@ -1243,7 +1243,7 @@ public:
                 auto& img = extraUIRes.RightArrow;
                 int imgHeight = img.rows;
                 int imgWidth = img.cols;
-                Utils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight - imgHeight) / 2);
+                jarkUtils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight - imgHeight) / 2);
             }
         } break;
 
@@ -1252,7 +1252,7 @@ public:
                 auto& img = extraUIRes.rightRotate;
                 int imgHeight = img.rows;
                 int imgWidth = img.cols;
-                Utils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight / 4 - imgHeight) / 2);
+                jarkUtils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight / 4 - imgHeight) / 2);
             }
         } break;
         }

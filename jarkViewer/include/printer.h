@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Utils.h"
-#include "stbText.h"
+#include "jarkUtils.h"
+#include "TextDrawer.h"
 
 // 全局变量存储UI状态
 struct PrintParams {
@@ -28,37 +28,37 @@ struct PrintParams {
 
 class Printer {
 private:
-    string windowsNameAnsi = Utils::utf8ToAnsi("打印");
+    string windowsNameAnsi = jarkUtils::utf8ToAnsi("打印");
     const char* windowsName = windowsNameAnsi.c_str();
 
     PrintParams params{};
-    stbText stb;
+    TextDrawer textDrawer;
     cv::Mat buttonPrint, buttonNormal, buttonInvert, trackbarBg;
     std::vector<cv::Mat> buttonColorMode;
     SettingParameter *settingParameter = nullptr;
 
     void Init() {
-        stb.setSize(24);
+        textDrawer.setSize(24);
         params.windowsName = windowsNameAnsi.c_str();
 
         rcFileInfo rc;
-        rc = Utils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
-        buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_BUTTON_NORMAL, L"PNG");
-        buttonNormal = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_BUTTON_INVERT, L"PNG");
-        buttonInvert = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
-        rc = Utils::GetResource(IDB_PNG_TRACKBAR, L"PNG");
-        trackbarBg = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
+        buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_NORMAL, L"PNG");
+        buttonNormal = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_INVERT, L"PNG");
+        buttonInvert = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_TRACKBAR, L"PNG");
+        trackbarBg = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        rc = Utils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
-        rc = Utils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
-        rc = Utils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
-        rc = Utils::GetResource(IDB_PNG_BUTTON_DOT, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.addr), cv::IMREAD_UNCHANGED));
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
+        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_DOT, L"PNG");
+        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;
@@ -204,7 +204,6 @@ public:
         const int height = image.rows;
 
         const int stride = (width * 3 + 3) & ~3;  // 4字节对齐
-        const size_t dataSize = static_cast<size_t>(stride) * height;
 
         // 准备BITMAPINFO结构
         BITMAPINFO bmi{};
@@ -214,7 +213,7 @@ public:
         bmi.bmiHeader.biPlanes = 1;
         bmi.bmiHeader.biBitCount = 24;          // 24位RGB
         bmi.bmiHeader.biCompression = BI_RGB;
-        bmi.bmiHeader.biSizeImage = dataSize;
+        bmi.bmiHeader.biSizeImage = stride * height;
 
         // 创建DIB并复制数据
         HDC hdcScreen = GetDC(nullptr);
@@ -379,13 +378,13 @@ public:
 
         cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
 
-        Utils::overlayImg(squareMat, buttonColorMode[params->colorMode], 0, 0);
-        Utils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 0);
-        Utils::overlayImg(squareMat, buttonPrint, 600, 0);
-        Utils::overlayImg(squareMat, trackbarBg, 0, 50);
+        jarkUtils::overlayImg(squareMat, buttonColorMode[params->colorMode], 0, 0);
+        jarkUtils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 0);
+        jarkUtils::overlayImg(squareMat, buttonPrint, 600, 0);
+        jarkUtils::overlayImg(squareMat, trackbarBg, 0, 50);
         
-        stb.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
-        stb.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
+        textDrawer.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
+        textDrawer.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
 
         drawProgressBar(squareMat, 250, 750, 60, 90, params->brightness / 200.0);
         drawProgressBar(squareMat, 250, 750, 110, 140, params->contrast / 200.0);
@@ -547,7 +546,7 @@ public:
 
         HWND hwnd = FindWindowA(NULL, windowsName);
         if (hwnd) {
-            Utils::disableWindowResize(hwnd);
+            jarkUtils::disableWindowResize(hwnd);
 
             HICON hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCE(IDI_JARKVIEWER));
             if (hIcon) {
@@ -571,7 +570,7 @@ public:
                 params.saveToFile = false;
 
                 std::thread saveImageThread([](cv::Mat image, PrintParams* params) {
-                    auto path = Utils::saveImageDialog();
+                    auto path = jarkUtils::saveImageDialog();
                     if (path.length() > 2) {
                         ApplyImageAdjustments(image, params->brightness, params->contrast, params->colorMode, params->invertColors);
                         cv::imwrite(path.c_str(), image);
@@ -600,7 +599,7 @@ public:
             return false;
         }
 
-        if (!Utils::limitSizeTo16K(bgrMat)) {
+        if (!jarkUtils::limitSizeTo16K(bgrMat)) {
             MessageBoxW(nullptr, L"调整图像尺寸发生错误", L"错误", MB_OK | MB_ICONERROR);
             return false;
         }

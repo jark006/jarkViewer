@@ -14,9 +14,18 @@ D2D1App::~D2D1App()
 {
     saveSettings();
     this->DiscardDeviceResources();
-    Utils::SafeRelease(m_pD2DFactory);
-    Utils::SafeRelease(m_pWICFactory);
-    Utils::SafeRelease(m_pDWriteFactory);
+    SafeRelease(m_pD2DFactory);
+    SafeRelease(m_pWICFactory);
+    SafeRelease(m_pDWriteFactory);
+}
+
+template<class Interface>
+void D2D1App::SafeRelease(Interface*& pInterfaceToRelease) {
+    if (pInterfaceToRelease == nullptr)
+        return;
+
+    pInterfaceToRelease->Release();
+    pInterfaceToRelease = nullptr;
 }
 
 void D2D1App::loadSettings() {
@@ -214,8 +223,8 @@ HRESULT D2D1App::CreateDeviceResources()
     if (SUCCEEDED(hr))
         hr = m_pD2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &m_pD2DDeviceContext);
 
-    Utils::SafeRelease(pDxgiDevice);
-    Utils::SafeRelease(pDxgiFactory);
+    SafeRelease(pDxgiDevice);
+    SafeRelease(pDxgiFactory);
 
     CreateWindowSizeDependentResources();
 
@@ -237,7 +246,7 @@ void D2D1App::CreateWindowSizeDependentResources()
 
     // 清除之前窗口的呈现器相关设备
     m_pD2DDeviceContext->SetTarget(nullptr);
-    Utils::SafeRelease(m_pD2DTargetBimtap);
+    SafeRelease(m_pD2DTargetBimtap);
     m_pD3DDeviceContext->Flush();
 
     RECT rect = { 0 }; GetClientRect(m_hWnd, &rect);
@@ -334,21 +343,21 @@ void D2D1App::CreateWindowSizeDependentResources()
         m_pD2DDeviceContext->SetTarget(m_pD2DTargetBimtap);
     }
 
-    Utils::SafeRelease(pDxgiDevice);
-    Utils::SafeRelease(pDxgiAdapter);
-    Utils::SafeRelease(pDxgiFactory);
-    Utils::SafeRelease(pDxgiBackBuffer);
+    SafeRelease(pDxgiDevice);
+    SafeRelease(pDxgiAdapter);
+    SafeRelease(pDxgiFactory);
+    SafeRelease(pDxgiBackBuffer);
 }
 
 // 丢弃设备相关资源
 void D2D1App::DiscardDeviceResources()
 {
-    Utils::SafeRelease(m_pD2DTargetBimtap);
-    Utils::SafeRelease(m_pSwapChain);
-    Utils::SafeRelease(m_pD2DDeviceContext);
-    Utils::SafeRelease(m_pD2DDevice);
-    Utils::SafeRelease(m_pD3DDevice);
-    Utils::SafeRelease(m_pD3DDeviceContext);
+    SafeRelease(m_pD2DTargetBimtap);
+    SafeRelease(m_pSwapChain);
+    SafeRelease(m_pD2DDeviceContext);
+    SafeRelease(m_pD2DDevice);
+    SafeRelease(m_pD3DDevice);
+    SafeRelease(m_pD3DDeviceContext);
 }
 
 void D2D1App::Run() {

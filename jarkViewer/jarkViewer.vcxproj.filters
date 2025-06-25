@@ -698,6 +698,9 @@
     <ClCompile Include="include\videoDecoder.h">
       <Filter>include</Filter>
     </ClCompile>
+    <ClCompile Include="src\Utils.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc">

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "Utils.h"
+#include "jarkUtils.h"
 
 
 class D2D1App {
@@ -39,6 +39,9 @@ protected:
     void CreateWindowSizeDependentResources();
     // 丢弃设备有关资源
     void DiscardDeviceResources();
+
+    template<class Interface>
+    void SafeRelease(Interface*& pInterfaceToRelease);
 
     void loadSettings();
     void saveSettings();

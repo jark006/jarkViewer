@@ -77,7 +77,7 @@
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -117,7 +117,7 @@
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;UNICODE;_UNICODE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -174,7 +174,7 @@
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\lunasvg.h" />
     <ClInclude Include="include\png.h" />
-    <ClInclude Include="include\printer.h" />
+    <ClInclude Include="include\Printer.h" />
     <ClInclude Include="include\psdsdk.h" />
     <ClInclude Include="include\psdsdk\Psd.h" />
     <ClInclude Include="include\psdsdk\PsdAllocator.h" />
@@ -239,9 +239,9 @@
     <ClInclude Include="include\psdsdk\PsdTypes.h" />
     <ClInclude Include="include\psdsdk\PsdUnionCast.h" />
     <ClInclude Include="include\psdsdk\PsdVectorMask.h" />
-    <ClInclude Include="include\stbText.h" />
+    <ClInclude Include="include\TextDrawer.h" />
     <ClInclude Include="include\thread_pool.h" />
-    <ClInclude Include="include\Utils.h" />
+    <ClInclude Include="include\jarkUtils.h" />
     <ClInclude Include="include\x265.h" />
     <ClInclude Include="include\x265_config.h" />
     <ClInclude Include="libavcodec\avcodec.h" />
@@ -378,8 +378,12 @@
     <ClCompile Include="libavutil\mem.cpp" />
     <ClCompile Include="libavutil\pixdesc.cpp" />
     <ClCompile Include="src\D2D1App.cpp" />
+    <ClCompile Include="src\exifParse.cpp" />
+    <ClCompile Include="src\ImageDatabase.cpp" />
     <ClCompile Include="src\jarkViewer.cpp" />
     <ClCompile Include="src\libbpg.cpp" />
+    <ClCompile Include="src\jarkUtils.cpp" />
+    <ClCompile Include="src\TextDrawer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc" />
