@@ -2,6 +2,7 @@
 
 #include "jarkUtils.h"
 #include "TextDrawer.h"
+#include "D2D1App.h"
 
 // 全局变量存储UI状态
 struct PrintParams {
@@ -37,28 +38,26 @@ private:
     std::vector<cv::Mat> buttonColorMode;
     SettingParameter *settingParameter = nullptr;
 
+    static inline volatile bool requestExitFlag = false;
+
     void Init() {
         textDrawer.setSize(24);
         params.windowsName = windowsNameAnsi.c_str();
 
         rcFileInfo rc;
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_PRINTER, L"PNG");
-        buttonPrint = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_NORMAL, L"PNG");
-        buttonNormal = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_INVERT, L"PNG");
-        buttonInvert = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
-        rc = jarkUtils::GetResource(IDB_PNG_TRACKBAR, L"PNG");
-        trackbarBg = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_PRINTER_RES, L"PNG");
+        auto printerRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_COLOR, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_GRAY, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_DOC, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
-        rc = jarkUtils::GetResource(IDB_PNG_BUTTON_DOT, L"PNG");
-        buttonColorMode.push_back(cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED));
+        buttonColorMode.push_back(printerRes({ 0, 0, 400, 50 }).clone());
+        buttonColorMode.push_back(printerRes({ 400, 0, 400, 50 }).clone());
+        buttonColorMode.push_back(printerRes({ 0, 50, 400, 50 }).clone());
+        buttonColorMode.push_back(printerRes({ 400, 50, 400, 50 }).clone());
+
+        buttonNormal = printerRes({ 0, 100, 200, 50 }).clone();
+        buttonInvert = printerRes({ 200, 100, 200, 50 }).clone();
+
+        buttonPrint = printerRes({ 400, 100, 200, 50 }).clone();
+        trackbarBg = printerRes({ 0, 150, 800, 100 }).clone();
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;
@@ -76,11 +75,10 @@ private:
     }
 
 public:
-    static inline volatile bool requitExitFlag = false;
     static inline volatile bool isWorking = false;
 
     Printer(const cv::Mat& image, SettingParameter* settingParameter) : settingParameter(settingParameter) {
-        requitExitFlag = false; 
+        requestExitFlag = false; 
         isWorking = true;
 
         Init();
@@ -95,8 +93,8 @@ public:
 
     ~Printer() { }
 
-    static void requitExit() {
-        requitExitFlag = true;
+    static void requestExit() {
+        requestExitFlag = true;
     }
 
     // 灰度/BGR/BGRA统一到BGR
@@ -360,11 +358,10 @@ public:
     }
 
 
-    void refreshPreview(void* userdata) {
-        PrintParams* params = static_cast<PrintParams*>(userdata);
+    void refreshUI() {
 
-        cv::Mat adjusted = params->previewImage.clone();
-        ApplyImageAdjustments(adjusted, params->brightness, params->contrast, params->colorMode, params->invertColors);
+        cv::Mat adjusted = params.previewImage.clone();
+        ApplyImageAdjustments(adjusted, params.brightness, params.contrast, params.colorMode, params.invertColors);
 
         // 扩展为正方形画布
         int outputSize = std::max(adjusted.rows, adjusted.cols);
@@ -378,16 +375,16 @@ public:
 
         cv::cvtColor(squareMat, squareMat, cv::COLOR_BGR2BGRA);
 
-        jarkUtils::overlayImg(squareMat, buttonColorMode[params->colorMode], 0, 0);
-        jarkUtils::overlayImg(squareMat, params->invertColors ? buttonInvert : buttonNormal, 400, 0);
+        jarkUtils::overlayImg(squareMat, buttonColorMode[params.colorMode], 0, 0);
+        jarkUtils::overlayImg(squareMat, params.invertColors ? buttonInvert : buttonNormal, 400, 0);
         jarkUtils::overlayImg(squareMat, buttonPrint, 600, 0);
         jarkUtils::overlayImg(squareMat, trackbarBg, 0, 50);
         
-        textDrawer.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params->brightness).c_str(), { 0, 0, 0, 255 });
-        textDrawer.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params->contrast).c_str(), {0, 0, 0, 255});
+        textDrawer.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params.brightness).c_str(), { 0, 0, 0, 255 });
+        textDrawer.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params.contrast).c_str(), {0, 0, 0, 255});
 
-        drawProgressBar(squareMat, 250, 750, 60, 90, params->brightness / 200.0);
-        drawProgressBar(squareMat, 250, 750, 110, 140, params->contrast / 200.0);
+        drawProgressBar(squareMat, 250, 750, 60, 90, params.brightness / 200.0);
+        drawProgressBar(squareMat, 250, 750, 110, 140, params.contrast / 200.0);
 
         cv::imshow(windowsName, squareMat);
     }
@@ -399,7 +396,7 @@ public:
         switch (event) {
 
         case cv::EVENT_RBUTTONUP: { // 右键直接关闭打印窗口
-            cv::destroyWindow(params->windowsName);
+            requestExit();
             return;
         }break;
 
@@ -511,7 +508,7 @@ public:
             if ((700 < x) && (x < 800) && (y < 50)) { // 确定按钮
                 params->confirmed = true;
                 params->isParamsChange = true;
-                cv::destroyWindow(params->windowsName);
+                requestExit();
             }
         }break;
         }
@@ -542,7 +539,7 @@ public:
         cv::setMouseCallback(windowsName, mouseCallback, &params);
 
         // 初始预览
-        refreshPreview(&params);
+        refreshUI();
 
         HWND hwnd = FindWindowA(NULL, windowsName);
         if (hwnd) {
@@ -553,17 +550,20 @@ public:
                 SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
                 SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             }
+            DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &D2D1App::isDarkMode, sizeof(BOOL));
         }
 
         // 事件循环
         while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {
             if (params.isParamsChange) {
                 params.isParamsChange = false;
-                refreshPreview(&params);
+                refreshUI();
             }
             int key = cv::waitKey(10);
-            if (params.confirmed) break;
-            if (requitExitFlag) break;
+            if (requestExitFlag || params.confirmed) {
+                cv::destroyWindow(params.windowsName);
+                break;
+            }
 
             // 保存到文件
             if (params.saveToFile) {

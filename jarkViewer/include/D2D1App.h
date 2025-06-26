@@ -12,6 +12,8 @@
 
 class D2D1App {
 public:
+    static inline BOOL isDarkMode = 0;
+
     // 构造函数
     D2D1App();
     // 析构函数

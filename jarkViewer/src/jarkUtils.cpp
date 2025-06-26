@@ -554,3 +554,14 @@ std::string jarkUtils::saveImageDialog() {
 
     return filePath;
 }
+
+void jarkUtils::openUrl(const wchar_t* url) {
+    SHELLEXECUTEINFOW sei = {
+        .cbSize = sizeof(sei),
+        .lpVerb = L"open",
+        .lpFile = url,
+        .nShow = SW_SHOWNORMAL,
+    };
+
+    ShellExecuteExW(&sei);
+}

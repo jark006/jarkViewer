@@ -1,5 +1,8 @@
 #pragma once
 
+// Add a macro definition to suppress the warning for VCR102  
+#pragma warning(disable : VCR102)
+
 #include<iostream>
 #include<format>
 #include<algorithm>
@@ -41,6 +44,7 @@ using std::endl;
 #include <commdlg.h>
 #include <shellapi.h>
 #include <winspool.h>
+#include <dwmapi.h>
 
 #include <mfapi.h>
 #include <mfidl.h>
@@ -215,7 +219,7 @@ struct GifData {
 };
 
 enum class ActionENUM:int64_t {
-    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requitExit, normalFresh, rotateLeft, rotateRight, printImage
+    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requestExit, normalFresh, rotateLeft, rotateRight, printImage, setting
 };
 
 enum class CursorPos :int {
@@ -223,7 +227,7 @@ enum class CursorPos :int {
 };
 
 enum class ShowExtraUI :int {
-    rotateLeftButton = -3, printer = -2, leftArrow = -1, none = 0, rightArrow = 1, reserve = 2, rotateRightButton = 3,
+    rotateLeftButton = -3, printer = -2, leftArrow = -1, none = 0, rightArrow = 1, setting = 2, rotateRightButton = 3,
 };
 
 struct Action {
@@ -352,4 +356,5 @@ public:
     // 图像另存为 选取文件路径 ANSI/GBK
     static std::string saveImageDialog();
 
+    static void openUrl(const wchar_t* url);
 };

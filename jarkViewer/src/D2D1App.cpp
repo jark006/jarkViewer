@@ -1,5 +1,4 @@
 #include "D2D1App.h"
-#include <dwmapi.h>
 
 D2D1App::D2D1App() 
 {
@@ -117,8 +116,8 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance)
 
         DragAcceptFiles(m_hWnd, TRUE);
 
-        bool isDarkMode = false;
         HKEY hKey;
+        // 计算机\HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
         if (RegOpenKeyEx(HKEY_CURRENT_USER,
             TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
             0, KEY_READ, &hKey) == ERROR_SUCCESS)
@@ -133,8 +132,7 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance)
             RegCloseKey(hKey);
         }
 
-        BOOL useSystemTheme = isDarkMode;
-        DwmSetWindowAttribute(m_hWnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &useSystemTheme, sizeof(useSystemTheme));
+        DwmSetWindowAttribute(m_hWnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &isDarkMode, sizeof(BOOL));
 
         ShowWindow(m_hWnd, settingPar.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
         UpdateWindow(m_hWnd);

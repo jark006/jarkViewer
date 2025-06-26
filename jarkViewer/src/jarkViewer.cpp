@@ -3,6 +3,7 @@
 #include "TextDrawer.h"
 #include "ImageDatabase.h"
 #include "Printer.h"
+#include "Setting.h"
 
 #include "D2D1App.h"
 #include <wrl.h>
@@ -15,15 +16,18 @@
 #endif
 
 /* TODO
-1. eps格式
 1. 在鼠标光标位置缩放
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
-1. svg动画
-1. xpm和bpm格式
 1. 图像预读取
+1. 单帧浏览
 */
 
-const wstring appName = L"JarkViewer v1.26";
+const wstring appName = L"JarkViewer v1.27";
+const wstring appBuildInfo = L"v1.27 (Build20250627 x64)";
+const wstring jarkLink = L"https://github.com/jark006";
+const wstring GithubLink = L"https://github.com/jark006/jarkViewer";
+const wstring BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
+const wstring LanzouLink = L"https://jark006.lanzout.com/b0ko7mczg"; // 密码 6666
 
 
 
@@ -161,30 +165,22 @@ public:
 class ExtraUIRes
 {
 public:
-    cv::Mat imgData, leftArrow, RightArrow, leftRotate, rightRotate, printer;
+    cv::Mat imgData, leftArrow, rightArrow, leftRotate, rightRotate, printer, setting;
 
     ExtraUIRes() {
         rcFileInfo rc;
 
-        rc = jarkUtils::GetResource(IDB_PNG_LEFT_ARROW, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-        leftArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+        rc = jarkUtils::GetResource(IDB_PNG_MAIN_RES, L"PNG");
+        auto mainRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        rc = jarkUtils::GetResource(IDB_PNG_LEFT_ROTATE, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-        leftRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+        leftRotate = mainRes({ 0, 0, 50, 50 }).clone();
+        rightRotate = mainRes({ 50, 0, 50, 50 }).clone();
 
-        rc = jarkUtils::GetResource(IDB_PNG_RIGHT_ARROW, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-        RightArrow = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+        printer = mainRes({ 0, 50, 50, 50 }).clone();
+        setting = mainRes({ 50, 50, 50, 50 }).clone();
 
-        rc = jarkUtils::GetResource(IDB_PNG_RIGHT_ROTATE, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-        rightRotate = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
-
-        rc = jarkUtils::GetResource(IDB_PNG_PRINTER, L"PNG");
-        imgData = cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-        printer = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+        leftArrow = mainRes({ 100, 0, 50, 100 }).clone();
+        rightArrow = mainRes({ 150, 0, 50, 100 }).clone();
     }
     ~ExtraUIRes() {}
 };
@@ -318,6 +314,8 @@ public:
                 operateQueue.push({ ActionENUM::rotateRight });
             else if (cursorPos == CursorPos::leftDown)
                 operateQueue.push({ ActionENUM::printImage });
+            else if (cursorPos == CursorPos::rightDown)
+                operateQueue.push({ ActionENUM::setting });
             return;
         }
 
@@ -356,7 +354,7 @@ public:
         }
 
         case WM_RBUTTONUP: {//右键
-            operateQueue.push({ ActionENUM::requitExit });
+            operateQueue.push({ ActionENUM::requestExit });
             return;
         }
 
@@ -462,7 +460,7 @@ public:
                 break;
 
             case CursorPos::rightDown:
-                extraUIFlag = ShowExtraUI::none;
+                extraUIFlag = ShowExtraUI::setting;
                 operateQueue.push({ ActionENUM::normalFresh });
                 break;
 
@@ -650,7 +648,7 @@ public:
             }break;
 
             case VK_ESCAPE: { // ESC
-                operateQueue.push({ ActionENUM::requitExit });
+                operateQueue.push({ ActionENUM::requestExit });
             }break;
 
             default: {
@@ -1206,54 +1204,40 @@ public:
         int canvasHeight = canvas.rows;
         int canvasWidth = canvas.cols;
 
+        //窗口尺寸太小则直接退出
+        if (canvasWidth < 100 || canvasHeight < 100 || extraUIFlag == ShowExtraUI::none)
+            return;
+
         switch (extraUIFlag)
         {
         case ShowExtraUI::rotateLeftButton: {
-            if (canvasWidth > 100 && canvasHeight > 100) {
-                auto& img = extraUIRes.leftRotate;
-                int imgHeight = img.rows;
-                int imgWidth = img.cols;
-                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight / 4 - imgHeight) / 2);
-            }
+            auto& img = extraUIRes.leftRotate;
+            jarkUtils::overlayImg(canvas, img, 0, (canvasHeight / 4 - img.rows) / 2);
         } break;
 
         case ShowExtraUI::leftArrow: {
-            if (canvasWidth > 100 && canvasHeight > 100) {
-                auto& img = extraUIRes.leftArrow;
-                int imgHeight = img.rows;
-                int imgWidth = img.cols;
-                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight - imgHeight) / 2);
-            }
+            auto& img = extraUIRes.leftArrow;
+            jarkUtils::overlayImg(canvas, img, 0, (canvasHeight - img.rows) / 2);
         } break;
 
         case ShowExtraUI::printer: {
-            if (canvasWidth > 100 && canvasHeight > 100) {
-                auto& img = extraUIRes.printer;
-                int imgHeight = img.rows;
-                int imgWidth = img.cols;
-                jarkUtils::overlayImg(canvas, img, 0, (canvasHeight * 7 / 4 - imgHeight) / 2);
-            }
+            auto& img = extraUIRes.printer;
+            jarkUtils::overlayImg(canvas, img, 0, (canvasHeight * 7 / 4 - img.rows) / 2);
         } break;
 
-        case ShowExtraUI::none:
-            break;
+        case ShowExtraUI::setting: {
+            auto& img = extraUIRes.setting;
+            jarkUtils::overlayImg(canvas, img, canvasWidth - img.cols, (canvasHeight * 7 / 4 - img.rows) / 2);
+        } break;
 
         case ShowExtraUI::rightArrow: {
-            if (canvasWidth > 100 && canvasHeight > 100) {
-                auto& img = extraUIRes.RightArrow;
-                int imgHeight = img.rows;
-                int imgWidth = img.cols;
-                jarkUtils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight - imgHeight) / 2);
-            }
+            auto& img = extraUIRes.rightArrow;
+            jarkUtils::overlayImg(canvas, img, canvasWidth - img.cols, (canvasHeight - img.rows) / 2);
         } break;
 
         case ShowExtraUI::rotateRightButton: {
-            if (canvasWidth > 100 && canvasHeight > 100) {
-                auto& img = extraUIRes.rightRotate;
-                int imgHeight = img.rows;
-                int imgWidth = img.cols;
-                jarkUtils::overlayImg(canvas, img, canvasWidth - imgWidth, (canvasHeight / 4 - imgHeight) / 2);
-            }
+            auto& img = extraUIRes.rightRotate;
+            jarkUtils::overlayImg(canvas, img, canvasWidth - img.cols, (canvasHeight / 4 - img.rows) / 2);
         } break;
         }
     }
@@ -1276,6 +1260,7 @@ public:
 
         if (operateAction.action == ActionENUM::printImage) {
             if (!Printer::isWorking) {
+                Setting::requestExit(); // OpenCV窗口暂时不能同时共存
                 const auto& imgs = curPar.framesPtr->imgList;
                 std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
                     Printer printer(image, settingParameter);
@@ -1285,6 +1270,19 @@ public:
             return;
         }
 
+        if (operateAction.action == ActionENUM::setting) {
+            if (!Setting::isWorking) {
+                Printer::requestExit(); // OpenCV窗口暂时不能同时共存
+                const auto& imgs = curPar.framesPtr->imgList;
+                std::thread settingThread([](cv::Mat image, SettingParameter* settingParameter) {
+                    Setting setting(image, settingParameter);
+                    }, imgs.front().img, &settingPar);
+                settingThread.detach();
+            }
+            return;
+        }
+
+        // 以下action均需要刷新画面
         switch (operateAction.action)
         {
         case ActionENUM::newSize: {
@@ -1421,8 +1419,9 @@ public:
             curPar.slideTargetRotateRight();
         } break;
 
-        case ActionENUM::requitExit: {
-            Printer::requitExit();
+        case ActionENUM::requestExit: {
+            Printer::requestExit();
+            Setting::requestExit();
             PostMessageW(m_hWnd, WM_DESTROY, 0, 0);
         } break;
 

@@ -33,12 +33,6 @@
     <ClInclude Include="include\LRU.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\stbText.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\Utils.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\x265.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -627,6 +621,15 @@
     <ClInclude Include="include\printer.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\TextDrawer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\jarkUtils.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Setting.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
@@ -698,7 +701,16 @@
     <ClCompile Include="include\videoDecoder.h">
       <Filter>include</Filter>
     </ClCompile>
-    <ClCompile Include="src\Utils.cpp">
+    <ClCompile Include="src\exifParse.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ImageDatabase.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\jarkUtils.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\TextDrawer.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -720,49 +732,13 @@
     <Image Include="file\home.png">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="file\leftArrow.png">
+    <Image Include="file\settingRes.png">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="file\leftRotate.png">
+    <Image Include="file\mainRes.png">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="file\rightArrow.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\RightRotate.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\printer.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_color.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_document_off.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_document_on.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_gray.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_invert.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_normal.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\printerButton.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_document.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\trackbar.png">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="file\button_dot.png">
+    <Image Include="file\printerRes.png">
       <Filter>资源文件</Filter>
     </Image>
   </ItemGroup>

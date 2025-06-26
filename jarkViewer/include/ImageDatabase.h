@@ -136,7 +136,7 @@ public:
     };
 
     ImageDatabase() {
-        setCapacity(3);
+        setCapacity(5);
     }
 
     cv::Mat errorTipsMat, homeMat;
