@@ -46,6 +46,7 @@ struct CurImageParameter {
     vector<int64_t> zoomList;
     int zoomIndex = 0;
     bool isAnimation = false;
+    bool isAnimationPause = false;
     int width = 0;
     int height = 0;
     int rotation = 0; // 旋转： 0正常， 1逆90度， 2：180度， 3顺90度
@@ -62,6 +63,7 @@ struct CurImageParameter {
         slideCur = 0;
         slideTarget = 0;
         rotation = 0;
+        isAnimationPause = false;
 
         if (framesPtr) {
             isAnimation = framesPtr->imgList.size() > 1;
@@ -165,7 +167,7 @@ public:
 class ExtraUIRes
 {
 public:
-    cv::Mat imgData, leftArrow, rightArrow, leftRotate, rightRotate, printer, setting;
+    cv::Mat imgData, leftArrow, rightArrow, leftRotate, rightRotate, printer, setting, animationBarPlaying, animationBarPausing;
 
     ExtraUIRes() {
         rcFileInfo rc;
@@ -181,6 +183,9 @@ public:
 
         leftArrow = mainRes({ 100, 0, 50, 100 }).clone();
         rightArrow = mainRes({ 150, 0, 50, 100 }).clone();
+
+        animationBarPlaying = mainRes({ 0, 100, 200, 50 }).clone();
+        animationBarPausing = mainRes({ 0, 150, 200, 50 }).clone();
     }
     ~ExtraUIRes() {}
 };
@@ -316,6 +321,47 @@ public:
                 operateQueue.push({ ActionENUM::printImage });
             else if (cursorPos == CursorPos::rightDown)
                 operateQueue.push({ ActionENUM::setting });
+            else if (cursorPos == CursorPos::centerTop) {
+                // 按钮ID  0:上一帧  1:暂停/继续  2:下一帧  3:保存该帧
+                int buttonIdx = (abs(winWidth / 2 - x) > 100 ? -1 : (x + 100 - winWidth / 2) / 50);
+                if (curPar.isAnimation && buttonIdx >= 0) {
+                    if (curPar.isAnimationPause) {
+                        switch (buttonIdx)
+                        {
+                        case 0: {
+                            if (--curPar.curFrameIdx < 0)
+                                curPar.curFrameIdx = curPar.curFrameIdxMax;
+                            operateQueue.push({ ActionENUM::normalFresh });
+                        }break;
+                        case 1: {
+                            curPar.isAnimationPause = !curPar.isAnimationPause;
+                            operateQueue.push({ ActionENUM::normalFresh });
+                        }break;
+                        case 2: {
+                            if (++curPar.curFrameIdx > curPar.curFrameIdxMax)
+                                curPar.curFrameIdx = 0;
+                            operateQueue.push({ ActionENUM::normalFresh });
+                        }break;
+                        case 3: {
+                            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                            std::thread saveImageThread([](cv::Mat image) {
+                                auto path = jarkUtils::saveImageDialog();
+                                if (path.length() > 2) {
+                                    cv::imwrite(path.c_str(), image);
+                                }
+                                }, srcImg);
+                            saveImageThread.detach();
+                        }break;
+                        }
+                    }
+                    else {
+                        if (buttonIdx == 1) {
+                            curPar.isAnimationPause = !curPar.isAnimationPause;
+                            operateQueue.push({ ActionENUM::normalFresh });
+                        }
+                    }
+                }
+            }
             return;
         }
 
@@ -429,6 +475,10 @@ public:
                     cursorPos = CursorPos::centerArea;
                 }
             }
+
+            if (y < 50 && abs(x - winWidth / 2) < 100) {
+                cursorPos = CursorPos::centerTop;
+            }
         }
 
         if (cursorPosLast != cursorPos) {
@@ -447,6 +497,13 @@ public:
             case CursorPos::leftEdge:
                 extraUIFlag = ShowExtraUI::leftArrow;
                 operateQueue.push({ ActionENUM::normalFresh });
+                break;
+
+            case CursorPos::centerTop:
+                if (curPar.isAnimation) {
+                    extraUIFlag = ShowExtraUI::animationBar;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
                 break;
 
             case CursorPos::centerArea:
@@ -513,30 +570,33 @@ public:
         if (ctrlIsPressing) {
             switch (keyValue)
             {
-            case 'O': { // Ctrl + O
+            case 'O': { // Ctrl + O  打开图片
                 wstring filePath = jarkUtils::SelectFile(m_hWnd);
                 if (!filePath.empty()) {
                     initOpenFile(filePath);
                     operateQueue.push({ ActionENUM::normalFresh });
                 }
             }break;
-            case 'S': { // Ctrl + S
-                const auto& imgs = curPar.framesPtr->imgList;
-                wstring& filePath = imgFileList[curFileIdx];
-                if (imgs.size() > 1) {
-                    auto dotIdx = filePath.find_last_of(L".");
-                    if (dotIdx == string::npos)
-                        dotIdx = filePath.size();
-                    for (int i = 0; i < imgs.size(); i++) {
-                        cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
-                    }
-                }
+
+            //case 'S': { // Ctrl + S  动图 批量保存每一帧
+            //    if (curPar.isAnimation) {
+            //        const auto& imgs = curPar.framesPtr->imgList;
+            //        wstring& filePath = imgFileList[curFileIdx];
+            //        auto dotIdx = filePath.find_last_of(L".");
+            //        if (dotIdx == string::npos)
+            //            dotIdx = filePath.size();
+            //        for (int i = 0; i < imgs.size(); i++) {
+            //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+            //        }
+            //    }
+            //}break;
+
+            case 'C': { // Ctrl + C  复制到剪贴板
+                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                jarkUtils::copyImageToClipboard(srcImg);
             }break;
-            case 'C': {
-                const auto& imgs = curPar.framesPtr->imgList;
-                jarkUtils::copyImageToClipboard(imgs.front().img);
-            }break;
-            case 'P': {
+
+            case 'P': { // Ctrl + P 打印
                 operateQueue.push({ ActionENUM::printImage });
             }break;
             }
@@ -544,6 +604,32 @@ public:
         else {
             switch (keyValue)
             {
+
+            case 'J': { // 上一帧
+                if (curPar.isAnimation && curPar.isAnimationPause) {
+                    curPar.curFrameIdx--;
+                    if (curPar.curFrameIdx < 0)
+                        curPar.curFrameIdx = curPar.curFrameIdxMax;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }break;
+
+            case 'K': { // 动图 暂停/继续
+                if (curPar.isAnimation) {
+                    curPar.isAnimationPause = !curPar.isAnimationPause;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }break;
+
+            case 'L': { // 下一帧
+                if (curPar.isAnimation && curPar.isAnimationPause) {
+                    curPar.curFrameIdx++;
+                    if (curPar.curFrameIdx > curPar.curFrameIdxMax)
+                        curPar.curFrameIdx = 0;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }break;
+
             case VK_CONTROL: {
                 ctrlIsPressing = true;
             }break;
@@ -1239,6 +1325,11 @@ public:
             auto& img = extraUIRes.rightRotate;
             jarkUtils::overlayImg(canvas, img, canvasWidth - img.cols, (canvasHeight / 4 - img.rows) / 2);
         } break;
+
+        case ShowExtraUI::animationBar: {
+            auto& img = curPar.isAnimationPause ? extraUIRes.animationBarPausing : extraUIRes.animationBarPlaying;
+            jarkUtils::overlayImg(canvas, img, (canvasWidth - img.cols)/2, 0);
+        } break;
         }
     }
 
@@ -1249,13 +1340,13 @@ public:
         static auto lastTimestamp = std::chrono::steady_clock::now();
 
         auto operateAction = operateQueue.get();
-        if (operateAction.action == ActionENUM::none) {
-            if (curPar.zoomCur == curPar.zoomTarget &&
-                curPar.slideCur == curPar.slideTarget &&
-                !curPar.isAnimation) {
-                Sleep(1); // Windows机制限制，实际时长最小只能 15.6ms
-                return;
-            }
+        if (operateAction.action == ActionENUM::none &&
+            curPar.zoomCur == curPar.zoomTarget &&
+            curPar.slideCur == curPar.slideTarget &&
+            (!curPar.isAnimation || (curPar.isAnimation && curPar.isAnimationPause))) {
+
+            Sleep(1); // Windows机制限制，实际时长最小只能 15.6ms
+            return;
         }
 
         if (operateAction.action == ActionENUM::printImage) {
@@ -1474,13 +1565,24 @@ public:
         drawExifInfo(mainCanvas);
         drawExtraUI(mainCanvas);
 
-        wstring str = std::format(L" [{}/{}] {}% ",
-            curFileIdx + 1, imgFileList.size(),
-            curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
-            + imgFileList[curFileIdx];
-        if (curPar.rotation)
-            str += (curPar.rotation == 1 ? L"  逆时针旋转90°" : (curPar.rotation == 3 ? L"  顺时针旋转90°" : (L"  旋转180°")));
-        SetWindowTextW(m_hWnd, str.c_str());
+        if (curPar.isAnimation && curPar.isAnimationPause) {
+            wstring str = std::format(L"逐帧浏览 [{}/{}] {}% ",
+                curPar.curFrameIdx + 1, curPar.curFrameIdxMax + 1,
+                curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
+                + imgFileList[curFileIdx];
+            if (curPar.rotation)
+                str += (curPar.rotation == 1 ? L"  逆时针旋转90°" : (curPar.rotation == 3 ? L"  顺时针旋转90°" : (L"  旋转180°")));
+            SetWindowTextW(m_hWnd, str.c_str());
+        }
+        else {
+            wstring str = std::format(L" [{}/{}] {}% ",
+                curFileIdx + 1, imgFileList.size(),
+                curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
+                + imgFileList[curFileIdx];
+            if (curPar.rotation)
+                str += (curPar.rotation == 1 ? L"  逆时针旋转90°" : (curPar.rotation == 3 ? L"  顺时针旋转90°" : (L"  旋转180°")));
+            SetWindowTextW(m_hWnd, str.c_str());
+        }
 
         m_pD2DDeviceContext->CreateBitmap(
             bitmapSize,
@@ -1496,7 +1598,7 @@ public:
         m_pSwapChain->Present(0, 0);
 
 
-        if (curPar.isAnimation) {
+        if (curPar.isAnimation && curPar.isAnimationPause == false) {
             if (delayRemain <= 0)
                 delayRemain = curPar.curFrameDelay;
 
