@@ -565,3 +565,62 @@ void jarkUtils::openUrl(const wchar_t* url) {
 
     ShellExecuteExW(&sei);
 }
+
+
+std::vector<std::string> jarkUtils::splitString(std::string_view str, std::string_view delim) {
+    if (str.empty()) return {};
+    if (delim.empty()) return { std::string(str) };
+
+    std::vector<std::string> res;
+    size_t nextDelimIdx, targetBeginIdx = 0;
+    while ((nextDelimIdx = str.find(delim, targetBeginIdx)) != std::string::npos) {
+        if (nextDelimIdx == targetBeginIdx) {
+            targetBeginIdx += delim.length();
+            continue;
+        }
+        res.emplace_back(str.substr(targetBeginIdx, nextDelimIdx - targetBeginIdx));
+        targetBeginIdx = nextDelimIdx + delim.length();
+    }
+    if (targetBeginIdx < str.length())
+        res.emplace_back(str.substr(targetBeginIdx, str.length() - targetBeginIdx));
+    return res;
+}
+
+void jarkUtils::stringReplace(std::string& src, std::string_view oldBlock, std::string_view newBlock) {
+    if (oldBlock.empty()) return;
+
+    size_t nextBeginIdx = 0, foundIdx;
+    while ((foundIdx = src.find(oldBlock, nextBeginIdx)) != std::string::npos) {
+        src.replace(foundIdx, oldBlock.length(), newBlock);
+        nextBeginIdx = foundIdx + newBlock.length();
+    }
+}
+
+std::vector<std::wstring> jarkUtils::splitWstring(std::wstring_view str, std::wstring_view delim) {
+    if (str.empty()) return {};
+    if (delim.empty()) return { std::wstring(str) };
+
+    std::vector<std::wstring> res;
+    size_t nextDelimIdx, targetBeginIdx = 0;
+    while ((nextDelimIdx = str.find(delim, targetBeginIdx)) != std::wstring::npos) {
+        if (nextDelimIdx == targetBeginIdx) {
+            targetBeginIdx += delim.length();
+            continue;
+        }
+        res.emplace_back(str.substr(targetBeginIdx, nextDelimIdx - targetBeginIdx));
+        targetBeginIdx = nextDelimIdx + delim.length();
+    }
+    if (targetBeginIdx < str.length())
+        res.emplace_back(str.substr(targetBeginIdx, str.length() - targetBeginIdx));
+    return res;
+}
+
+void jarkUtils::wstringReplace(std::wstring& src, std::wstring_view oldBlock, std::wstring_view newBlock) {
+    if (oldBlock.empty()) return;
+
+    size_t nextBeginIdx = 0, foundIdx;
+    while ((foundIdx = src.find(oldBlock, nextBeginIdx)) != std::wstring::npos) {
+        src.replace(foundIdx, oldBlock.length(), newBlock);
+        nextBeginIdx = foundIdx + newBlock.length();
+    }
+}

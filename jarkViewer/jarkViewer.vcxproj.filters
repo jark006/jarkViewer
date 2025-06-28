@@ -630,6 +630,9 @@
     <ClInclude Include="include\Setting.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\FileAssociationManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">

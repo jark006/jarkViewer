@@ -88,7 +88,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <OpenMPSupport>false</OpenMPSupport>
     </ClCompile>
@@ -160,6 +160,7 @@
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\D2D1App.h" />
     <ClInclude Include="include\exifParse.h" />
+    <ClInclude Include="include\FileAssociationManager.h" />
     <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
     <ClInclude Include="include\libbpg.h" />

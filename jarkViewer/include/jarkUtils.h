@@ -14,6 +14,7 @@
 #include<unordered_set>
 #include<unordered_map>
 #include<stdexcept>
+#include <ranges>
 
 using std::vector;
 using std::string;
@@ -101,31 +102,14 @@ struct SettingParameter {
     int pptOrder = 0;                       // 幻灯片模式  0: 顺序  1:逆序  2:随机
     int pptTimeout = 5;                     // 幻灯片模式  切换间隔 1 ~ 300 秒
 
-    uint32_t reserve[35];
+    uint32_t reserve[803];
 
-    uint32_t extCheckFlag[8] = {};
+    // 常见格式
+    char extCheckedListStr[800] = "apng,avif,bmp,bpg,gif,heic,heif,ico,jfif,jp2,jpe,jpeg,jpg,jxl,jxr,livp,png,qoi,svg,tga,tif,tiff,webp,wp2";
 
-    bool getExtCheckFlag(uint32_t idx) const {
-        if (idx < 256) {
-            const uint32_t arrayIdx = idx / 32;
-            const uint32_t bitOffset = idx % 32;
-            return (extCheckFlag[arrayIdx] & (1 << bitOffset)) != 0;
-        }
-    }
-
-    void setExtCheckFlag(uint32_t idx, bool value) {
-        if (idx < 256) {
-            const uint32_t arrayIdx = idx / 32;
-            const uint32_t bitOffset = idx % 32;
-            if (value)
-                extCheckFlag[arrayIdx] |= (1 << bitOffset);
-            else
-                extCheckFlag[arrayIdx] &= ~(1 << bitOffset);
-        }
-    }
 };
 
-static_assert(sizeof(SettingParameter) == 256, "sizeof(SettingParameter) != 256");
+static_assert(sizeof(SettingParameter) == 4096, "sizeof(SettingParameter) != 4096");
 
 struct rcFileInfo {
     uint8_t* ptr = nullptr;
@@ -364,4 +348,12 @@ public:
     static std::string saveImageDialog();
 
     static void openUrl(const wchar_t* url);
+
+    static std::vector<std::string> splitString(std::string_view str, std::string_view delim);
+
+    static void stringReplace(std::string& src, std::string_view oldBlock, std::string_view newBlock);
+
+    static std::vector<std::wstring> splitWstring(std::wstring_view str, std::wstring_view delim);
+
+    static void wstringReplace(std::wstring& src, std::wstring_view oldBlock, std::wstring_view newBlock);
 };

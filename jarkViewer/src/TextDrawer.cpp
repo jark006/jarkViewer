@@ -110,7 +110,7 @@ void TextDrawer::putAlignCenter(cv::Mat& img, cv::Rect rect, const char* str, co
         W = W_cnt;
 
     const int sizeAndGap = int(fontSize * (1 + lineGapPercent));// Mono Font
-    H *= fontSize;
+    H *= sizeAndGap;
     W = sizeAndGap * W / 2;
 
     const int x = rect.x + (rect.width - W) / 2;
@@ -238,5 +238,5 @@ int TextDrawer::putWord(cv::Mat& img, int x, int y, const int codePoint, const c
     }
 
     const int size = int(fontSize * (1 + lineGapPercent));
-    return codePoint < 128 ? (size / 2) : size;
+    return codePoint < 256 ? (size / 2) : size;
 }

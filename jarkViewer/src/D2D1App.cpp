@@ -31,7 +31,7 @@ void D2D1App::loadSettings() {
     const int MAX_PATH_LEN = 512;
     TCHAR szPath[MAX_PATH_LEN];
 
-    if (GetModuleFileName(NULL, szPath, MAX_PATH_LEN) != 0) {
+    if (GetModuleFileNameW(NULL, szPath, MAX_PATH_LEN) != 0) {
 
         exePath = wstring(szPath);
         settingPath = exePath.substr(0, exePath.length() - 3) + L"db";
@@ -43,16 +43,16 @@ void D2D1App::loadSettings() {
             fclose(f);
 
             if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length() + 1))
-                settingPar = tmp;
+                memcpy(&settingPar, &tmp, sizeof(SettingParameter));
 
             if (settingPar.showCmd == SW_NORMAL) {
                 int screenWidth = (::GetSystemMetrics(SM_CXFULLSCREEN));
                 int screenHeight = (::GetSystemMetrics(SM_CYFULLSCREEN));
 
-                if (settingPar.rect.left > screenWidth || settingPar.rect.top > screenHeight ||
-                    (settingPar.rect.right - settingPar.rect.left) > screenWidth ||
-                    (settingPar.rect.bottom - settingPar.rect.top) > screenHeight) {
-                    settingPar.rect = { 100, 100, 100 + screenWidth / 2, 100 + screenHeight / 2 };
+                if (settingPar.rect.left >= screenWidth || settingPar.rect.bottom >= screenHeight ||
+                    (settingPar.rect.right - settingPar.rect.left) >= screenWidth ||
+                    (settingPar.rect.bottom - settingPar.rect.top) >= screenHeight) {
+                    settingPar.rect = { screenWidth / 4, screenHeight / 4, screenWidth * 3 / 4, 100 + screenHeight * 3 / 4 };
                 }
             }
         }
@@ -60,8 +60,7 @@ void D2D1App::loadSettings() {
 }
 
 void D2D1App::saveSettings() {
-    WINDOWPLACEMENT wp;
-    wp.length = sizeof(WINDOWPLACEMENT);
+    WINDOWPLACEMENT wp{ .length = sizeof(WINDOWPLACEMENT) };
 
     // 获取窗口的显示状态和位置信息
     if (GetWindowPlacement(m_hWnd, &wp) && wp.showCmd == SW_NORMAL) {
