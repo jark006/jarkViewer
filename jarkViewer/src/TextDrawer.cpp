@@ -66,8 +66,8 @@ void TextDrawer::putText(cv::Mat& img, const int x, const int y, const char* str
     }
 }
 
-
-void TextDrawer::putAlignCenter(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
+//Rect {x, y, width, height}
+void TextDrawer::putAlignCenter(cv::Mat& img, cv::Rect rect, const char* str, const cv::Vec4b& color) {
     int codePoint = '?';
     int H = 1, W = 0, W_cnt = 0;
     const auto len = strlen(str);
@@ -113,13 +113,14 @@ void TextDrawer::putAlignCenter(cv::Mat& img, RECT r, const char* str, const cv:
     H *= fontSize;
     W = sizeAndGap * W / 2;
 
-    const int x = r.left + (r.right - r.left - W) / 2;
-    const int y = r.top + (r.bottom - r.top - H) / 2;
+    const int x = rect.x + (rect.width - W) / 2;
+    const int y = rect.y + (rect.height - H) / 2;
 
     putText(img, x, y, str, color);
 }
 
-void TextDrawer::putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color) {
+//Rect {x, y, width, height}
+void TextDrawer::putAlignLeft(cv::Mat& img, cv::Rect rect, const char* str, const cv::Vec4b& color) {
     if (!hasInit) {
         Init(IDR_TTF_DEFAULT, L"TTF");
         hasInit = true;
@@ -128,8 +129,8 @@ void TextDrawer::putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::V
         scale = stbtt_ScaleForPixelHeight(&info, (float)fontSize);
 
     int codePoint = '?';
-    int xOffset = r.left, yOffset = r.top;
-    int areaWidth = r.right - r.left;
+    int xOffset = rect.x, yOffset = rect.y;
+    int areaWidth = rect.width;
     const auto len = strlen(str);
     size_t i = 0;
     while (i < len) {
@@ -154,14 +155,17 @@ void TextDrawer::putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::V
             i++;
         }
 
-        if (codePoint == '\n' || (xOffset + fontSize) > r.right) {
+        if (codePoint == '\n' || (xOffset + fontSize) > (rect.x+rect.width)) {
             yOffset += int(fontSize * (1 + lineGapPercent));
-            if (yOffset + fontSize > r.bottom) {
-                r.left += areaWidth;
-                r.right += areaWidth;
-                yOffset = r.top;
+            if (yOffset + fontSize > (rect.y+rect.height)) {
+                rect.x += rect.width;
+                yOffset = rect.y;
+
+                if (rect.x >= img.cols) {
+                    return;
+                }
             }
-            xOffset = r.left;
+            xOffset = rect.x;
             if (codePoint == '\n')
                 continue;
         }

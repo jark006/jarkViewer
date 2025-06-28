@@ -339,21 +339,13 @@ public:
         cv::cvtColor(image, image, cv::COLOR_GRAY2BGR);
     }
 
+    void drawProgressBar(cv::Mat& image, cv::Rect rect, double progress) {
+        cv::rectangle(image, rect, cv::Scalar(255, 0, 0, 255), 2);
 
-    void drawProgressBar(cv::Mat& image, int xBegin, int xEnd, int yBegin, int yEnd, double progress) {
-        cv::rectangle(image,
-            cv::Point(xBegin, yBegin),
-            cv::Point(xEnd, yEnd),
-            cv::Scalar(255, 0, 0, 255),
-            2);
-
-        int fillWidth = static_cast<int>((xEnd - xBegin) * progress);
-        if (0 < fillWidth && fillWidth <= (xEnd - xBegin)) {
-            cv::rectangle(image,
-                cv::Point(xBegin, yBegin),
-                cv::Point(xBegin + fillWidth, yEnd),
-                cv::Scalar(204, 72, 63, 255),
-                -1); // -1表示完全填充
+        const int progresswidth = static_cast<int>(rect.width * progress);
+        if (0 < progresswidth && progresswidth <= rect.width) {
+            rect.width = progresswidth;
+            cv::rectangle(image, rect, cv::Scalar(204, 72, 63, 255), -1);
         }
     }
 
@@ -379,12 +371,12 @@ public:
         jarkUtils::overlayImg(squareMat, params.invertColors ? buttonInvert : buttonNormal, 400, 0);
         jarkUtils::overlayImg(squareMat, buttonPrint, 600, 0);
         jarkUtils::overlayImg(squareMat, trackbarBg, 0, 50);
-        
-        textDrawer.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params.brightness).c_str(), { 0, 0, 0, 255 });
-        textDrawer.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params.contrast).c_str(), {0, 0, 0, 255});
 
-        drawProgressBar(squareMat, 250, 750, 60, 90, params.brightness / 200.0);
-        drawProgressBar(squareMat, 250, 750, 110, 140, params.contrast / 200.0);
+        textDrawer.putAlignLeft(squareMat, { 120, 60, 200, 900 }, std::format("{}", params.brightness).c_str(), { 0, 0, 0, 255 });
+        textDrawer.putAlignLeft(squareMat, { 120, 110, 200, 900 }, std::format("{}", params.contrast).c_str(), { 0, 0, 0, 255 });
+
+        drawProgressBar(squareMat, { 250, 60, 500, 30 }, params.brightness / 200.0);
+        drawProgressBar(squareMat, { 250, 110, 500, 30 }, params.contrast / 200.0);
 
         cv::imshow(windowsName, squareMat);
     }

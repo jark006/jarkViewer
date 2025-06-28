@@ -419,11 +419,11 @@ ID2D1PathGeometry* jarkUtils::GetPathGeometry(ID2D1Factory4* pD2DFactory, D2D1_P
 }
 
 void jarkUtils::ToggleFullScreen(HWND hwnd) {
-    RECT preRect{};
-    DWORD preStyle = 0;
-    DWORD preExStyle = 0;
+    static RECT preRect{};
+    static DWORD preStyle = 0;
+    static DWORD preExStyle = 0;
 
-    bool isFullScreen = false;
+    static bool isFullScreen = false;
 
     if (isFullScreen) {
         // 退出全屏模式，恢复之前的窗口状态

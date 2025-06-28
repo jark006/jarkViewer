@@ -23,8 +23,9 @@ struct SettingParams {
 
 class Setting {
 private:
-    const int winWidth = 800;
-    const int winHeight = 600;
+    const int winWidth = 1000;
+    const int winHeight = 800;
+    const int tabHeight = 50;
 
     const string windowsNameAnsi = jarkUtils::utf8ToAnsi("设置");
     const char* windowsName = windowsNameAnsi.c_str();
@@ -49,8 +50,8 @@ private:
         cv::Rect a{};
 
         tabTitleMat = settingRes({ 0, 0, 400, 50 }).clone();
-        helpPage = settingRes({ 0, 100, 800, 550 }).clone();
-        aboutPage = settingRes({ 0, 650, 800, 550 }).clone();
+        helpPage = settingRes({ 0, 100, 1000, 750 }).clone();
+        aboutPage = settingRes({ 0, 850, 1000, 750 }).clone();
         
     }
 
@@ -82,30 +83,23 @@ public:
         requestExitFlag = true;
     }
 
-    void drawProgressBar(cv::Mat& image, int xBegin, int xEnd, int yBegin, int yEnd, double progress) {
-        cv::rectangle(image,
-            cv::Point(xBegin, yBegin),
-            cv::Point(xEnd, yEnd),
-            cv::Scalar(255, 0, 0, 255),
-            2);
+    void drawProgressBar(cv::Mat& image, cv::Rect rect, double progress) {
+        cv::rectangle(image, rect, cv::Scalar(255, 0, 0, 255), 2);
 
-        int fillWidth = static_cast<int>((xEnd - xBegin) * progress);
-        if (0 < fillWidth && fillWidth <= (xEnd - xBegin)) {
-            cv::rectangle(image,
-                cv::Point(xBegin, yBegin),
-                cv::Point(xBegin + fillWidth, yEnd),
-                cv::Scalar(204, 72, 63, 255),
-                -1); // -1表示完全填充
+        const int progresswidth = static_cast<int>(rect.width * progress);
+        if (0 < progresswidth && progresswidth <= rect.width) {
+            rect.width = progresswidth;
+            cv::rectangle(image, rect, cv::Scalar(204, 72, 63, 255), -1);
         }
     }
 
     void refreshReguralTab() {
-        cv::rectangle(winCanvas, { 0, 50, 800, 550 }, cv::Scalar(24, 72, 63, 255), -1);
+        cv::rectangle(winCanvas, { 0, tabHeight, winWidth, winHeight - tabHeight }, cv::Scalar(24, 72, 63, 255), -1);
 
     }
 
     void refreshAssociateTab() {
-        cv::rectangle(winCanvas, {0, 50, 800, 550}, cv::Scalar(204, 72, 63, 255), -1);
+        cv::rectangle(winCanvas, { 0, tabHeight, winWidth, winHeight - tabHeight }, cv::Scalar(204, 72, 63, 255), -1);
 
     }
 
@@ -115,13 +109,13 @@ public:
 
     void refreshAboutTab() {
         jarkUtils::overlayImg(winCanvas, aboutPage, 0, 50);
-        textDrawer.putAlignCenter(winCanvas, { 0, 480, 360, 500 }, jarkUtils::wstringToUtf8(appBuildInfo).c_str(), { 186, 38, 60, 255 });
+        textDrawer.putAlignCenter(winCanvas, { 0, 580, 450, 40 }, jarkUtils::wstringToUtf8(appBuildInfo).c_str(), { 186, 38, 60, 255 });
     }
 
     void refreshUI() {
         // 绘制标签栏
-        cv::rectangle(winCanvas, cv::Point(0, 0), cv::Point(winWidth, 50), cv::Scalar(220, 220, 220, 255), -1);
-        cv::rectangle(winCanvas, cv::Point(params.curTabIdx * 100, 0), cv::Point((params.curTabIdx + 1) * 100, 50), cv::Scalar(240, 240, 240, 255), -1);
+        cv::rectangle(winCanvas, { 0, 0, winWidth, tabHeight }, cv::Scalar(200, 200, 200, 255), -1);
+        cv::rectangle(winCanvas, { params.curTabIdx * 100, 0, 100, tabHeight }, cv::Scalar(240, 240, 240, 255), -1);
         jarkUtils::overlayImg(winCanvas, tabTitleMat, 0, 0);
 
         switch (params.curTabIdx) {
@@ -166,16 +160,16 @@ public:
         SettingParams* params = static_cast<SettingParams*>(userdata);
 
         if (event == cv::EVENT_LBUTTONUP) {
-            if (isInside(x, y, {510, 140, 560, 200})) {
+            if (isInside(x, y, { 600, 150, 650, 190 })) {
                 jarkUtils::openUrl(jarkLink.c_str());
             }
-            if (isInside(x, y, { 400, 280, 760, 350 })) {
+            if (isInside(x, y, { 490, 280, 960, 350 })) {
                 jarkUtils::openUrl(GithubLink.c_str());
             }
-            if (isInside(x, y, { 400, 366, 760, 454 })) {
+            if (isInside(x, y, { 490, 366, 960, 454 })) {
                 jarkUtils::openUrl(BaiduLink.c_str());
             }
-            if (isInside(x, y, { 400, 470, 760, 540 })) {
+            if (isInside(x, y, { 490, 470, 960, 540 })) {
                 jarkUtils::openUrl(LanzouLink.c_str());
             }
         }
@@ -196,7 +190,7 @@ public:
             }
         }
 
-        if (event == cv::EVENT_RBUTTONUP){ // 右键直接关闭打印窗口
+        if (event == cv::EVENT_RBUTTONUP) { // 右键直接关闭打印窗口
             requestExit();
             return;
         }

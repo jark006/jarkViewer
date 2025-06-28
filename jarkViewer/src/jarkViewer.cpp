@@ -23,7 +23,7 @@
 */
 
 const wstring appName = L"JarkViewer v1.27";
-const wstring appBuildInfo = L"v1.27 (Build20250627 x64)";
+const wstring appBuildInfo = L"v1.27 (Build 202507xx)";
 const wstring jarkLink = L"https://github.com/jark006";
 const wstring GithubLink = L"https://github.com/jark006/jarkViewer";
 const wstring BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
@@ -1280,9 +1280,9 @@ public:
     void drawExifInfo(cv::Mat& canvas) {
         if (showExif) {
             const int padding = 10;
-            const int rightEdge = (canvas.cols - 2 * padding) / 4 + padding;
-            RECT r{ padding, padding, rightEdge > 300 ? rightEdge : 300, canvas.rows - padding };
-            textDrawer.putAlignLeft(canvas, r, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
+            const int areaWidth = (canvas.cols - 2 * padding) / 4;
+            cv::Rect rect{ padding, padding, std::max(areaWidth, 400), canvas.rows - 2 * padding };
+            textDrawer.putAlignLeft(canvas, rect, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
     }
 

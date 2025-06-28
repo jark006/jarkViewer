@@ -1,8 +1,5 @@
 #pragma once
 
-// Add a macro definition to suppress the warning for VCR102  
-#pragma warning(disable : VCR102)
-
 #include<iostream>
 #include<format>
 #include<algorithm>
@@ -83,8 +80,8 @@ using std::endl;
 
 struct SettingParameter {
     uint8_t header[32];
-    RECT rect{};
-    uint32_t showCmd = SW_MAXIMIZE;
+    RECT rect{};                           // 窗口大小位置
+    uint32_t showCmd = SW_MAXIMIZE;        // 窗口模式
 
     int printerBrightness = 100;           // 亮度调整 (0 ~ 200)
     int printerContrast = 100;             // 对比度调整 (0 ~ 200)
@@ -95,9 +92,18 @@ struct SettingParameter {
     bool reserve1 = false;
     bool reserve2 = false;
 
-    uint32_t extCheckFlag[8] = {};
+    bool isAllowRotateAnimation = true;
+    bool isAllowZoomAnimation = true;
+    bool reserve3 = false;
+    bool reserve4 = false;
+    int switchImageAnimationMode = 0;       // 0: 无动画  1:上下滑动  2:左右滑动
 
-    uint32_t reserve[39];
+    int pptOrder = 0;                       // 幻灯片模式  0: 顺序  1:逆序  2:随机
+    int pptTimeout = 5;                     // 幻灯片模式  切换间隔 1 ~ 300 秒
+
+    uint32_t reserve[35];
+
+    uint32_t extCheckFlag[8] = {};
 
     bool getExtCheckFlag(uint32_t idx) const {
         if (idx < 256) {

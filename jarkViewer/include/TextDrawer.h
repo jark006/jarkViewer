@@ -19,8 +19,12 @@ public:
 
     // str : UTF-8
     void putText(cv::Mat& img, const int x, const int y, const char* str, const cv::Vec4b& color);
-    void putAlignCenter(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color);
-    void putAlignLeft(cv::Mat& img, RECT r, const char* str, const cv::Vec4b& color);
+
+    //Rect {x, y, width, height}
+    void putAlignCenter(cv::Mat& img, cv::Rect rect, const char* str, const cv::Vec4b& color);
+
+    //Rect {x, y, width, height}
+    void putAlignLeft(cv::Mat& img, cv::Rect rect, const char* str, const cv::Vec4b& color);
 
 private:
     bool hasInit = false;
