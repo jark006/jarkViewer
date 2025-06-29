@@ -510,9 +510,9 @@ public:
     }
 
     // 打印前预处理
-    cv::Mat ImagePreprocessingForPrint(const cv::Mat& image) {
+    bool ImagePreprocessingForPrint(const cv::Mat& image) {
         if (image.empty() || image.type() != CV_8UC3) {
-            return {};
+            return false;
         }
 
         // 创建预览图像
@@ -524,7 +524,7 @@ public:
 
         // 若长宽差距很极端，超长或超宽，缩放可能异常
         if (params.previewImage.empty() || params.previewImage.rows <= 0 || params.previewImage.cols <= 0) {
-            return {};
+            return false;
         }
 
         // 创建UI窗口
@@ -575,34 +575,29 @@ public:
             }
         }
 
-        // 用户取消处理
-        if (!params.confirmed) return {};
-
-        // 应用参数到原始图像
-        cv::Mat finalImage = image.clone();
-        ApplyImageAdjustments(finalImage, params.brightness, params.contrast, params.colorMode, params.invertColors);
-        return finalImage;
+        // 用户是否确定打印
+        return params.confirmed;
     }
 
 
     // 打印图像函数
-    bool PrintMatImage(const cv::Mat& image) {
+    void PrintMatImage(const cv::Mat& image) {
         auto bgrMat = matToBGR(image);
 
         if (bgrMat.empty()) {
             MessageBoxW(nullptr, L"图像转换到BGR发生错误", L"错误", MB_OK | MB_ICONERROR);
-            return false;
+            return;
         }
 
         if (!jarkUtils::limitSizeTo16K(bgrMat)) {
             MessageBoxW(nullptr, L"调整图像尺寸发生错误", L"错误", MB_OK | MB_ICONERROR);
-            return false;
+            return;
         }
 
-        auto adjustMat = ImagePreprocessingForPrint(bgrMat);
+        auto confirmFlag = ImagePreprocessingForPrint(bgrMat);
 
-        if (adjustMat.empty()) { // 取消打印
-            return true;
+        if (!confirmFlag) { // 取消打印
+            return;
         }
 
         // 初始化打印对话框
@@ -612,9 +607,11 @@ public:
 
         // 显示打印对话框
         if (!PrintDlgW(&pd))
-            return false;
-        if (!pd.hDC)
-            return false;
+            return;
+        if (!pd.hDC) {
+            MessageBoxW(nullptr, L"无法获得打印机参数", L"错误", MB_OK | MB_ICONERROR);
+            return;
+        }
 
         // 准备文档信息
         DOCINFOW di{};
@@ -625,44 +622,49 @@ public:
         // 开始打印作业
         if (StartDocW(pd.hDC, &di) <= 0) {
             DeleteDC(pd.hDC);
-            return false;
+            return;
         }
 
         // 开始新页面
         if (StartPage(pd.hDC) <= 0) {
             EndDoc(pd.hDC);
             DeleteDC(pd.hDC);
-            return false;
+            MessageBoxW(nullptr, L"无法初始化打印业StartPage", L"错误", MB_OK | MB_ICONERROR);
+            return;
         }
 
-        // 获取打印机和图像尺寸
+        // 获取打印页面尺寸
         int pageWidth = GetDeviceCaps(pd.hDC, HORZRES);
         int pageHeight = GetDeviceCaps(pd.hDC, VERTRES);
 
-        HBITMAP hBitmap = MatToHBITMAP(adjustMat);
+        double scale = std::min(static_cast<double>(pageWidth) / bgrMat.cols,
+            static_cast<double>(pageHeight) / bgrMat.rows);
+        int newWidth = static_cast<int>(std::round(bgrMat.cols * scale));
+        int newHeight = static_cast<int>(std::round(bgrMat.rows * scale));
+
+        // 确保不超过目标尺寸
+        newWidth = std::min(newWidth, pageWidth);
+        newHeight = std::min(newHeight, pageHeight);
+
+        // 缩放图像
+        cv::Mat resized;
+        cv::resize(bgrMat, resized, cv::Size(newWidth, newHeight), 0, 0);
+
+        // 使用之前调整的参数处理图像
+        ApplyImageAdjustments(resized, params.brightness, params.contrast, params.colorMode, params.invertColors);
+
+        cv::Mat output(pageHeight, pageWidth, bgrMat.type(), cv::Scalar(255, 255, 255));
+        int offsetX = (pageWidth - newWidth + 1) / 2;  // +1确保偶数差时居中
+        int offsetY = (pageHeight - newHeight + 1) / 2;
+
+        cv::Mat roi(output, cv::Rect(offsetX, offsetY, newWidth, newHeight));
+        resized.copyTo(roi);
+
+        HBITMAP hBitmap = MatToHBITMAP(output);
         if (!hBitmap) {
-            return false;
+            MessageBoxW(nullptr, L"无法转换图像到打印格式HBITMAP", L"错误", MB_OK | MB_ICONERROR);
+            return;
         }
-
-        BITMAP bm{};
-        GetObjectW(hBitmap, sizeof(BITMAP), &bm);
-        int imgWidth = bm.bmWidth;
-        int imgHeight = bm.bmHeight;
-
-        // 计算缩放比例（保持宽高比）
-        double scale = std::min(
-            static_cast<double>(pageWidth) / imgWidth,
-            static_cast<double>(pageHeight) / imgHeight
-        );
-
-        scale *= (pageHeight > pageWidth ? 0.893 : 0.879); // 按标准A4边距 1.0-31.8/297  1.0-2.54/210
-
-        int scaledWidth = static_cast<int>(imgWidth * scale);
-        int scaledHeight = static_cast<int>(imgHeight * scale);
-
-        // 居中位置
-        int xPos = (pageWidth - scaledWidth) / 2;
-        int yPos = (pageHeight - scaledHeight) / 2;
 
         // 创建内存DC
         HDC hdcMem = CreateCompatibleDC(pd.hDC);
@@ -674,8 +676,8 @@ public:
 
         // 绘制到打印机DC
         StretchBlt(
-            pd.hDC, xPos, yPos, scaledWidth, scaledHeight,
-            hdcMem, 0, 0, imgWidth, imgHeight, SRCCOPY
+            pd.hDC, 0, 0, pageWidth, pageHeight,
+            hdcMem, 0, 0, pageWidth, pageHeight, SRCCOPY
         );
 
         // 清理资源
@@ -687,7 +689,7 @@ public:
         EndDoc(pd.hDC);
         DeleteDC(pd.hDC);
 
-        return true;
+        return;
     }
 
 };

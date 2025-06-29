@@ -1371,7 +1371,7 @@ public:
                 const auto& imgs = curPar.framesPtr->imgList;
                 std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
                     Printer printer(image, settingParameter);
-                    }, imgs.front().img, &settingPar);
+                    }, imgs[curPar.curFrameIdx].img, & settingPar);
                 printerThread.detach();
             }
             return;
