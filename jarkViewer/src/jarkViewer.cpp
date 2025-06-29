@@ -1350,7 +1350,10 @@ public:
         }
 
         if (operateAction.action == ActionENUM::printImage) {
-            if (!Printer::isWorking) {
+            if (Printer::isWorking) {
+                jarkUtils::activateWindow(Printer::hwnd);
+            }
+            else {
                 Setting::requestExit(); // OpenCV窗口暂时不能同时共存
                 const auto& imgs = curPar.framesPtr->imgList;
                 std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
@@ -1362,7 +1365,10 @@ public:
         }
 
         if (operateAction.action == ActionENUM::setting) {
-            if (!Setting::isWorking) {
+            if (Setting::isWorking) {
+                jarkUtils::activateWindow(Setting::hwnd);
+            }
+            else {
                 Printer::requestExit(); // OpenCV窗口暂时不能同时共存
                 const auto& imgs = curPar.framesPtr->imgList;
                 std::thread settingThread([](cv::Mat image, SettingParameter* settingParameter) {

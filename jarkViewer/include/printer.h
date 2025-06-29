@@ -76,9 +76,10 @@ private:
 
 public:
     static inline volatile bool isWorking = false;
+    static inline volatile HWND hwnd = nullptr;
 
     Printer(const cv::Mat& image, SettingParameter* settingParameter) : settingParameter(settingParameter) {
-        requestExitFlag = false; 
+        requestExitFlag = false;
         isWorking = true;
 
         Init();
@@ -88,7 +89,9 @@ public:
         settingParameter->printercolorMode = params.colorMode;
         settingParameter->printerInvertColors = params.invertColors;
 
+        requestExitFlag = false;
         isWorking = false;
+        hwnd = nullptr;
     }
 
     ~Printer() { }
@@ -533,7 +536,7 @@ public:
         // 初始预览
         refreshUI();
 
-        HWND hwnd = FindWindowA(NULL, windowsName);
+        hwnd = FindWindowA(NULL, windowsName);
         if (hwnd) {
             jarkUtils::disableWindowResize(hwnd);
 

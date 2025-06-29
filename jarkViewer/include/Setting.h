@@ -11,13 +11,13 @@ extern const wstring GithubLink;
 extern const wstring BaiduLink;
 extern const wstring LanzouLink;
 
-struct reguralTabCheckBox {
+struct generalTabCheckBox {
     cv::Rect rect{};
     string_view text;
     bool* valuePtr = nullptr;
 };
 
-struct reguralTabRadio {
+struct generalTabRadio {
     cv::Rect rect{};
     std::vector<string_view> text;
     int* valuePtr = nullptr;
@@ -33,8 +33,8 @@ struct SettingParams {
     int curTabIdx = 0; // 0:常规  1:文件关联  2:帮助  3:关于
     std::vector<string>* allSupportExt = nullptr;
     std::set<string>* checkedExt = nullptr;
-    std::vector<reguralTabCheckBox>* reguralTabCheckBoxList;
-    std::vector<reguralTabRadio>* reguralTabRadioList;
+    std::vector<generalTabCheckBox>* generalTabCheckBoxList;
+    std::vector<generalTabRadio>* generalTabRadioList;
 };
 
 class Setting {
@@ -56,8 +56,8 @@ private:
     std::vector<string> allSupportExt;
     std::set<string> checkedExt;
 
-    std::vector<reguralTabCheckBox> reguralTabCheckBoxList;
-    std::vector<reguralTabRadio> reguralTabRadioList;
+    std::vector<generalTabCheckBox> generalTabCheckBoxList;
+    std::vector<generalTabRadio> generalTabRadioList;
 
     void Init() {
         textDrawer.setSize(24);
@@ -66,8 +66,8 @@ private:
         params.windowsName = windowsNameAnsi.c_str();
         params.allSupportExt = &allSupportExt;
         params.checkedExt = &checkedExt;
-        params.reguralTabCheckBoxList = &reguralTabCheckBoxList;
-        params.reguralTabRadioList = &reguralTabRadioList;
+        params.generalTabCheckBoxList = &generalTabCheckBoxList;
+        params.generalTabRadioList = &generalTabRadioList;
 
 
         rcFileInfo rc;
@@ -78,12 +78,12 @@ private:
         helpPage = settingRes({ 0, 100, 1000, 750 }).clone();
         aboutPage = settingRes({ 0, 850, 1000, 750 }).clone();
 
-        // ReguralTab
-        reguralTabCheckBoxList = {
+        // GeneralTab
+        generalTabCheckBoxList = {
             { {50, 100, 200, 50}, "旋转动画", &settingParameter->isAllowRotateAnimation },
             { {50, 150, 200, 50}, "缩放动画", &settingParameter->isAllowZoomAnimation },
         };
-        reguralTabRadioList = {
+        generalTabRadioList = {
             {{50, 200, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
         };
 
@@ -103,6 +103,7 @@ private:
 
 public:
     static inline volatile bool isWorking = false;
+    static inline volatile HWND hwnd = nullptr;
 
     Setting(const cv::Mat& image, SettingParameter* settingPar) {
         settingParameter = settingPar;
@@ -114,6 +115,7 @@ public:
 
         requestExitFlag = false;
         isWorking = false;
+        hwnd = nullptr;
     }
 
     ~Setting() {}
@@ -132,10 +134,10 @@ public:
         }
     }
 
-    void refreshReguralTab() {
+    void refreshGeneralTab() {
         cv::rectangle(winCanvas, { 0, tabHeight, winWidth, winHeight - tabHeight }, cv::Scalar(240, 240, 240, 255), -1);
 
-        for (auto& cbox : reguralTabCheckBoxList) {
+        for (auto& cbox : generalTabCheckBoxList) {
             cv::Rect rect({ cbox.rect.x + 8, cbox.rect.y + 8, cbox.rect.height - 16, cbox.rect.height - 16 }); //方形
             cv::rectangle(winCanvas, rect, cv::Scalar(0, 0, 0, 255), 4);
             if (*cbox.valuePtr) {
@@ -147,7 +149,7 @@ public:
             textDrawer.putAlignCenter(winCanvas, rect, cbox.text.data(), cv::Scalar(0, 0, 0, 255));
         }
 
-        for (auto& radio : reguralTabRadioList) {
+        for (auto& radio : generalTabRadioList) {
             int idx = *radio.valuePtr;
             if (idx >= radio.text.size())
                 idx = 0;
@@ -219,7 +221,7 @@ public:
         jarkUtils::overlayImg(winCanvas, tabTitleMat, 0, 0);
 
         switch (params.curTabIdx) {
-        case 0:refreshReguralTab(); break;
+        case 0:refreshGeneralTab(); break;
         case 1:refreshAssociateTab(); break;
         case 2:refreshHelpTab(); break;
         default:refreshAboutTab(); break;
@@ -228,18 +230,18 @@ public:
         cv::imshow(windowsName, winCanvas);
     }
 
-    static void handleReguralTab(int event, int x, int y, int flags, void* userdata) {
+    static void handleGeneralTab(int event, int x, int y, int flags, void* userdata) {
         SettingParams* params = static_cast<SettingParams*>(userdata);
 
         if (event == cv::EVENT_LBUTTONUP) {
-            for (auto& cbox : *params->reguralTabCheckBoxList) {
+            for (auto& cbox : *params->generalTabCheckBoxList) {
                 if (isInside(x, y, cbox.rect)) {
                     *cbox.valuePtr = !(*cbox.valuePtr);
                     params->isParamsChange = true;
                 }
             }
 
-            for (auto& radio : *params->reguralTabRadioList) {
+            for (auto& radio : *params->generalTabRadioList) {
                 if (isInside(x, y, radio.rect)) {
                     int itemWidth = radio.rect.width / radio.text.size();
                     int clickIdx = (x - radio.rect.x) / itemWidth - 1;
@@ -252,7 +254,7 @@ public:
         }
     }
 
-    static void finishReguralTab(void* userdata) {
+    static void finishGeneralTab(void* userdata) {
         SettingParams* params = static_cast<SettingParams*>(userdata);
 
 
@@ -409,7 +411,7 @@ public:
             if (newTabIdx <= 3 && newTabIdx != params->curTabIdx) {
                 params->isParamsChange = true;
                 switch (params->curTabIdx) {
-                case 0: finishReguralTab(userdata); break;
+                case 0: finishGeneralTab(userdata); break;
                 case 1: finishAssociateTab(userdata); break;
                 }
                 params->curTabIdx = newTabIdx;
@@ -422,7 +424,7 @@ public:
         }
 
         switch (params->curTabIdx) {
-        case 0:handleReguralTab(event, x, y, flags, userdata); break;
+        case 0:handleGeneralTab(event, x, y, flags, userdata); break;
         case 1:handleAssociateTab(event, x, y, flags, userdata); break;
         case 3:handleAboutTab(event, x, y, flags, userdata); break;
         }
@@ -435,7 +437,7 @@ public:
 
         refreshUI();
 
-        HWND hwnd = FindWindowA(NULL, windowsName);
+        hwnd = FindWindowA(NULL, windowsName);
         if (hwnd) {
             jarkUtils::disableWindowResize(hwnd);
 
@@ -461,7 +463,7 @@ public:
         }
 
         switch (params.curTabIdx) {
-        case 0: finishReguralTab(&params); break;
+        case 0: finishGeneralTab(&params); break;
         case 1: finishAssociateTab(&params); break;
         }
     }

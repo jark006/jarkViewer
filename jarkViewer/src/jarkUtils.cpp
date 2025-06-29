@@ -624,3 +624,12 @@ void jarkUtils::wstringReplace(std::wstring& src, std::wstring_view oldBlock, st
         nextBeginIdx = foundIdx + newBlock.length();
     }
 }
+
+void jarkUtils::activateWindow(HWND hwnd) {
+    if (hwnd) {
+        if (IsIconic(hwnd)) {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        SetForegroundWindow(hwnd);
+    }
+}

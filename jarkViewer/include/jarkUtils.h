@@ -356,4 +356,6 @@ public:
     static std::vector<std::wstring> splitWstring(std::wstring_view str, std::wstring_view delim);
 
     static void wstringReplace(std::wstring& src, std::wstring_view oldBlock, std::wstring_view newBlock);
+
+    static void activateWindow(HWND hwnd);
 };
