@@ -262,20 +262,33 @@ public:
         imgDB.clear();
 
         fs::path fullPath = fs::absolute(filePath);
-        wstring fileName = fullPath.filename().wstring();
+        wstring openFileName = fullPath.filename().wstring();
 
         auto workDir = fullPath.parent_path();
         if (fs::exists(workDir)) {
+            std::vector<std::wstring> fileNameList;
             for (const auto& entry : fs::directory_iterator(workDir)) {
                 if (!entry.is_regular_file())continue;
 
                 std::wstring ext = entry.path().extension().wstring();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
-
+                
                 if (ImageDatabase::supportExt.contains(ext) || ImageDatabase::supportRaw.contains(ext)) {
-                    imgFileList.push_back(fs::absolute(entry.path()).wstring());
-                    if (curFileIdx == -1 && fileName == entry.path().filename())
-                        curFileIdx = (int)imgFileList.size() - 1;
+                    fileNameList.push_back(entry.path().filename().wstring());
+                    jarkUtils::log(L"add fileNameList: {}", fileNameList.back());
+                }
+            }
+
+            // 自然排序 数字感知排序
+            std::sort(fileNameList.begin(), fileNameList.end(), [](std::wstring_view a, std::wstring_view b) -> bool {
+                return StrCmpLogicalW(a.data(), b.data()) < 0; });
+
+            for (auto& fileName : fileNameList) {
+                auto fullpath = (workDir / fileName).wstring();
+                imgFileList.push_back(fullpath);
+                jarkUtils::log(L"add fullpath imgFileList: {}", fullpath);
+                if (curFileIdx == -1 && openFileName == fileName) {
+                    curFileIdx = (int)imgFileList.size() - 1;
                 }
             }
         }

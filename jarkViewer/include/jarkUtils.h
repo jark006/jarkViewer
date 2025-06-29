@@ -263,30 +263,22 @@ class jarkUtils {
 public:
 
     template<typename... Args>
-    static void log(const std::string_view fmt, Args&&... args) {
+    static void log(std::string_view fmt, Args&&... args) {
 #ifndef NDEBUG
-        const bool TO_LOG_FILE = false;
-        FILE* fp = nullptr;
-
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::current_zone()->to_local(now);
+        auto str = std::format("[{:%H:%M:%S}] {}\n", time, std::vformat(fmt, std::make_format_args(args...)));
+        std::cout << str;
+#endif
+    }
 
-        string str = std::format("[{:%H:%M:%S}] ", time) +
-            std::vformat(fmt, std::make_format_args(args...)) + "\n";
-
-        if (TO_LOG_FILE) {
-            if (!fp) {
-                fp = fopen("D:\\log.txt", "a");
-                if (!fp)return;
-            }
-            fwrite(str.c_str(), 1, str.length(), fp);
-            fflush(fp);
-        }
-        else {
-            cout << str;
-        }
-#else
-        return;
+    template<typename... Args>
+    static void log(std::wstring_view fmt, Args&&... args) {
+#ifndef NDEBUG
+        auto now = std::chrono::system_clock::now();
+        auto time = std::chrono::current_zone()->to_local(now);
+        auto str = std::format(L"[{:%H:%M:%S}] {}\n", time, std::vformat(fmt, std::make_wformat_args(args...)));
+        std::cout << jarkUtils::wstringToUtf8(str);
 #endif
     }
 
