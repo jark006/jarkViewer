@@ -1413,8 +1413,10 @@ public:
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
 
-            //mainCanvasSlideToPreAnimationHorizontal();    // 水平滑动
-            mainCanvasSlideToPreAnimationVertical();      // 竖直滑动
+            if (settingPar.switchImageAnimationMode == 1)
+                mainCanvasSlideToPreAnimationVertical();      // 竖直滑动
+            else if (settingPar.switchImageAnimationMode == 2)
+                mainCanvasSlideToPreAnimationHorizontal();    // 水平滑动
 
             lastTimestamp = std::chrono::steady_clock::now();
             delayRemain = 0;
@@ -1432,8 +1434,10 @@ public:
             curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
             curPar.Init(winWidth, winHeight);
 
-            //mainCanvasSlideToNextAnimationHorizontal(); // 水平滑动
-            mainCanvasSlideToNextAnimationVertical();   // 竖直滑动
+            if (settingPar.switchImageAnimationMode == 1)
+                mainCanvasSlideToNextAnimationVertical();   // 竖直滑动
+            else if (settingPar.switchImageAnimationMode == 2)
+                mainCanvasSlideToNextAnimationHorizontal(); // 水平滑动
 
             lastTimestamp = std::chrono::steady_clock::now();
             delayRemain = 0;
@@ -1499,13 +1503,17 @@ public:
         } break;
 
         case ActionENUM::rotateLeft: {
-            rotateLeftAnimation();
+            if (settingPar.isAllowRotateAnimation) {
+                rotateLeftAnimation();
+            }
             curPar.rotation = (curPar.rotation + 1) & 0b11;
             curPar.slideTargetRotateLeft();
         } break;
 
         case ActionENUM::rotateRight: {
-            rotateRightAnimation();
+            if (settingPar.isAllowRotateAnimation) {
+                rotateRightAnimation();
+            }
             curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
             curPar.slideTargetRotateRight();
         } break;

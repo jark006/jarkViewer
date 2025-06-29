@@ -11,6 +11,18 @@ extern const wstring GithubLink;
 extern const wstring BaiduLink;
 extern const wstring LanzouLink;
 
+struct reguralTabCheckBox {
+    cv::Rect rect{};
+    string_view text;
+    bool* valuePtr = nullptr;
+};
+
+struct reguralTabRadio {
+    cv::Rect rect{};
+    std::vector<string_view> text;
+    int* valuePtr = nullptr;
+};
+
 struct SettingParams {
     const char* windowsName = nullptr;
     bool isParamsChange = false;
@@ -21,6 +33,8 @@ struct SettingParams {
     int curTabIdx = 0; // 0:常规  1:文件关联  2:帮助  3:关于
     std::vector<string>* allSupportExt = nullptr;
     std::set<string>* checkedExt = nullptr;
+    std::vector<reguralTabCheckBox>* reguralTabCheckBoxList;
+    std::vector<reguralTabRadio>* reguralTabRadioList;
 };
 
 class Setting {
@@ -42,14 +56,19 @@ private:
     std::vector<string> allSupportExt;
     std::set<string> checkedExt;
 
+    std::vector<reguralTabCheckBox> reguralTabCheckBoxList;
+    std::vector<reguralTabRadio> reguralTabRadioList;
 
     void Init() {
         textDrawer.setSize(24);
+        winCanvas = cv::Mat(winHeight, winWidth, CV_8UC4, cv::Scalar(240, 240, 240, 240));
+
         params.windowsName = windowsNameAnsi.c_str();
         params.allSupportExt = &allSupportExt;
         params.checkedExt = &checkedExt;
+        params.reguralTabCheckBoxList = &reguralTabCheckBoxList;
+        params.reguralTabRadioList = &reguralTabRadioList;
 
-        winCanvas = cv::Mat(winHeight, winWidth, CV_8UC4, cv::Scalar(240, 240, 240, 240));
 
         rcFileInfo rc;
         rc = jarkUtils::GetResource(IDB_PNG_SETTING_RES, L"PNG");
@@ -59,6 +78,16 @@ private:
         helpPage = settingRes({ 0, 100, 1000, 750 }).clone();
         aboutPage = settingRes({ 0, 850, 1000, 750 }).clone();
 
+        // ReguralTab
+        reguralTabCheckBoxList = {
+            { {50, 100, 200, 50}, "旋转动画", &settingParameter->isAllowRotateAnimation },
+            { {50, 150, 200, 50}, "缩放动画", &settingParameter->isAllowZoomAnimation },
+        };
+        reguralTabRadioList = {
+            {{50, 200, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
+        };
+
+        // AssociateTab
         std::set<wstring> allSupportExtW;
         allSupportExtW.insert(ImageDatabase::supportExt.begin(), ImageDatabase::supportExt.end());
         allSupportExtW.insert(ImageDatabase::supportRaw.begin(), ImageDatabase::supportRaw.end());
@@ -106,6 +135,35 @@ public:
     void refreshReguralTab() {
         cv::rectangle(winCanvas, { 0, tabHeight, winWidth, winHeight - tabHeight }, cv::Scalar(240, 240, 240, 255), -1);
 
+        for (auto& cbox : reguralTabCheckBoxList) {
+            cv::Rect rect({ cbox.rect.x + 8, cbox.rect.y + 8, cbox.rect.height - 16, cbox.rect.height - 16 }); //方形
+            cv::rectangle(winCanvas, rect, cv::Scalar(0, 0, 0, 255), 4);
+            if (*cbox.valuePtr) {
+                rect = { cbox.rect.x + 12, cbox.rect.y + 12, cbox.rect.height - 24, cbox.rect.height - 24 }; //小方形
+                cv::rectangle(winCanvas, rect, cv::Scalar(255, 200, 120, 255), -1);
+            }
+
+            rect = { cbox.rect.x + cbox.rect.height, cbox.rect.y, cbox.rect.width - cbox.rect.height, cbox.rect.height };
+            textDrawer.putAlignCenter(winCanvas, rect, cbox.text.data(), cv::Scalar(0, 0, 0, 255));
+        }
+
+        for (auto& radio : reguralTabRadioList) {
+            int idx = *radio.valuePtr;
+            if (idx >= radio.text.size())
+                idx = 0;
+
+            int itemWidth = radio.rect.width / radio.text.size();
+            cv::Rect rect1 = { radio.rect.x + itemWidth * (1 + idx) , radio.rect.y, itemWidth, radio.rect.height }; // 当前项背景框
+            cv::rectangle(winCanvas, rect1, cv::Scalar(255, 230, 150, 255), -1);
+
+            cv::Rect rect2 = { radio.rect.x + itemWidth , radio.rect.y, radio.rect.width - itemWidth, radio.rect.height }; //大框
+            cv::rectangle(winCanvas, rect2, cv::Scalar(0, 0, 0, 255), 2);
+
+            for (int i = 0; i < radio.text.size(); i++) {
+                cv::Rect rect3 = { radio.rect.x + itemWidth * (i), radio.rect.y , itemWidth, radio.rect.height };
+                textDrawer.putAlignCenter(winCanvas, rect3, radio.text[i].data(), cv::Scalar(0, 0, 0, 255));
+            }
+        }
     }
 
     void refreshAssociateTab() {
@@ -173,7 +231,25 @@ public:
     static void handleReguralTab(int event, int x, int y, int flags, void* userdata) {
         SettingParams* params = static_cast<SettingParams*>(userdata);
 
+        if (event == cv::EVENT_LBUTTONUP) {
+            for (auto& cbox : *params->reguralTabCheckBoxList) {
+                if (isInside(x, y, cbox.rect)) {
+                    *cbox.valuePtr = !(*cbox.valuePtr);
+                    params->isParamsChange = true;
+                }
+            }
 
+            for (auto& radio : *params->reguralTabRadioList) {
+                if (isInside(x, y, radio.rect)) {
+                    int itemWidth = radio.rect.width / radio.text.size();
+                    int clickIdx = (x - radio.rect.x) / itemWidth - 1;
+                    if (0 <= clickIdx && clickIdx < radio.text.size() - 1) {
+                        *radio.valuePtr = clickIdx;
+                        params->isParamsChange = true;
+                    }
+                }
+            }
+        }
     }
 
     static void finishReguralTab(void* userdata) {
