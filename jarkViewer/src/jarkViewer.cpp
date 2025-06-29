@@ -41,7 +41,7 @@ struct CurImageParameter {
     int curFrameIdxMax;     // 若是动画则为帧数量
     int curFrameDelay;      // 当前帧延迟
     Cood slideCur, slideTarget;
-    Frames* framesPtr = nullptr;
+    std::shared_ptr<Frames> framesPtr;
 
     vector<int64_t> zoomList;
     int zoomIndex = 0;
@@ -309,7 +309,7 @@ public:
             }
         }
 
-        curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
+        curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
         curPar.Init(winWidth, winHeight);
     }
 
@@ -648,7 +648,7 @@ public:
             }break;
 
             case 'C': { // 复制图像信息到剪贴板
-                jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(imgDB.get(imgFileList[curFileIdx]).exifStr));
+                jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(imgDB.getSafePtr(imgFileList[curFileIdx])->exifStr));
             }break;
 
             case VK_F11: {
@@ -1429,7 +1429,7 @@ public:
 
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
-            curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
+            curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + imgFileList.size() - 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
             if (settingPar.switchImageAnimationMode == 1)
@@ -1450,7 +1450,7 @@ public:
 
             if (++curFileIdx >= (int)imgFileList.size())
                 curFileIdx = 0;
-            curPar.framesPtr = imgDB.getPtr(imgFileList[curFileIdx]);
+            curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
             if (settingPar.switchImageAnimationMode == 1)
