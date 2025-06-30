@@ -1416,9 +1416,9 @@ cv::Mat ImageDatabase::loadTGA_HDR(const wstring& path, const vector<uchar>& buf
     int width, height, channels;
 
     // 使用stb_image从内存缓冲区加载图像
-    uint8_t* img = stbi_load_from_memory(buf.data(), (int)buf.size(), &width, &height, &channels, 0);
+    uint8_t* pxData = stbi_load_from_memory(buf.data(), (int)buf.size(), &width, &height, &channels, 0);
 
-    if (!img) {
+    if (!pxData) {
         jarkUtils::log("Failed to load image: {}", jarkUtils::wstringToUtf8(path));
         return {};
     }
@@ -1430,17 +1430,13 @@ cv::Mat ImageDatabase::loadTGA_HDR(const wstring& path, const vector<uchar>& buf
     case 3: cv_type = CV_8UC3; break;
     case 4: cv_type = CV_8UC4; break;
     default:
-        stbi_image_free(img);
+        stbi_image_free(pxData);
         jarkUtils::log("Unsupported number of channels:{} {}", channels, jarkUtils::wstringToUtf8(path));
         return {};
     }
 
-    auto result = cv::Mat(height, width, cv_type, img).clone();
-
-    stbi_image_free(img);
-
-    cv::cvtColor(result, result, channels == 1 ? cv::COLOR_GRAY2BGRA :
-        (channels == 3 ? cv::COLOR_RGB2BGRA : cv::COLOR_RGBA2BGRA));
+    auto result = cv::Mat(height, width, cv_type, pxData).clone();
+    stbi_image_free(pxData);
 
     return result;
 }
@@ -2140,8 +2136,6 @@ Frames ImageDatabase::loader(const wstring& path) {
 
     if (img.empty())
         img = getErrorTipsMat();
-    else if (img.type() == CV_8UC3)
-        cv::cvtColor(img, img, cv::COLOR_BGR2BGRA);
 
     ret.imgList.emplace_back(img, 0);
 

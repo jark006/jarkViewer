@@ -637,14 +637,11 @@ public:
         int pageWidth = GetDeviceCaps(pd.hDC, HORZRES);
         int pageHeight = GetDeviceCaps(pd.hDC, VERTRES);
 
-        double scale = std::min(static_cast<double>(pageWidth) / bgrMat.cols,
+        // 0.9 留5%边距
+        double scale = 0.9 * std::min(static_cast<double>(pageWidth) / bgrMat.cols,
             static_cast<double>(pageHeight) / bgrMat.rows);
         int newWidth = static_cast<int>(std::round(bgrMat.cols * scale));
         int newHeight = static_cast<int>(std::round(bgrMat.rows * scale));
-
-        // 确保不超过目标尺寸
-        newWidth = std::min(newWidth, pageWidth);
-        newHeight = std::min(newHeight, pageHeight);
 
         // 缩放图像
         cv::Mat resized;
@@ -670,8 +667,7 @@ public:
         HDC hdcMem = CreateCompatibleDC(pd.hDC);
         SelectObject(hdcMem, hBitmap);
 
-        // 高质量缩放
-        SetStretchBltMode(pd.hDC, HALFTONE);
+        SetStretchBltMode(pd.hDC, COLORONCOLOR); // 尺寸一致，无需缩放
         SetBrushOrgEx(pd.hDC, 0, 0, nullptr);
 
         // 绘制到打印机DC

@@ -264,7 +264,6 @@ std::string ExifParse::exifDataToString(const std::wstring& path, const Exiv2::E
 
 std::string ExifParse::xmpDataToString(const std::wstring& path, const Exiv2::XmpData& xmpData) {
     if (xmpData.empty()) {
-        jarkUtils::log("No XMP data {}", jarkUtils::wstringToUtf8(path));
         return "";
     }
 
@@ -277,7 +276,6 @@ std::string ExifParse::xmpDataToString(const std::wstring& path, const Exiv2::Xm
 
 std::string ExifParse::iptcDataToString(const std::wstring& path, const Exiv2::IptcData& IptcData) {
     if (IptcData.empty()) {
-        jarkUtils::log("No Iptc data {}", jarkUtils::wstringToUtf8(path));
         return "";
     }
 

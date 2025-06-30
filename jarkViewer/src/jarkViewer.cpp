@@ -18,8 +18,6 @@
 /* TODO
 1. 在鼠标光标位置缩放
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
-1. 图像预读取
-1. 单帧浏览
 */
 
 const wstring appName = L"JarkViewer v1.27";
@@ -192,10 +190,10 @@ public:
 
 class JarkViewerApp : public D2D1App {
 public:
-    const int BG_GRID_WIDTH = 16;
-    const uint32_t BG_COLOR = 0x46;
-    const uint32_t GRID_DARK = 0xFF282828;
-    const uint32_t GRID_LIGHT = 0xFF3C3C3C;
+    static const int BG_GRID_WIDTH = 16;
+    static const uint32_t BG_COLOR = 0x46;
+    static const uint32_t GRID_DARK = 0xFF282828;
+    static const uint32_t GRID_LIGHT = 0xFF3C3C3C;
 
     OperateQueue operateQueue;
 
@@ -272,7 +270,7 @@ public:
 
                 std::wstring ext = entry.path().extension().wstring();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
-                
+
                 if (ImageDatabase::supportExt.contains(ext) || ImageDatabase::supportRaw.contains(ext)) {
                     fileNameList.push_back(entry.path().filename().wstring());
                     jarkUtils::log(L"add fileNameList: {}", fileNameList.back());
@@ -591,18 +589,18 @@ public:
                 }
             }break;
 
-            //case 'S': { // Ctrl + S  动图 批量保存每一帧
-            //    if (curPar.isAnimation) {
-            //        const auto& imgs = curPar.framesPtr->imgList;
-            //        wstring& filePath = imgFileList[curFileIdx];
-            //        auto dotIdx = filePath.find_last_of(L".");
-            //        if (dotIdx == string::npos)
-            //            dotIdx = filePath.size();
-            //        for (int i = 0; i < imgs.size(); i++) {
-            //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
-            //        }
-            //    }
-            //}break;
+                    //case 'S': { // Ctrl + S  动图 批量保存每一帧
+                    //    if (curPar.isAnimation) {
+                    //        const auto& imgs = curPar.framesPtr->imgList;
+                    //        wstring& filePath = imgFileList[curFileIdx];
+                    //        auto dotIdx = filePath.find_last_of(L".");
+                    //        if (dotIdx == string::npos)
+                    //            dotIdx = filePath.size();
+                    //        for (int i = 0; i < imgs.size(); i++) {
+                    //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+                    //        }
+                    //    }
+                    //}break;
 
             case 'C': { // Ctrl + C  复制到剪贴板
                 const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
@@ -735,7 +733,7 @@ public:
             case VK_LEFT: {
                 operateQueue.push({ ActionENUM::preImg });
             }break;
-                        
+
             case VK_SPACE:
             case VK_NEXT:
             case VK_RIGHT: {
@@ -796,49 +794,53 @@ public:
         operateQueue.push({ ActionENUM::newSize, (int)width, (int)height });
     }
 
-    uint32_t getSrcPx3(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
+    uint32_t getSrcPx1(const cv::Mat& srcImg, int srcX, int srcY) const {
+        uchar srcPx = srcImg.at<uchar>(srcY, srcX);
+        if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+            const uchar px0 = srcImg.at<uchar>(srcY - 1, srcX - 1);
+            const uchar px1 = srcImg.at<uchar>(srcY - 1, srcX);
+            const uchar px2 = srcImg.at<uchar>(srcY, srcX - 1);
+            srcPx = (px0 + px1 + px2 + srcPx) >> 2;
+        }
+        return srcPx | srcPx << 8 | srcPx << 16 | 255 << 24;
+    }
+
+    uint32_t getSrcPx3(const cv::Mat& srcImg, int srcX, int srcY) const {
         cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
-        intUnion ret = 255;
         if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
-            cv::Vec3b px0 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
-            cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
-            cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
+            const cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
+            const cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
+            const cv::Vec3b px3 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
             for (int i = 0; i < 3; i++)
-                ret[i] = (px0[i] + px1[i] + px2[i] + srcPx[i]) >> 2;
-
-            return ret.u32;
+                srcPx[i] = (px1[i] + px2[i] + px3[i] + srcPx[i]) >> 2;
         }
-        ret[0] = srcPx[0];
-        ret[1] = srcPx[1];
-        ret[2] = srcPx[2];
-        return ret.u32;
+        return *((uint32_t*)&srcPx) | (255 << 24);
     }
 
     uint32_t getSrcPx4(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
-        // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
-        auto srcPtr = (intUnion*)srcImg.ptr();
-        int srcW = srcImg.cols;
+        const intUnion* srcPtr = (intUnion*)srcImg.ptr();
+        const int srcW = srcImg.cols;
 
         intUnion srcPx = srcPtr[srcW * srcY + srcX];
-        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ?
-            GRID_DARK : GRID_LIGHT;
 
         if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
-            intUnion srcPx1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
-            intUnion srcPx2 = srcPtr[srcW * (srcY - 1) + srcX];
-            intUnion srcPx3 = srcPtr[srcW * srcY + srcX - 1];
+            intUnion px1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
+            intUnion px2 = srcPtr[srcW * (srcY - 1) + srcX];
+            intUnion px3 = srcPtr[srcW * srcY + srcX - 1];
             for (int i = 0; i < 4; i++)
-                srcPx[i] = (srcPx1[i] + srcPx2[i] + srcPx3[i] + srcPx[i]) >> 2;
+                srcPx[i] = (px1[i] + px2[i] + px3[i] + srcPx[i]) >> 2;
         }
 
-        if (srcPx[3] == 0) return bgPx.u32;
         if (srcPx[3] == 255) return srcPx.u32;
+
+        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? GRID_DARK : GRID_LIGHT;
+        if (srcPx[3] == 0) return bgPx.u32;
 
         const int alpha = srcPx[3];
         intUnion ret = 255;
         for (int i = 0; i < 3; i++)
-            ret[i] = (bgPx[i] * (255 - alpha) + srcPx[i] * alpha + 128) >> 8;
+            ret[i] = (bgPx[i] * (255 - alpha) + srcPx[i] * alpha + 255) >> 8;
         return ret.u32;
     }
 
@@ -899,7 +901,8 @@ public:
             }
         }
 
-        if (srcImg.type() == CV_8UC3) {
+        switch (srcImg.type()) {
+        case CV_8UC4: {
 #ifdef ENABLE_OMP
 #pragma omp parallel for
 #endif
@@ -912,70 +915,110 @@ public:
                     if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
                         switch (curPar.rotation)
                         {
-                        case 1:
-                            ptr[x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX, x, y);
+                        case 0:
+                            ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
                             break;
-                        case 2:
-                            ptr[x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
-                            break;
-                        case 3:
-                            ptr[x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX, x, y);
-                            break;
-                        default:
-                            ptr[x] = getSrcPx3(srcImg, srcX, srcY, x, y);
-                            break;
-                        }
-                    }
-                }
-
-                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    if ((srcY & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
-                        memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
-                    }
-                }
-            }
-        }
-        else if (srcImg.type() == CV_8UC4) {
-#ifdef ENABLE_OMP
-#pragma omp parallel for
-#endif
-            for (int y = yStart; y < yEnd; y++) {
-                auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
-                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
-
-                for (int x = xStart; x < xEnd; x++) {
-                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
-                        switch (curPar.rotation)
-                        {
                         case 1:
                             ptr[x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
                             break;
                         case 2:
                             ptr[x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
                             break;
-                        case 3:
-                            ptr[x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
-                            break;
                         default:
-                            ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
+                            ptr[x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
                             break;
                         }
                     }
                 }
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    //if ((y & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
+                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                    //if ((y & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
                     //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     //}
                     //上下只能二选一
-                    if ((srcY & 1) && (++y) < yEnd) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
             }
+        }break;
+
+        case CV_8UC3: {
+#ifdef ENABLE_OMP
+#pragma omp parallel for
+#endif
+            for (int y = yStart; y < yEnd; y++) {
+                auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
+                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+
+                for (int x = xStart; x < xEnd; x++) {
+                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
+                        switch (curPar.rotation)
+                        {
+                        case 0:
+                            ptr[x] = getSrcPx3(srcImg, srcX, srcY);
+                            break;
+                        case 1:
+                            ptr[x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX);
+                            break;
+                        case 2:
+                            ptr[x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
+                            break;
+                        default:
+                            ptr[x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX);
+                            break;
+                        }
+                    }
+                }
+
+                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                        memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    }
+                }
+            }
+        }break;
+
+        case CV_8UC1: {
+            for (int y = yStart; y < yEnd; y++) {
+                auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
+                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+
+                for (int x = xStart; x < xEnd; x++) {
+                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
+                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
+                        switch (curPar.rotation)
+                        {
+                        case 0:
+                            ptr[x] = getSrcPx1(srcImg, srcX, srcY);
+                            break;
+                        case 1:
+                            ptr[x] = getSrcPx1(srcImg, srcH - 1 - srcY, srcX);
+                            break;
+                        case 2:
+                            ptr[x] = getSrcPx1(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
+                            break;
+                        default:
+                            ptr[x] = getSrcPx1(srcImg, srcY, srcW - 1 - srcX);
+                            break;
+                        }
+                    }
+                }
+
+                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                        memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    }
+                }
+            }
+        }break;
         }
     }
 
@@ -996,6 +1039,8 @@ public:
     // 取对角线作为新画布的宽高，绘制好内容再旋转，最后截取画布。
     // 若直接使用原尺寸画布进行旋转，宽或高其中较小的那边旋转到较长那边时，会缺失部分内容
     void rotateLeftAnimation() {
+        using namespace std::chrono;
+
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
@@ -1007,30 +1052,22 @@ public:
 
         bool needDelay = (maxEdge <= 1920);
         for (int i = 0; i <= 90; i += ((100 - i) / 6)) {
-            auto start_clock = std::chrono::system_clock::now();
-            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
-            cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
-            drawExifInfo(tmp);
-            drawExtraUI(tmp);
+            auto start_clock = system_clock::now();
+            auto view = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExifInfo(mainCanvas);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                tmp.ptr(),
-                (UINT32)tmp.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
 
     void rotateRightAnimation() {
+        using namespace std::chrono;
+
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
@@ -1041,25 +1078,15 @@ public:
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
         for (int i = 0; i >= -90; i -= ((100 + i) / 6)) {
-            auto start_clock = std::chrono::system_clock::now();
-            auto tmp = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
-            cv::resize(tmp, tmp, cv::Size(winWidth, winHeight));
-            drawExifInfo(tmp);
-            drawExtraUI(tmp);
+            auto start_clock = system_clock::now();
+            auto view = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExifInfo(mainCanvas);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                tmp.ptr(),
-                (UINT32)tmp.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
@@ -1112,6 +1139,8 @@ public:
 
     // 水平滑动 上一张图
     void mainCanvasSlideToPreAnimationHorizontal() {
+        using namespace std::chrono;
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
@@ -1132,31 +1161,23 @@ public:
         const int frame_width = nextmainCanvas.cols;
         const int frame_height = nextmainCanvas.rows;
         for (int x = frame_width; x > 0; x -= ((frame_width * 1.5 - x) / 8)) {
-            auto start_clock = std::chrono::system_clock::now();
+            auto start_clock = system_clock::now();
 
             cv::Mat view = panorama(cv::Rect(x, 0, frame_width, frame_height));
-            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
-            drawExtraUI(view);
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                view.ptr(),
-                (UINT32)view.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
 
     // 水平滑动 下一张图
     void mainCanvasSlideToNextAnimationHorizontal() {
+        using namespace std::chrono;
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
@@ -1177,31 +1198,23 @@ public:
         const int frame_width = nextmainCanvas.cols;
         const int frame_height = nextmainCanvas.rows;
         for (int x = 0; x <= frame_width; x += ((frame_width*1.5 - x) / 8)) {
-            auto start_clock = std::chrono::system_clock::now();
+            auto start_clock = system_clock::now();
 
             cv::Mat view = panorama(cv::Rect(x, 0, frame_width, frame_height));
-            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
-            drawExtraUI(view);
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                view.ptr(),
-                (UINT32)view.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
 
     // 竖直滑动 上一张图
     void mainCanvasSlideToPreAnimationVertical() {
+        using namespace std::chrono;
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
@@ -1222,31 +1235,23 @@ public:
         const int frame_width = nextmainCanvas.cols;
         const int frame_height = nextmainCanvas.rows;
         for (int y = frame_height; y >= 0; y -= ((frame_height * 1.5 - y) / 8)) {
-            auto start_clock = std::chrono::system_clock::now();
+            auto start_clock = system_clock::now();
 
             cv::Mat view = panorama(cv::Rect(0, y, frame_width, frame_height));
-            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
-            drawExtraUI(view);
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                view.ptr(),
-                (UINT32)view.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
     
     // 竖直滑动 下一张图
     void mainCanvasSlideToNextAnimationVertical() {
+        using namespace std::chrono;
+
         const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
@@ -1267,25 +1272,15 @@ public:
         const int frame_width = nextmainCanvas.cols;
         const int frame_height = nextmainCanvas.rows;
         for (int y = 0; y <= frame_height; y += ((frame_height * 1.5 - y) / 8)) {
-            auto start_clock = std::chrono::system_clock::now();
+            auto start_clock = system_clock::now();
 
             cv::Mat view = panorama(cv::Rect(0, y, frame_width, frame_height));
-            cv::resize(view, view, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
-            drawExtraUI(view);
+            cv::resize(view, mainCanvas, cv::Size(winWidth, winHeight), 0, 0, cv::INTER_NEAREST);
+            drawExtraUI(mainCanvas);
 
-            m_pD2DDeviceContext->CreateBitmap(
-                bitmapSize,
-                view.ptr(),
-                (UINT32)view.step,
-                &bitmapProperties,
-                &pBitmap
-            );
+            updateMainCanvas();
 
-            m_pD2DDeviceContext->BeginDraw();
-            m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-            m_pD2DDeviceContext->EndDraw();
-            m_pSwapChain->Present(0, 0);
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count() < 10)
+            if (duration_cast<milliseconds>(system_clock::now() - start_clock).count() < 10)
                 Sleep(1);
         }
     }
@@ -1346,12 +1341,28 @@ public:
         }
     }
 
+    void updateMainCanvas() {
+        m_pD2DDeviceContext->CreateBitmap(
+            bitmapSize,
+            mainCanvas.ptr(),
+            (UINT32)mainCanvas.step,
+            &bitmapProperties,
+            &pBitmap
+        );
+
+        m_pD2DDeviceContext->BeginDraw();
+        m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
+        m_pD2DDeviceContext->EndDraw();
+        m_pSwapChain->Present(0, 0);
+    }
+
+
+    int64_t delayRemain = 0;
+    const std::chrono::milliseconds frameDuration{ 10 };
+    std::chrono::steady_clock::time_point lastTimestamp = std::chrono::steady_clock::now();
+
+
     void DrawScene() {
-        const auto frameDuration = std::chrono::milliseconds(10);
-
-        static int64_t delayRemain = 0;
-        static auto lastTimestamp = std::chrono::steady_clock::now();
-
         auto operateAction = operateQueue.get();
         if (operateAction.action == ActionENUM::none &&
             curPar.zoomCur == curPar.zoomTarget &&
@@ -1423,9 +1434,12 @@ public:
         case ActionENUM::preImg: {
             if (imgFileList.size() <= 1)
                 break;
-            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-            drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
-            drawExifInfo(mainCanvas);
+            
+            if (settingPar.switchImageAnimationMode) {// 开动画时才需要
+                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+                drawExifInfo(mainCanvas);
+            }
 
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
@@ -1444,9 +1458,12 @@ public:
         case ActionENUM::nextImg: {
             if (imgFileList.size() <= 1)
                 break;
-            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-            drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
-            drawExifInfo(mainCanvas);
+            
+            if (settingPar.switchImageAnimationMode) {// 开动画时才需要
+                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+                drawExifInfo(mainCanvas);
+            }
 
             if (++curFileIdx >= (int)imgFileList.size())
                 curFileIdx = 0;
@@ -1611,19 +1628,7 @@ public:
             SetWindowTextW(m_hWnd, str.c_str());
         }
 
-        m_pD2DDeviceContext->CreateBitmap(
-            bitmapSize,
-            mainCanvas.ptr(),
-            (UINT32)mainCanvas.step,
-            &bitmapProperties,
-            &pBitmap
-        );
-
-        m_pD2DDeviceContext->BeginDraw();
-        m_pD2DDeviceContext->DrawBitmap(pBitmap.Get());
-        m_pD2DDeviceContext->EndDraw();
-        m_pSwapChain->Present(0, 0);
-
+        updateMainCanvas();
 
         if (curPar.isAnimation && curPar.isAnimationPause == false) {
             if (delayRemain <= 0)
