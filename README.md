@@ -1,4 +1,4 @@
-# 🌟 jarkViewer 
+# 🌟 jarkViewer看图
 
 ![Version](https://img.shields.io/github/v/release/jark006/jarkViewer) ![Download](https://img.shields.io/github/downloads/jark006/jarkviewer/total) ![Stars](https://img.shields.io/github/stars/jark006/jarkViewer) ![License](https://img.shields.io/github/license/jark006/jarkViewer) ![Platform](https://img.shields.io/badge/OS-Windows%2010/11%2064%20bit-00adef.svg)
 
@@ -21,7 +21,22 @@
 
 ---
 
-## ⚙️ 其他
+## 🖨 打印/编辑
+
+进入打印功能可以简单调整图像的 `对比度`、`亮度`、`是否反色` 等等，然后再决定 **另存为** 其他图像文件或 **继续打印**。
+
+还可以选择颜色模式：`彩色`、`黑白`、`黑白文档`、`黑白点阵`。
+
+1. **黑白文档**: 均衡全图亮度差异，突出字迹，避免局部阴影的观感影响，适合打印拍摄的文字纸张图像。
+1. **黑白点阵**: 使用纯黑或纯白二值像素的分布密度模拟灰度值，适合只能打印黑点或白点的打印机，例如超市打印小票或快递面单这类小型的热敏打印机。
+
+## ⚙️ 设置
+
+1. 是否开启 `旋转动画`, `缩放动画`, `切图动画` 等等。
+1. 关联所需文件格式。
+1. 查看软件帮助和关于信息。
+
+## 🗃️ 其他
 
 1. 🍀 全静态链接编译，原生绿色单文件
 1. ✅ 自动记忆上次窗口位置/尺寸
@@ -37,13 +52,13 @@
 - **动态图像**：`gif webp png apng jxl bpg`  
 - **RAW格式**：`3fr ari arw bay cap cr2 cr3 crw dcr dcs dng drf eip erf fff gpr iiq k25 kdc mdc mef mos mrw nef nrw orf pef ptx r3d raf raw rw2 rwl rwz sr2 srf srw x3f`
 
-## ⚓ 关联文件格式
+## ⚓ 对于v1.26及更旧版本的文件关联：
 
-将脚本 `associate_images.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images.bat)） 放置到 `jarkViewer.exe` 同一目录下，右键管理员身份运行即可关联图片格式。
+**关联文件格式**：将脚本 `associate_images.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images.bat)） 放置到 `jarkViewer.exe` 同一目录下，右键管理员身份运行即可关联图片格式。
 
-## 🚫 取消关联文件格式
+**取消关联**：将脚本 `associate_images_uninstall.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images_uninstall.bat)） 右键管理员身份运行即可取消 `jarkViewer` 的关联。
 
-将脚本 `associate_images_uninstall.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images_uninstall.bat)） 右键管理员身份运行即可取消 `jarkViewer` 的关联。
+**从 v1.27 版本起，只需在软件的设置页面设置关联即可，不再需要以上bat脚本。**
 
 ---
 
@@ -88,7 +103,7 @@ vcpkg install opencv4[core,ade,contrib,ipp,jasper,jpeg,nonfree,openexr,opengl,op
 
 ## ❤ 支持开发
 
-生活不易，三瓜俩枣都是心意
+软件开发不易，1毛也是心意
 
 ![donate](donate.png)
 
