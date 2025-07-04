@@ -1,7 +1,7 @@
 #include "exifParse.h"
 
 
-std::string ExifParse::getSimpleInfo(const std::wstring& path, int width, int height, const uint8_t* buf, size_t fileSize) {
+std::string ExifParse::getSimpleInfo(wstring_view path, int width, int height, const uint8_t* buf, size_t fileSize) {
     return (path.ends_with(L".ico") || (width == 0 && height == 0)) ?
         std::format("路径: {}\n大小: {}\n",
             jarkUtils::wstringToUtf8(path), jarkUtils::size2Str(fileSize)) :
@@ -9,7 +9,7 @@ std::string ExifParse::getSimpleInfo(const std::wstring& path, int width, int he
             jarkUtils::wstringToUtf8(path), jarkUtils::size2Str(fileSize), width, height);
 }
 
-std::string ExifParse::handleMathDiv(const std::string& str) {
+std::string ExifParse::handleMathDiv(string_view str) {
     if (str.empty())return "";
 
     int divIdx = -1;
@@ -36,8 +36,8 @@ std::string ExifParse::handleMathDiv(const std::string& str) {
     }
 
     if (divIdx > 0) {
-        auto a = std::stoll(str.substr(0, divIdx));
-        auto b = std::stoll(str.substr((size_t)divIdx + 1));
+        auto a = std::stoll(string(str.substr(0, divIdx)));
+        auto b = std::stoll(string(str.substr((size_t)divIdx + 1)));
 
         if (isNegative)
             a = 0 - a;
@@ -52,7 +52,7 @@ std::string ExifParse::handleMathDiv(const std::string& str) {
     return "";
 }
 
-std::string ExifParse::exifDataToString(const std::wstring& path, const Exiv2::ExifData& exifData) {
+std::string ExifParse::exifDataToString(wstring_view path, const Exiv2::ExifData& exifData) {
     if (exifData.empty()) {
         jarkUtils::log("No EXIF data {}", jarkUtils::wstringToUtf8(path));
         return "";
@@ -228,7 +228,7 @@ std::string ExifParse::exifDataToString(const std::wstring& path, const Exiv2::E
             vector<uint8_t> buf(a->size());
             a->copy(buf.data(), Exiv2::ByteOrder::bigEndian);
             if (!memcmp(buf.data(), "UNICODE\0", 8)) {
-                wstring str((wchar_t*)(buf.data() + 8), (buf.size() - 8) / 2);
+                wstring_view str((wchar_t*)(buf.data() + 8), (buf.size() - 8) / 2);
                 tagValue = jarkUtils::wstringToUtf8(str);
                 auto idx = tagValue.find("\nNegative prompt");
                 if (idx != string::npos) {
@@ -262,7 +262,7 @@ std::string ExifParse::exifDataToString(const std::wstring& path, const Exiv2::E
     return oss.str() + ossEnd.str();
 }
 
-std::string ExifParse::xmpDataToString(const std::wstring& path, const Exiv2::XmpData& xmpData) {
+std::string ExifParse::xmpDataToString(wstring_view path, const Exiv2::XmpData& xmpData) {
     if (xmpData.empty()) {
         return "";
     }
@@ -274,7 +274,7 @@ std::string ExifParse::xmpDataToString(const std::wstring& path, const Exiv2::Xm
     return xmpStr;
 }
 
-std::string ExifParse::iptcDataToString(const std::wstring& path, const Exiv2::IptcData& IptcData) {
+std::string ExifParse::iptcDataToString(wstring_view path, const Exiv2::IptcData& IptcData) {
     if (IptcData.empty()) {
         return "";
     }
@@ -286,7 +286,7 @@ std::string ExifParse::iptcDataToString(const std::wstring& path, const Exiv2::I
     return itpcStr;
 }
 
-std::string ExifParse::AI_Prompt(const std::wstring& path, const uint8_t* buf) {
+std::string ExifParse::AI_Prompt(wstring_view path, const uint8_t* buf) {
     if (!strncmp((const char*)buf + 0x25, "tEXtparameters", 14)) {
         int length = (buf[0x21] << 24) + (buf[0x22] << 16) + (buf[0x23] << 8) + buf[0x24];
         if (length > 16 * 1024) {
@@ -364,7 +364,7 @@ std::string ExifParse::AI_Prompt(const std::wstring& path, const uint8_t* buf) {
     return "";
 }
 
-std::string ExifParse::getExif(const std::wstring& path, const uint8_t* buf, int fileSize) {
+std::string ExifParse::getExif(wstring_view path, const uint8_t* buf, int fileSize) {
     try {
         auto image = Exiv2::ImageFactory::open(buf, fileSize);
         image->readMetadata();

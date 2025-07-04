@@ -90,7 +90,7 @@
 class ImageDatabase :public LRU<wstring, Frames> {
 public:
 
-    static inline const unordered_set<wstring> supportExt{
+    static inline const unordered_set<wstring_view> supportExt{
         L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png", L".apng",
         L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
         L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
@@ -99,7 +99,7 @@ public:
         L".jxr", L".wp2", L".pfm", L".bpg", L".livp", L".qoi",
     };
 
-    static inline const unordered_set<wstring> supportRaw{
+    static inline const unordered_set<wstring_view> supportRaw{
         L".crw", L".cr2", L".cr3", // Canon
         L".arw", L".srf", L".sr2", // Sony
         L".raw", L".dng", // Leica
@@ -170,26 +170,26 @@ public:
 
 
     const std::string jxlStatusCode2String(JxlDecoderStatus status);
-    std::vector<ImageNode> loadJXL(const wstring& path, const vector<uchar>& buf);
+    std::vector<ImageNode> loadJXL(wstring_view path, const vector<uchar>& buf);
     std::string statusExplain(WP2Status status);
-    std::vector<ImageNode> loadWP2(const wstring& path, const std::vector<uint8_t>& buf);
-    std::vector<ImageNode> loadBPG(const std::wstring& path, const std::vector<uchar>& buf);
-    std::vector<ImageNode> loadGif(const wstring& path, const vector<uchar>& buf);
-    std::vector<ImageNode> loadWebp(const wstring& path, const std::vector<uint8_t>& buf);
-    std::vector<ImageNode> loadApng(const std::wstring& path, const std::vector<uint8_t>& buf);
+    std::vector<ImageNode> loadWP2(wstring_view path, const std::vector<uint8_t>& buf);
+    std::vector<ImageNode> loadBPG(wstring_view path, const std::vector<uchar>& buf);
+    std::vector<ImageNode> loadGif(wstring_view path, const vector<uchar>& buf);
+    std::vector<ImageNode> loadWebp(wstring_view path, const std::vector<uint8_t>& buf);
+    std::vector<ImageNode> loadApng(wstring_view path, const std::vector<uint8_t>& buf);
 
 
     // HEIC ONLY, AVIF not support
     // https://github.com/strukturag/libheif
     // vcpkg install libheif:x64-windows-static
     // vcpkg install libheif[hevc]:x64-windows-static
-    cv::Mat loadHeic(const wstring& path, const vector<uchar>& buf);
+    cv::Mat loadHeic(wstring_view path, const vector<uchar>& buf);
 
     // vcpkg install libavif[core,aom,dav1d]:x64-windows-static
     // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
     // TODO 部分图像仍不能正常解码
-    cv::Mat loadAvif(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadRaw(const wstring& path, const vector<uchar>& buf);
+    cv::Mat loadAvif(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadRaw(wstring_view path, const vector<uchar>& buf);
 
 
     struct IconDirEntry {
@@ -220,7 +220,7 @@ public:
     cv::Mat readDibFromMemory(const uint8_t* data, size_t size);
 
     // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
-    std::tuple<cv::Mat, string> loadICO(const wstring& path, const vector<uchar>& buf);
+    std::tuple<cv::Mat, string> loadICO(wstring_view path, const vector<uchar>& buf);
 
 
     template <typename T, typename DataHolder>
@@ -326,18 +326,18 @@ public:
 
 
     // https://github.com/MolecularMatters/psd_sdk
-    cv::Mat loadPSD(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadTGA_HDR(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadSVG(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadJXR(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadMat(const wstring& path, const vector<uchar>& buf);
+    cv::Mat loadPSD(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadTGA_HDR(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadSVG(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadJXR(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadMat(wstring_view path, const vector<uchar>& buf);
     bool parsePFMHeader(const vector<uchar>& buf, int& width, int& height, float& scaleFactor, bool& isColor, size_t& dataOffset);
-    cv::Mat loadPFM(const wstring& path, const vector<uchar>& buf);
-    cv::Mat loadQOI(const wstring& path, const vector<uchar>& buf);
+    cv::Mat loadPFM(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadQOI(wstring_view path, const vector<uchar>& buf);
 
     std::pair<std::vector<uint8_t>, std::string> unzipLivp(std::vector<uint8_t>& livpFileBuff);
 
-    vector<cv::Mat> loadMats(const wstring& path, const vector<uchar>& buf);
+    vector<cv::Mat> loadMats(wstring_view path, const vector<uchar>& buf);
 
     struct PngSource {
         const uint8_t* data;

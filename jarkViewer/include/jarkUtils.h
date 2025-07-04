@@ -9,17 +9,19 @@
 #include<semaphore>
 #include<string>
 #include<vector>
+#include<array>
 #include<set>
 #include<map>
 #include<unordered_set>
 #include<unordered_map>
 #include<stdexcept>
-#include <ranges>
+#include<ranges>
 
 using std::vector;
 using std::string;
 using std::wstring;
 using std::string_view;
+using std::wstring_view;
 using std::set;
 using std::map;
 using std::unordered_set;
@@ -95,7 +97,7 @@ struct SettingParameter {
 
     bool isAllowRotateAnimation = true;
     bool isAllowZoomAnimation = true;
-    bool reserve3 = false;
+    bool isOptimizeSlide = true;            // 优化图像平移性能 （实为渲染工作量偷懒减半）
     bool reserve4 = false;
     int switchImageAnimationMode = 0;       // 0: 无动画  1:上下滑动  2:左右滑动
 
@@ -193,6 +195,16 @@ struct Cood {
     }
 };
 
+template <>
+struct std::formatter<Cood> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+    auto format(const Cood& cood, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "(x={}, y={})", cood.x, cood.y);
+    }
+};
+
 struct ImageNode {
     cv::Mat img;
     int delay;
@@ -286,21 +298,19 @@ public:
 
     static string bin2Hex(const void* bytes, const size_t len);
 
-    static std::wstring ansiToWstring(const std::string& str);
+    static std::wstring ansiToWstring(string_view str);
 
-    static std::string wstringToAnsi(const std::wstring& wstr);
+    static std::string wstringToAnsi(wstring_view wstr);
 
-    //UTF8 to UTF16
-    static std::wstring utf8ToWstring(const std::string& str);
+    static std::wstring utf8ToWstring(string_view str);
 
-    //UTF16 to UTF8
-    static std::string wstringToUtf8(const std::wstring& wstr);
+    static std::string wstringToUtf8(wstring_view wstr);
 
-    static std::wstring latin1ToWstring(const std::string& str);
+    static std::wstring latin1ToWstring(string_view str);
 
-    static std::string utf8ToAnsi(const std::string& str);
+    static std::string utf8ToAnsi(string_view str);
 
-    static std::string ansiToUtf8(const std::string& str);
+    static std::string ansiToUtf8(string_view str);
 
     static rcFileInfo GetResource(unsigned int idi, const wchar_t* type);
 
@@ -316,7 +326,7 @@ public:
     // 禁止窗口调整尺寸
     static void disableWindowResize(HWND hwnd);
 
-    static bool copyToClipboard(const std::wstring& text);
+    static bool copyToClipboard(wstring_view text);
 
     static bool limitSizeTo16K(cv::Mat& image);
 

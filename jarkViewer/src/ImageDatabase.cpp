@@ -48,7 +48,7 @@ const std::string ImageDatabase::jxlStatusCode2String(JxlDecoderStatus status) {
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadJXL(const wstring& path, const vector<uchar>& buf) {
+std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uchar>& buf) {
     std::vector<ImageNode> frames;
     cv::Mat mat;
 
@@ -177,7 +177,7 @@ std::vector<ImageNode> ImageDatabase::loadJXL(const wstring& path, const vector<
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadApng(const std::wstring& path, const std::vector<uint8_t>& buf) {
+std::vector<ImageNode> ImageDatabase::loadApng(wstring_view path, const std::vector<uint8_t>& buf) {
     std::vector<ImageNode> frames;
 
     if (buf.size() < 8 || png_sig_cmp(buf.data(), 0, 8)) {
@@ -358,7 +358,7 @@ std::vector<ImageNode> ImageDatabase::loadApng(const std::wstring& path, const s
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadGif(const wstring& path, const vector<uchar>& buf) {
+std::vector<ImageNode> ImageDatabase::loadGif(wstring_view path, const vector<uchar>& buf) {
 
     auto InternalRead_Mem = [](GifFileType* gif, GifByteType* buf, int len) -> int {
         if (len == 0)
@@ -480,7 +480,7 @@ std::vector<ImageNode> ImageDatabase::loadGif(const wstring& path, const vector<
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadWebp(const wstring& path, const std::vector<uint8_t>& buf) {
+std::vector<ImageNode> ImageDatabase::loadWebp(wstring_view path, const std::vector<uint8_t>& buf) {
     std::vector<ImageNode> frames;
 
     WebPData webp_data{ buf.data(), buf.size() };
@@ -592,7 +592,7 @@ std::string ImageDatabase::statusExplain(WP2Status status) {
 
 // https://chromium.googlesource.com/codecs/libwebp2  commit 96720e6410284ebebff2007d4d87d7557361b952  Date:   Mon Sep 9 18:11:04 2024 +0000
 // 网络找的不少wp2图像无法解码，使用 libwebp2 的 cwp2.exe 工具编码的 .wp2 图片可以正常解码
-std::vector<ImageNode> ImageDatabase::loadWP2(const wstring& path, const std::vector<uint8_t>& buf) {
+std::vector<ImageNode> ImageDatabase::loadWP2(wstring_view path, const std::vector<uint8_t>& buf) {
     std::vector<ImageNode> frames;
 
     WP2::ArrayDecoder decoder(buf.data(), buf.size());
@@ -680,7 +680,7 @@ std::vector<ImageNode> ImageDatabase::loadWP2(const wstring& path, const std::ve
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadBPG(const std::wstring& path, const std::vector<uchar>& buf) {
+std::vector<ImageNode> ImageDatabase::loadBPG(wstring_view path, const std::vector<uchar>& buf) {
     auto decoderContext = bpg_decoder_open();
     if (bpg_decoder_decode(decoderContext, buf.data(), (int)buf.size()) < 0) {
         jarkUtils::log("cvMat cannot decode: {}", jarkUtils::wstringToUtf8(path));
@@ -733,7 +733,7 @@ std::vector<ImageNode> ImageDatabase::loadBPG(const std::wstring& path, const st
 // https://github.com/strukturag/libheif
 // vcpkg install libheif:x64-windows-static
 // vcpkg install libheif[hevc]:x64-windows-static
-cv::Mat ImageDatabase::loadHeic(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadHeic(wstring_view path, const vector<uchar>& buf) {
     if (buf.empty())
         return {};
 
@@ -801,7 +801,7 @@ cv::Mat ImageDatabase::loadHeic(const wstring& path, const vector<uchar>& buf) {
 // vcpkg install libavif[core,aom,dav1d]:x64-windows-static
 // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
 // TODO 部分图像仍不能正常解码
-cv::Mat ImageDatabase::loadAvif(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadAvif(wstring_view path, const vector<uchar>& buf) {
     avifImage* image = avifImageCreateEmpty();
     if (image == nullptr) {
         jarkUtils::log("avifImageCreateEmpty failure: {}", jarkUtils::wstringToUtf8(path));
@@ -882,7 +882,7 @@ cv::Mat ImageDatabase::loadAvif(const wstring& path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadRaw(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadRaw(wstring_view path, const vector<uchar>& buf) {
     if (buf.empty()) {
         jarkUtils::log("Buf is empty: {}", jarkUtils::wstringToUtf8(path));
         return {};
@@ -1079,7 +1079,7 @@ cv::Mat ImageDatabase::readDibFromMemory(const uint8_t* data, size_t size) {
 
 
 // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
-std::tuple<cv::Mat, string> ImageDatabase::loadICO(const wstring& path, const vector<uchar>& buf) {
+std::tuple<cv::Mat, string> ImageDatabase::loadICO(wstring_view path, const vector<uchar>& buf) {
     if (buf.size() < 6) {
         jarkUtils::log("Invalid ICO file: {}", jarkUtils::wstringToUtf8(path));
         return { cv::Mat(),"" };
@@ -1182,7 +1182,7 @@ std::tuple<cv::Mat, string> ImageDatabase::loadICO(const wstring& path, const ve
 
 
 // https://github.com/MolecularMatters/psd_sdk
-cv::Mat ImageDatabase::loadPSD(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadPSD(wstring_view path, const vector<uchar>& buf) {
     const int32_t CHANNEL_NOT_FOUND = UINT_MAX;
 
     cv::Mat img;
@@ -1190,7 +1190,7 @@ cv::Mat ImageDatabase::loadPSD(const wstring& path, const vector<uchar>& buf) {
     psd::MallocAllocator allocator;
     psd::NativeFile file(&allocator);
 
-    if (!file.OpenRead(path.c_str())) {
+    if (!file.OpenRead(path.data())) {
         jarkUtils::log("Cannot open file {}", jarkUtils::wstringToUtf8(path));
         return {};
     }
@@ -1412,7 +1412,7 @@ cv::Mat ImageDatabase::loadPSD(const wstring& path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadTGA_HDR(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadTGA_HDR(wstring_view path, const vector<uchar>& buf) {
     int width, height, channels;
 
     // 使用stb_image从内存缓冲区加载图像
@@ -1442,7 +1442,7 @@ cv::Mat ImageDatabase::loadTGA_HDR(const wstring& path, const vector<uchar>& buf
 }
 
 
-cv::Mat ImageDatabase::loadSVG(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
     const int maxEdge = 3840;
     static bool isInitFont = false;
 
@@ -1484,7 +1484,7 @@ cv::Mat ImageDatabase::loadSVG(const wstring& path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadJXR(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadJXR(wstring_view path, const vector<uchar>& buf) {
     HRESULT hr = CoInitialize(NULL);
     if (FAILED(hr)) {
         std::cerr << "Failed to initialize COM library." << std::endl;
@@ -1609,7 +1609,7 @@ cv::Mat ImageDatabase::loadJXR(const wstring& path, const vector<uchar>& buf) {
 }
 
 
-vector<cv::Mat> ImageDatabase::loadMats(const wstring& path, const vector<uchar>& buf) {
+vector<cv::Mat> ImageDatabase::loadMats(wstring_view path, const vector<uchar>& buf) {
     vector<cv::Mat> imgs;
 
     if (!cv::imdecodemulti(buf, cv::IMREAD_UNCHANGED, imgs)) {
@@ -1619,7 +1619,7 @@ vector<cv::Mat> ImageDatabase::loadMats(const wstring& path, const vector<uchar>
 }
 
 
-cv::Mat ImageDatabase::loadMat(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadMat(wstring_view path, const vector<uchar>& buf) {
     cv::Mat img;
     try {
         img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
@@ -1717,7 +1717,7 @@ bool ImageDatabase::parsePFMHeader(const vector<uchar>& buf, int& width, int& he
 }
 
 
-cv::Mat ImageDatabase::loadPFM(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadPFM(wstring_view path, const vector<uchar>& buf) {
     int width, height;
     float scaleFactor;
     bool isColor;
@@ -1751,7 +1751,7 @@ cv::Mat ImageDatabase::loadPFM(const wstring& path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadQOI(const wstring& path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadQOI(wstring_view path, const vector<uchar>& buf) {
     cv::Mat mat;
     qoi_desc desc;
     auto pixels = qoi_decode(buf.data(), buf.size(), &desc, 0);
@@ -1940,7 +1940,7 @@ Frames ImageDatabase::loader(const wstring& path) {
         return { {{getErrorTipsMat(), 0}}, "" };
     }
 
-    auto f = _wfopen(path.c_str(), L"rb");
+    auto f = _wfopen(path.data(), L"rb");
     if (f == nullptr) {
         jarkUtils::log("path canot open: {}", jarkUtils::wstringToUtf8(path));
         return { {{getErrorTipsMat(), 0}}, "" };
@@ -1961,8 +1961,8 @@ Frames ImageDatabase::loader(const wstring& path) {
     fclose(f);
 
     auto dotPos = path.rfind(L'.');
-    auto ext = (dotPos != std::wstring::npos && dotPos < path.size() - 1) ?
-        path.substr(dotPos) : path;
+    auto ext = wstring((dotPos != std::wstring::npos && dotPos < path.size() - 1) ?
+        path.substr(dotPos) : path);
     for (auto& c : ext)	c = std::tolower(c);
 
     Frames ret;

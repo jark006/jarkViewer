@@ -5,13 +5,13 @@
 
 class ExifParse {
 public:
-    static std::string getSimpleInfo(const std::wstring& path, int width, int height, const uint8_t* buf, size_t fileSize);
-    static std::string handleMathDiv(const std::string& str);
-    static std::string exifDataToString(const std::wstring& path, const Exiv2::ExifData& exifData);
-    static std::string xmpDataToString(const std::wstring& path, const Exiv2::XmpData& xmpData);
-    static std::string iptcDataToString(const std::wstring& path, const Exiv2::IptcData& IptcData);
-    static std::string AI_Prompt(const std::wstring& path, const uint8_t* buf);
-    static std::string getExif(const std::wstring& path, const uint8_t* buf, int fileSize);
+    static std::string getSimpleInfo(wstring_view path, int width, int height, const uint8_t* buf, size_t fileSize);
+    static std::string handleMathDiv(string_view str);
+    static std::string exifDataToString(wstring_view path, const Exiv2::ExifData& exifData);
+    static std::string xmpDataToString(wstring_view path, const Exiv2::XmpData& xmpData);
+    static std::string iptcDataToString(wstring_view path, const Exiv2::IptcData& IptcData);
+    static std::string AI_Prompt(wstring_view path, const uint8_t* buf);
+    static std::string getExif(wstring_view path, const uint8_t* buf, int fileSize);
 
 private:
     // https://exiv2.org/tags.html

@@ -5,11 +5,11 @@
 #include "D2D1App.h"
 #include "FileAssociationManager.h"
 
-extern const wstring appBuildInfo;
-extern const wstring jarkLink;
-extern const wstring GithubLink;
-extern const wstring BaiduLink;
-extern const wstring LanzouLink;
+extern std::wstring_view appBuildInfo;
+extern std::wstring_view jarkLink;
+extern std::wstring_view GithubLink;
+extern std::wstring_view BaiduLink;
+extern std::wstring_view LanzouLink;
 
 struct generalTabCheckBox {
     cv::Rect rect{};
@@ -80,11 +80,12 @@ private:
 
         // GeneralTab
         generalTabCheckBoxList = {
-            { {50, 100, 200, 50}, "旋转动画", &settingParameter->isAllowRotateAnimation },
-            { {50, 150, 200, 50}, "缩放动画", &settingParameter->isAllowZoomAnimation },
+            { {50, 100, 180, 50}, "旋转动画", &settingParameter->isAllowRotateAnimation },
+            { {50, 150, 180, 50}, "缩放动画", &settingParameter->isAllowZoomAnimation },
+            { {50, 200, 760, 50}, "平移图像加速 (拖动图像时优化渲染速度，图像会微微失真)", &settingParameter->isOptimizeSlide },
         };
         generalTabRadioList = {
-            {{50, 200, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
+            {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
         };
 
         // AssociateTab
@@ -141,7 +142,7 @@ public:
             cv::Rect rect({ cbox.rect.x + 8, cbox.rect.y + 8, cbox.rect.height - 16, cbox.rect.height - 16 }); //方形
             cv::rectangle(winCanvas, rect, cv::Scalar(0, 0, 0, 255), 4);
             if (*cbox.valuePtr) {
-                rect = { cbox.rect.x + 12, cbox.rect.y + 12, cbox.rect.height - 24, cbox.rect.height - 24 }; //小方形
+                rect = { cbox.rect.x + 14, cbox.rect.y + 14, cbox.rect.height - 28, cbox.rect.height - 28 }; //小方形
                 cv::rectangle(winCanvas, rect, cv::Scalar(255, 200, 120, 255), -1);
             }
 
@@ -176,7 +177,7 @@ public:
         const int gridWidth = 80, gridHeight = 40;
         const int gridNumPerLine = 12;
 
-        const std::string btnTextList[4] = { "默认选择", "全选", "全不选", "立即关联" };
+        const std::string btnTextList[4] = { "选择常用", "全选", "全不选", "立即关联" };
         const cv::Rect btnRectList[4] = {
             { winWidth - 640, winHeight - 60, 160, 60 }, // defaultCheck
             { winWidth - 480, winHeight - 60, 160, 60 }, // allCheckBtnRect
@@ -389,16 +390,16 @@ public:
 
         if (event == cv::EVENT_LBUTTONUP) {
             if (isInside(x, y, { 550, 100, 50, 50 })) {
-                jarkUtils::openUrl(jarkLink.c_str());
+                jarkUtils::openUrl(jarkLink.data());
             }
             if (isInside(x, y, { 440, 230, 520, 90 })) {
-                jarkUtils::openUrl(GithubLink.c_str());
+                jarkUtils::openUrl(GithubLink.data());
             }
             if (isInside(x, y, { 440, 335, 520, 110 })) {
-                jarkUtils::openUrl(BaiduLink.c_str());
+                jarkUtils::openUrl(BaiduLink.data());
             }
             if (isInside(x, y, { 440, 460, 520, 90 })) {
-                jarkUtils::openUrl(LanzouLink.c_str());
+                jarkUtils::openUrl(LanzouLink.data());
             }
         }
     }
@@ -455,7 +456,8 @@ public:
                 refreshUI();
             }
 
-            int key = cv::waitKey(10);
+            if (cv::waitKey(10) == 27) // ESC
+                requestExit();
             if (requestExitFlag) {
                 cv::destroyWindow(params.windowsName);
                 break;

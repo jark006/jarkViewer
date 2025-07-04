@@ -554,7 +554,9 @@ public:
                 params.isParamsChange = false;
                 refreshUI();
             }
-            int key = cv::waitKey(10);
+
+            if (cv::waitKey(10) == 27) // ESC
+                requestExit();
             if (requestExitFlag || params.confirmed) {
                 cv::destroyWindow(params.windowsName);
                 break;

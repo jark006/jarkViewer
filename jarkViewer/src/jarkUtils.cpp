@@ -19,71 +19,69 @@ std::string jarkUtils::bin2Hex(const void* bytes, const size_t len) {
     return res;
 }
 
-std::wstring jarkUtils::ansiToWstring(const std::string& str) {
+std::wstring jarkUtils::ansiToWstring(string_view str) {
     if (str.empty())return L"";
 
-    int wcharLen = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.length(), nullptr, 0);
+    int wcharLen = MultiByteToWideChar(CP_ACP, 0, str.data(), (int)str.length(), nullptr, 0);
     if (wcharLen == 0) return L"";
 
     std::wstring ret(wcharLen, 0);
-    MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
+    MultiByteToWideChar(CP_ACP, 0, str.data(), (int)str.length(), ret.data(), wcharLen);
 
     return ret;
 }
 
-std::string jarkUtils::wstringToAnsi(const std::wstring& wstr) {
+std::string jarkUtils::wstringToAnsi(wstring_view wstr) {
     if (wstr.empty())return "";
 
-    int byteLen = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
+    int byteLen = WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
     if (byteLen == 0) return "";
 
     std::string ret(byteLen, 0);
-    WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
+    WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
     return ret;
 }
 
-//UTF8 to UTF16
-std::wstring jarkUtils::utf8ToWstring(const std::string& str) {
+std::wstring jarkUtils::utf8ToWstring(string_view str) {
     if (str.empty())return L"";
 
-    int wcharLen = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
+    int wcharLen = MultiByteToWideChar(CP_UTF8, 0, str.data(), (int)str.length(), nullptr, 0);
     if (wcharLen == 0) return L"";
 
     std::wstring ret(wcharLen, 0);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
+    MultiByteToWideChar(CP_UTF8, 0, str.data(), (int)str.length(), ret.data(), wcharLen);
 
     return ret;
 }
 
-//UTF16 to UTF8
-std::string jarkUtils::wstringToUtf8(const std::wstring& wstr) {
+std::string jarkUtils::wstringToUtf8(wstring_view wstr) {
     if (wstr.empty())return "";
 
-    int byteLen = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
+    int byteLen = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.length(), nullptr, 0, nullptr, nullptr);
     if (byteLen == 0) return "";
 
     std::string ret(byteLen, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.data(), (int)wstr.length(), ret.data(), byteLen, nullptr, nullptr);
     return ret;
 }
 
-std::wstring jarkUtils::latin1ToWstring(const std::string& str) {
+std::wstring jarkUtils::latin1ToWstring(string_view str) {
     if (str.empty())return L"";
 
-    int wcharLen = MultiByteToWideChar(1252, 0, str.c_str(), (int)str.length(), nullptr, 0);
+    int wcharLen = MultiByteToWideChar(1252, 0, str.data(), (int)str.length(), nullptr, 0);
     if (wcharLen == 0) return L"";
 
     std::wstring ret(wcharLen, 0);
-    MultiByteToWideChar(1252, 0, str.c_str(), (int)str.length(), ret.data(), wcharLen);
+    MultiByteToWideChar(1252, 0, str.data(), (int)str.length(), ret.data(), wcharLen);
 
     return ret;
 }
 
-std::string jarkUtils::utf8ToAnsi(const std::string& str) {
+std::string jarkUtils::utf8ToAnsi(string_view str) {
     return wstringToAnsi(utf8ToWstring(str));
 }
 
-std::string jarkUtils::ansiToUtf8(const std::string& str) {
+std::string jarkUtils::ansiToUtf8(string_view str) {
     return wstringToUtf8(ansiToWstring(str));
 }
 
@@ -158,7 +156,7 @@ void jarkUtils::disableWindowResize(HWND hwnd) {
     }
 }
 
-bool jarkUtils::copyToClipboard(const std::wstring& text) {
+bool jarkUtils::copyToClipboard(wstring_view text) {
     if (!OpenClipboard(nullptr)) {
         return false;
     }
@@ -172,9 +170,10 @@ bool jarkUtils::copyToClipboard(const std::wstring& text) {
     }
 
     auto desPtr = GlobalLock(hGlob);
-    if (desPtr)
-        memcpy(desPtr, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
-
+    if (desPtr) {
+        memcpy(desPtr, text.data(), (text.size() + 1) * sizeof(wchar_t));
+        ((wchar_t*)desPtr)[text.size() + 1] = 0; // wstring_view 尾部不能保证有 '\0' 终止符
+    }
     GlobalUnlock(hGlob);
 
     if (!SetClipboardData(CF_UNICODETEXT, hGlob)) {

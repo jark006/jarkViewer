@@ -20,18 +20,21 @@
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 */
 
-const wstring appName = L"JarkViewer v1.27";
-const wstring appBuildInfo = L"v1.27 (Build 202507xx)";
-const wstring jarkLink = L"https://github.com/jark006";
-const wstring GithubLink = L"https://github.com/jark006/jarkViewer";
-const wstring BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
-const wstring LanzouLink = L"https://jark006.lanzout.com/b0ko7mczg"; // 密码 6666
+std::wstring_view appName = L"JarkViewer v1.27";
+std::wstring_view appBuildInfo = L"v1.27 (Build 20250705)";
+std::wstring_view jarkLink = L"https://github.com/jark006";
+std::wstring_view GithubLink = L"https://github.com/jark006/jarkViewer";
+std::wstring_view BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
+std::wstring_view LanzouLink = L"https://jark006.lanzout.com/b0ko7mczg"; // 密码 6666
 
 
 
 struct CurImageParameter {
-    static const vector<int64_t> ZOOM_LIST;
-    static const int64_t ZOOM_BASE = (1 << 16); // 100%缩放
+    static const inline std::vector<int64_t> ZOOM_LIST{
+    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
+    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
+    };
+    static constexpr int64_t ZOOM_BASE = (1 << 16); // 100%缩放
 
     int64_t zoomTarget;     // 设定的缩放比例
     int64_t zoomCur;        // 动画播放过程的缩放比例，动画完毕后的值等于zoomTarget
@@ -94,12 +97,14 @@ struct CurImageParameter {
         }
     }
 
-    void handleNewSize(int winWidth = 0, int winHeight = 0) {
+    void updateZoomList(int winWidth = 0, int winHeight = 0) {
         if (winHeight == 0 || winWidth == 0 || framesPtr == nullptr)
             return;
 
         //适应显示窗口宽高的缩放比例
-        int64_t zoomFitWindow = std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height);
+        int64_t zoomFitWindow = (rotation == 0 || rotation == 2)?
+            std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height):
+            std::min(winWidth * ZOOM_BASE / height, winHeight * ZOOM_BASE / width);
 
         zoomList = ZOOM_LIST;
         if (!jarkUtils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
@@ -113,16 +118,13 @@ struct CurImageParameter {
 
     void slideTargetRotateLeft() {
         slideTarget = { slideTarget.y, -slideTarget.x };
+        slideCur = slideTarget;
     }
 
     void slideTargetRotateRight() {
         slideTarget = { -slideTarget.y, slideTarget.x };
+        slideCur = slideTarget;
     }
-};
-
-const vector<int64_t> CurImageParameter::ZOOM_LIST = {
-    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
-    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
 };
 
 class OperateQueue {
@@ -194,6 +196,8 @@ public:
     static const uint32_t BG_COLOR = 0x46;
     static const uint32_t GRID_DARK = 0xFF282828;
     static const uint32_t GRID_LIGHT = 0xFF3C3C3C;
+
+    static inline bool isLowZoom = false;
 
     OperateQueue operateQueue;
 
@@ -298,7 +302,7 @@ public:
             if (filePath.empty()) { //直接打开软件，没有传入参数
                 imgFileList.emplace_back(appName);
                 curFileIdx = 0;
-                imgDB.put(appName, { {{imgDB.getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
+                imgDB.put(wstring(appName), { {{imgDB.getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
             }
             else { // 打开的文件不支持，默认加到尾部
                 imgFileList.emplace_back(fullPath.wstring());
@@ -558,7 +562,7 @@ public:
         switch (cursorPos)
         {
         case CursorPos::centerArea:
-            operateQueue.push({ zDelta < 0 ? ActionENUM::zoomIn : ActionENUM::zoomOut });
+            operateQueue.push({ zDelta < 0 ? ActionENUM::zoomOut : ActionENUM::zoomIn });
             break;
 
         case CursorPos::leftEdge:
@@ -589,18 +593,18 @@ public:
                 }
             }break;
 
-                    //case 'S': { // Ctrl + S  动图 批量保存每一帧
-                    //    if (curPar.isAnimation) {
-                    //        const auto& imgs = curPar.framesPtr->imgList;
-                    //        wstring& filePath = imgFileList[curFileIdx];
-                    //        auto dotIdx = filePath.find_last_of(L".");
-                    //        if (dotIdx == string::npos)
-                    //            dotIdx = filePath.size();
-                    //        for (int i = 0; i < imgs.size(); i++) {
-                    //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
-                    //        }
-                    //    }
-                    //}break;
+            //case 'S': { // Ctrl + S  动图 批量保存每一帧
+            //    if (curPar.isAnimation) {
+            //        const auto& imgs = curPar.framesPtr->imgList;
+            //        wstring& filePath = imgFileList[curFileIdx];
+            //        auto dotIdx = filePath.find_last_of(L".");
+            //        if (dotIdx == string::npos)
+            //            dotIdx = filePath.size();
+            //        for (int i = 0; i < imgs.size(); i++) {
+            //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
+            //        }
+            //    }
+            //}break;
 
             case 'C': { // Ctrl + C  复制到剪贴板
                 const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
@@ -662,71 +666,43 @@ public:
             }break;
 
             case 'W': {
+                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetY = curPar.slideTarget.y + ((winHeight + winWidth) / 16);
-
-                int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-                int newTargetYMin = -newTargetYMax;
-                if (newTargetY > newTargetYMax) {
-                    newTargetY = newTargetYMax;
-                }
-                else if (newTargetY < newTargetYMin) {
-                    newTargetY = newTargetYMin;
-                }
+                newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
                 curPar.slideTarget.y = newTargetY;
                 smoothShift = true;
             }break;
 
             case 'S': {
+                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetY = curPar.slideTarget.y - ((winHeight + winWidth) / 16);
-
-                int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-                int newTargetYMin = -newTargetYMax;
-                if (newTargetY > newTargetYMax) {
-                    newTargetY = newTargetYMax;
-                }
-                else if (newTargetY < newTargetYMin) {
-                    newTargetY = newTargetYMin;
-                }
+                newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
                 curPar.slideTarget.y = newTargetY;
                 smoothShift = true;
             }break;
 
             case 'A': {
+                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetX = curPar.slideTarget.x + ((winHeight + winWidth) / 16);
-
-                int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-                int newTargetXMin = -newTargetXMax;
-                if (newTargetX > newTargetXMax) {
-                    newTargetX = newTargetXMax;
-                }
-                else if (newTargetX < newTargetXMin) {
-                    newTargetX = newTargetXMin;
-                }
+                newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
                 curPar.slideTarget.x = newTargetX;
                 smoothShift = true;
             }break;
 
             case 'D': {
+                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetX = curPar.slideTarget.x - ((winHeight + winWidth) / 16);
-
-                int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-                int newTargetXMin = -newTargetXMax;
-                if (newTargetX > newTargetXMax) {
-                    newTargetX = newTargetXMax;
-                }
-                else if (newTargetX < newTargetXMin) {
-                    newTargetX = newTargetXMin;
-                }
+                newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
                 curPar.slideTarget.x = newTargetX;
                 smoothShift = true;
             }break;
 
             case VK_UP: {
-                operateQueue.push({ ActionENUM::zoomOut });
+                operateQueue.push({ ActionENUM::zoomIn });
             }break;
 
             case VK_DOWN: {
-                operateQueue.push({ ActionENUM::zoomIn });
+                operateQueue.push({ ActionENUM::zoomOut });
             }break;
 
             case VK_PRIOR:
@@ -805,10 +781,10 @@ public:
         return srcPx | srcPx << 8 | srcPx << 16 | 255 << 24;
     }
 
-    uint32_t getSrcPx3(const cv::Mat& srcImg, int srcX, int srcY) const {
+    inline static uint32_t getSrcPx3(const cv::Mat& srcImg, int srcX, int srcY) {
         cv::Vec3b srcPx = srcImg.at<cv::Vec3b>(srcY, srcX);
 
-        if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+        if (isLowZoom && srcY > 0 && srcX > 0) { // 简单临近像素平均
             const cv::Vec3b px1 = srcImg.at<cv::Vec3b>(srcY - 1, srcX - 1);
             const cv::Vec3b px2 = srcImg.at<cv::Vec3b>(srcY - 1, srcX);
             const cv::Vec3b px3 = srcImg.at<cv::Vec3b>(srcY, srcX - 1);
@@ -818,13 +794,13 @@ public:
         return *((uint32_t*)&srcPx) | (255 << 24);
     }
 
-    uint32_t getSrcPx4(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) const {
+    inline static uint32_t getSrcPx4(const cv::Mat& srcImg, int srcX, int srcY, int mainX, int mainY) {
         const intUnion* srcPtr = (intUnion*)srcImg.ptr();
         const int srcW = srcImg.cols;
 
         intUnion srcPx = srcPtr[srcW * srcY + srcX];
 
-        if (curPar.zoomCur < curPar.ZOOM_BASE && srcY > 0 && srcX > 0) { // 简单临近像素平均
+        if (isLowZoom && srcY > 0 && srcX > 0) { // 简单临近像素平均
             intUnion px1 = srcPtr[srcW * (srcY - 1) + srcX - 1];
             intUnion px2 = srcPtr[srcW * (srcY - 1) + srcX];
             intUnion px3 = srcPtr[srcW * srcY + srcX - 1];
@@ -838,21 +814,25 @@ public:
         if (srcPx[3] == 0) return bgPx.u32;
 
         const int alpha = srcPx[3];
-        intUnion ret = 255;
-        for (int i = 0; i < 3; i++)
-            ret[i] = (bgPx[i] * (255 - alpha) + srcPx[i] * alpha + 255) >> 8;
-        return ret.u32;
+        //intUnion ret = 255;
+        //ret[0] = (bgPx[0] * (255 - alpha) + srcPx[0] * alpha + 255) >> 8;
+        //ret[1] = (bgPx[1] * (255 - alpha) + srcPx[1] * alpha + 255) >> 8;
+        //ret[2] = (bgPx[2] * (255 - alpha) + srcPx[2] * alpha + 255) >> 8;
+        return 255 << 24 |
+            (((bgPx[2] * (255 - alpha) + srcPx[2] * alpha + 255) & 0xff00) << 8) |
+            ((bgPx[1] * (255 - alpha) + srcPx[1] * alpha + 255) & 0xff00) |
+            ((bgPx[0] * (255 - alpha) + srcPx[0] * alpha + 255) >> 8);
     }
 
     void drawCanvas(const cv::Mat& srcImg, cv::Mat& canvas) const {
         int srcH, srcW;
-        if (curPar.rotation == 1 || curPar.rotation == 3) {
-            srcH = srcImg.cols;
-            srcW = srcImg.rows;
-        }
-        else {
+        if (curPar.rotation == 0 || curPar.rotation == 2) {
             srcH = srcImg.rows;
             srcW = srcImg.cols;
+        }
+        else {
+            srcH = srcImg.cols;
+            srcW = srcImg.rows;
         }
 
         const int canvasH = canvas.rows;
@@ -860,6 +840,26 @@ public:
 
         if (srcH <= 0 || srcW <= 0)
             return;
+
+        // 源图和画板canvas均100%缩放且居中重合，此时随机取一个点，先只考虑水平方向
+        // 该点与画板中心的距离，等于该点与源图中心的距离
+        // 即 canvasW / 2 - x = srcW / 2 - srcX
+        // 再考虑偏移量：canvasW / 2 - x = srcW / 2 - srcX - slide * srcW
+        // 再考虑源图缩放：canvasW / 2 - x = (srcW / 2 - srcX - slide * srcW) * zoom
+        // 即为源图和画板在特定位移和缩放的坐标变换公式
+        // x = canvasW / 2.0 - (srcW / 2.0 - srcX - slide * srcW) * zoom
+        // srcX = srcW / 2.0 - ((canvasW / 2.0 - x) / zoom + slide * srcW)
+
+        //SlideParameter slideVal;// 偏移比例，窗口中心落在源图的点与源图中心距离占边长的比例，slideVal.x = delta.x/srcWidth
+        //int xStart = std::round(canvasW / 2.0 - (srcW / 2.0 - curPar.slideVal.x * srcW) * curPar.zoomDouble);
+        //int xEnd = std::round(canvasW / 2.0 - (-srcW / 2.0 - curPar.slideVal.x * srcW) * curPar.zoomDouble);
+        //int yStart = std::round(canvasH / 2.0 - (srcH / 2.0 - curPar.slideVal.y * srcH) * curPar.zoomDouble);
+        //int yEnd = std::round(canvasH / 2.0 - (-srcH / 2.0 - curPar.slideVal.y * srcH) * curPar.zoomDouble);
+
+        //if (xStart < 0) xStart = 0;
+        //if (yStart < 0) yStart = 0;
+        //if (xEnd > canvasW) xEnd = canvasW;
+        //if (yEnd > canvasH) yEnd = canvasH;
 
         const int deltaW = curPar.slideCur.x + (int)((canvasW - srcW * curPar.zoomCur / curPar.ZOOM_BASE) / 2);
         const int deltaH = curPar.slideCur.y + (int)((canvasH - srcH * curPar.zoomCur / curPar.ZOOM_BASE) / 2);
@@ -901,44 +901,65 @@ public:
             }
         }
 
+        const float zoomInvert = (float)curPar.ZOOM_BASE / curPar.zoomCur;
+        isLowZoom = curPar.zoomCur < curPar.ZOOM_BASE;
+
         switch (srcImg.type()) {
         case CV_8UC4: {
 #ifdef ENABLE_OMP
 #pragma omp parallel for
 #endif
+            const intUnion* srcPtr = (intUnion*)srcImg.ptr();
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
-                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                //int srcY = (int)((int64_t)(y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur); // 2K屏 50%缩放一帧34ms 100%缩放一帧14ms
+                int srcY = (int)((y - deltaH) * zoomInvert); // 快一点  2K屏 50%缩放一帧28ms 100%缩放一帧14ms
 
-                for (int x = xStart; x < xEnd; x++) {
-                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
-                        switch (curPar.rotation)
-                        {
-                        case 0:
-                            ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
-                            break;
-                        case 1:
-                            ptr[x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
-                            break;
-                        case 2:
-                            ptr[x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
-                            break;
-                        default:
-                            ptr[x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
-                            break;
-                        }
+                srcY = std::clamp(srcY, 0, srcH);
+
+                switch (curPar.rotation) {
+                case 0:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx4(srcImg, srcX, srcY, x, y);
                     }
-                }
+                    break;
+                case 1:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx4(srcImg, srcH - 1 - srcY, srcX, x, y);
+                    }
+                    break;
+                case 2:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx4(srcImg, srcW - 1 - srcX, srcH - 1 - srcY, x, y);
+                    }
+                    break;
+                default:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx4(srcImg, srcY, srcW - 1 - srcX, x, y);
+                    }
+                    break;
+                }                
 
-                // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
+                 //如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (settingPar.isOptimizeSlide && 
+                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((y & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
                     //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     //}
                     //上下只能二选一
-                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                    //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                    //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    //}
+                    if (++y < yEnd) {  // 原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
@@ -951,33 +972,50 @@ public:
 #endif
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
-                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                //int srcY = (int)((int64_t)(y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                int srcY = (int)((y - deltaH) * zoomInvert);
 
-                for (int x = xStart; x < xEnd; x++) {
-                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
-                        switch (curPar.rotation)
-                        {
-                        case 0:
-                            ptr[x] = getSrcPx3(srcImg, srcX, srcY);
-                            break;
-                        case 1:
-                            ptr[x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX);
-                            break;
-                        case 2:
-                            ptr[x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
-                            break;
-                        default:
-                            ptr[x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX);
-                            break;
-                        }
+                srcY = std::clamp(srcY, 0, srcH);
+
+                switch (curPar.rotation) {
+                case 0:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx3(srcImg, srcX, srcY);
                     }
+                    break;
+                case 1:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx3(srcImg, srcH - 1 - srcY, srcX);
+                    }
+                    break;
+                case 2:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx3(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
+                    }
+                    break;
+                default:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx3(srcImg, srcY, srcW - 1 - srcX);
+                    }
+                    break;
                 }
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                if (settingPar.isOptimizeSlide &&
+                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
+                    //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                    //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    //}
+                    if (++y < yEnd) {  // 原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
@@ -987,33 +1025,50 @@ public:
         case CV_8UC1: {
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
-                const int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                //int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                int srcY = (int)((y - deltaH) * zoomInvert);
 
-                for (int x = xStart; x < xEnd; x++) {
-                    const int srcX = (int)(((int64_t)x - deltaW) * curPar.ZOOM_BASE / curPar.zoomCur);
-                    if (0 <= srcX && srcX < srcW && 0 <= srcY && srcY < srcH) {
-                        switch (curPar.rotation)
-                        {
-                        case 0:
-                            ptr[x] = getSrcPx1(srcImg, srcX, srcY);
-                            break;
-                        case 1:
-                            ptr[x] = getSrcPx1(srcImg, srcH - 1 - srcY, srcX);
-                            break;
-                        case 2:
-                            ptr[x] = getSrcPx1(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
-                            break;
-                        default:
-                            ptr[x] = getSrcPx1(srcImg, srcY, srcW - 1 - srcX);
-                            break;
-                        }
+                srcY = std::clamp(srcY, 0, srcH);
+
+                switch (curPar.rotation) {
+                case 0:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx1(srcImg, srcX, srcY);
                     }
+                    break;
+                case 1:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx1(srcImg, srcH - 1 - srcY, srcX);
+                    }
+                    break;
+                case 2:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx1(srcImg, srcW - 1 - srcX, srcH - 1 - srcY);
+                    }
+                    break;
+                default:
+                    for (int x = xStart; x < xEnd; x++) {
+                        int srcX = (x - deltaW) * zoomInvert;
+                        srcX = std::clamp(srcX, 0, srcW - 1);
+                        ptr[x] = getSrcPx1(srcImg, srcY, srcW - 1 - srcX);
+                    }
+                    break;
                 }
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-                    if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                if (settingPar.isOptimizeSlide &&
+                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
+                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
+                    //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
+                    //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
+                    //}
+                    if (++y < yEnd) {  // 原图拖动/平移上下单行像素抖动
                         memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     }
                 }
@@ -1050,7 +1105,6 @@ public:
         drawCanvas(srcImg, tmpCanvas);
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
-        bool needDelay = (maxEdge <= 1920);
         for (int i = 0; i <= 90; i += ((100 - i) / 6)) {
             auto start_clock = system_clock::now();
             auto view = rotateImage(tmpCanvas, i)(cv::Rect((maxEdge - winWidth) / 4, (maxEdge - winHeight) / 4, winWidth / 2, winHeight / 2));
@@ -1423,7 +1477,7 @@ public:
             }
 
             if (hasInitWinSize) {
-                curPar.handleNewSize(winWidth, winHeight);
+                curPar.updateZoomList(winWidth, winHeight);
             }
             else {
                 hasInitWinSize = true;
@@ -1480,30 +1534,29 @@ public:
         } break;
 
         case ActionENUM::slide: {
+            // slideVal: -0.5 ~ 0.5
+            //if (curPar.rotation == 0 || curPar.rotation == 2) {
+            //    curPar.slideVal.x += operateAction.x / (curPar.width * curPar.zoomDouble);
+            //    curPar.slideVal.y += operateAction.y / (curPar.height * curPar.zoomDouble);
+            //}
+            //else {
+            //    curPar.slideVal.x += operateAction.x / (curPar.height * curPar.zoomDouble);
+            //    curPar.slideVal.y += operateAction.y / (curPar.width * curPar.zoomDouble);
+            //}
+            // curPar.slideVal.x = std::clamp(curPar.slideVal.x, -0.5, 0.5);
+            // curPar.slideVal.y = std::clamp(curPar.slideVal.y, -0.5, 0.5);
+
             int newTargetX = curPar.slideTarget.x + operateAction.x;
             int newTargetY = curPar.slideTarget.y + operateAction.y;
 
-            int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-            int newTargetXMin = -newTargetXMax;
-            if (newTargetX > newTargetXMax) {
-                newTargetX = newTargetXMax;
-            }
-            else if (newTargetX < newTargetXMin) {
-                newTargetX = newTargetXMin;
-            }
+            const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+            newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
 
-            int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / (curPar.ZOOM_BASE * 2);
-            int newTargetYMin = -newTargetYMax;
-            if (newTargetY > newTargetYMax) {
-                newTargetY = newTargetYMax;
-            }
-            else if (newTargetY < newTargetYMin) {
-                newTargetY = newTargetYMin;
-            }
+            const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+            newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
 
             curPar.slideTarget.x = newTargetX;
             curPar.slideTarget.y = newTargetY;
-
         } break;
 
         case ActionENUM::toggleExif: {
@@ -1511,8 +1564,8 @@ public:
         } break;
 
         case ActionENUM::zoomIn: {
-            if (curPar.zoomIndex > 0) {
-                curPar.zoomIndex--;
+            if (curPar.zoomIndex < curPar.zoomList.size() - 1) {
+                curPar.zoomIndex++;
 
                 auto zoomNext = curPar.zoomList[curPar.zoomIndex];
                 if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
@@ -1525,8 +1578,8 @@ public:
         } break;
 
         case ActionENUM::zoomOut: {
-            if (curPar.zoomIndex < curPar.zoomList.size() - 1) {
-                curPar.zoomIndex++;
+            if (curPar.zoomIndex > 0) {
+                curPar.zoomIndex--;
 
                 auto zoomNext = curPar.zoomList[curPar.zoomIndex];
                 if (curPar.zoomTarget && zoomNext != curPar.zoomTarget) {
@@ -1544,6 +1597,7 @@ public:
             }
             curPar.rotation = (curPar.rotation + 1) & 0b11;
             curPar.slideTargetRotateLeft();
+            curPar.updateZoomList(winWidth, winHeight);
         } break;
 
         case ActionENUM::rotateRight: {
@@ -1552,6 +1606,7 @@ public:
             }
             curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
             curPar.slideTargetRotateRight();
+            curPar.updateZoomList(winWidth, winHeight);
         } break;
 
         case ActionENUM::requestExit: {
@@ -1559,17 +1614,10 @@ public:
             Setting::requestExit();
             PostMessageW(m_hWnd, WM_DESTROY, 0, 0);
         } break;
-
-        default:
-            break;
         }
 
-
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-        curPar.curFrameDelay = (delay <= 0 ? 10 : delay);
-
         if (curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-            if (smoothShift) { // 简单缩放动画
+            if (settingPar.isAllowZoomAnimation && smoothShift) { // 简单缩放动画
                 const int progressMax = 1 << 8;
                 static int progressCnt = progressMax;
                 static int64_t zoomInit = 0;
@@ -1604,6 +1652,9 @@ public:
                 curPar.slideCur = curPar.slideTarget;
             }
         }
+
+        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        curPar.curFrameDelay = (delay <= 0 ? 10 : delay);
 
         drawCanvas(srcImg, mainCanvas);
         drawExifInfo(mainCanvas);
