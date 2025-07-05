@@ -1441,7 +1441,7 @@ cv::Mat ImageDatabase::loadTGA_HDR(wstring_view path, const vector<uchar>& buf) 
     return result;
 }
 
-
+// TODO 某些带文字的svg在第一次加载时有概率无法渲染文本，再次加载才会，怀疑是字体初始化有问题：lunasvg_add_font_face_from_data
 cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
     const int maxEdge = 3840;
     static bool isInitFont = false;
@@ -1449,7 +1449,13 @@ cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
     if (!isInitFont) {
         isInitFont = true;
         auto rc = jarkUtils::GetResource(IDR_MSYHMONO_TTF, L"TTF");
-        lunasvg_add_font_face_from_data("", false, false, rc.ptr, rc.size, nullptr, nullptr);
+        jarkUtils::log("loadSVG initFont: size:{} ptr:{:x}", rc.size, (size_t)rc.ptr);
+        if (!lunasvg_add_font_face_from_data("", false, false, rc.ptr, rc.size, nullptr, nullptr)) {
+            jarkUtils::log("loadSVG initFont Fail !!!\nlunasvg_add_font_face_from_data");
+        }
+        else {
+            jarkUtils::log("loadSVG initFont Done!");
+        }
     }
 
     auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
@@ -1458,8 +1464,12 @@ cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
         return {};
     }
 
+    if (document->height() == 0 || document->width() == 0) {
+        jarkUtils::log("Failed to load SVG: height/width == 0 {}", jarkUtils::wstringToUtf8(path));
+        return {};
+    }
     // 宽高比例
-    const double AspectRatio = (document->height() == 0) ? 1 : (document->width() / document->height());
+    const float AspectRatio = document->width() / document->height();
     int height, width;
 
     if (AspectRatio == 1) {
@@ -1480,7 +1490,7 @@ cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
         return {};
     }
 
-    return cv::Mat(height, width, CV_8UC4, bitmap.data()).clone();
+    return cv::Mat(height, width, CV_8UC4, bitmap.data(), bitmap.stride()).clone();
 }
 
 

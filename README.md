@@ -96,6 +96,7 @@ vcpkg install libavif[core,aom,dav1d]:x64-windows-static
 vcpkg install libjxl[core,tools]:x64-windows-static
 vcpkg install libheif[core,hevc]:x64-windows-static
 vcpkg install libraw[core,dng-lossy,openmp]:x64-windows-static
+vcpkg install lunasvg:x64-windows-static
 vcpkg install opencv4[core,ade,contrib,ipp,jasper,jpeg,nonfree,openexr,opengl,openjpeg,png,tiff,webp,world]:x64-windows-static
 ```
 
