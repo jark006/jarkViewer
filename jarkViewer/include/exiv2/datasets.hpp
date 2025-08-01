@@ -39,7 +39,7 @@ struct EXIV2API DataSet {
   TypeId type_;            //!< Exiv2 default type
   uint16_t recordId_;      //!< Record id
   const char* photoshop_;  //!< Photoshop string
-};                         // struct DataSet
+};
 
 //! IPTC dataset reference, implemented as a static class.
 class EXIV2API IptcDataSets {

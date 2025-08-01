@@ -99,7 +99,7 @@ enum TypeId {
 };
 
 //! Container for binary data
-//using Blob = std::vector<byte>;
+using Blob = std::vector<byte>;
 
 // *****************************************************************************
 // class definitions

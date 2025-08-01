@@ -231,7 +231,7 @@ struct EXIV2API TagInfo {
   TypeId typeId_;        //!< Type id
   int16_t count_;        //!< The number of values (not bytes!), 0=any, -1=count not known.
   PrintFct printFct_;    //!< Pointer to tag print function
-};                       // struct TagInfo
+};
 
 //! Access to Exif group and tag lists and misc. tag reference methods, implemented as a static class.
 class EXIV2API ExifTags {

@@ -6,11 +6,14 @@
 // Define to 1 if you want to use libcurl in httpIO.
 /* #undef EXV_USE_CURL */
 
+// Define to 1 if you want to enable filesystem access
+#define EXV_ENABLE_FILESYSTEM
+
 // Define if you require webready support.
 /* #undef EXV_ENABLE_WEBREADY */
 
 // Define if you want translation of program messages to the user's native language
-#define EXV_ENABLE_NLS
+/* #undef EXV_ENABLE_NLS */
 
 // Define if you want to enable the decoding of video metadata
 /* #undef EXV_ENABLE_VIDEO */
@@ -46,26 +49,26 @@
 #endif
 
 // Define if you have the zlib library.
-/* #undef EXV_HAVE_LIBZ */
+#define EXV_HAVE_LIBZ
 
 // Define if you have the brotli library.
 #define EXV_HAVE_BROTLI
 
 /* Define if you have (Exiv2/xmpsdk) Adobe XMP Toolkit. */
-/* #undef EXV_HAVE_XMP_TOOLKIT */
+#define EXV_HAVE_XMP_TOOLKIT
 
 /* Define to the full name of this package. */
 #define EXV_PACKAGE_NAME "exiv2"
 
 /* Define to the full name and version of this package. */
-#define EXV_PACKAGE_STRING "exiv2 0.28.1"
+#define EXV_PACKAGE_STRING "exiv2 0.28.5"
 
 /* Define to the version of this package. */
-#define EXV_PACKAGE_VERSION "0.28.1"
+#define EXV_PACKAGE_VERSION "0.28.5"
 
 #define EXIV2_MAJOR_VERSION (0U)
 #define EXIV2_MINOR_VERSION (28U)
-#define EXIV2_PATCH_VERSION (1U)
+#define EXIV2_PATCH_VERSION (5U)
 #define EXIV2_TWEAK_VERSION (U)
 
 // Definition to enable translation of Nikon lens names.

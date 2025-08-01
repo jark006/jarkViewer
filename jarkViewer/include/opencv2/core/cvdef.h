@@ -368,7 +368,7 @@ enum CpuFeatures {
 
 #include "cv_cpu_dispatch.h"
 
-#if !defined(CV_STRONG_ALIGNMENT) && defined(__arm__) && !(defined(__aarch64__) || defined(_M_ARM64))
+#if !defined(CV_STRONG_ALIGNMENT) && defined(__arm__) && !(defined(__aarch64__) || defined(_M_ARM64) || defined(_M_ARM64EC))
 // int*, int64* should be propertly aligned pointers on ARMv7
 #define CV_STRONG_ALIGNMENT 1
 #endif
@@ -478,6 +478,7 @@ Cv64suf;
 #define CV_OUT
 #define CV_PROP
 #define CV_PROP_RW
+#define CV_ND // Indicates that input data should be parsed into Mat without channels
 #define CV_WRAP
 #define CV_WRAP_AS(synonym)
 #define CV_WRAP_MAPPABLE(mappable)
@@ -696,7 +697,7 @@ __CV_ENUM_FLAGS_BITWISE_XOR_EQ   (EnumType, EnumType)                           
 #ifdef CV_XADD
   // allow to use user-defined macro
 #elif defined __GNUC__ || defined __clang__
-#  if defined __clang__ && __clang_major__ >= 3 && !defined __ANDROID__ && !defined __EMSCRIPTEN__ && !defined(__CUDACC__)  && !defined __INTEL_COMPILER
+#  if defined __clang__ && __clang_major__ >= 3 && !defined __EMSCRIPTEN__ && !defined __INTEL_COMPILER
 #    ifdef __ATOMIC_ACQ_REL
 #      define CV_XADD(addr, delta) __c11_atomic_fetch_add((_Atomic(int)*)(addr), delta, __ATOMIC_ACQ_REL)
 #    else
@@ -746,7 +747,11 @@ __CV_ENUM_FLAGS_BITWISE_XOR_EQ   (EnumType, EnumType)                           
 #    define __has_cpp_attribute(__x) 0
 #  endif
 #  if __has_cpp_attribute(nodiscard)
-#    define CV_NODISCARD_STD [[nodiscard]]
+#    if defined(__NVCC__) && __CUDACC_VER_MAJOR__ < 12
+#       define CV_NODISCARD_STD
+#    else
+#       define CV_NODISCARD_STD [[nodiscard]]
+#    endif
 #  elif __cplusplus >= 201703L
 //   available when compiler is C++17 compliant
 #    define CV_NODISCARD_STD [[nodiscard]]
@@ -922,6 +927,17 @@ typedef hfloat float16_t;
 
 }
 #endif
+
+/** @brief Constructs the 'fourcc' code, used in video codecs and many other places.
+    Simply call it with 4 chars like `CV_FOURCC('I', 'Y', 'U', 'V')`
+*/
+CV_INLINE int CV_FOURCC(char c1, char c2, char c3, char c4)
+{
+    return (c1 & 255) + ((c2 & 255) << 8) + ((c3 & 255) << 16) + ((c4 & 255) << 24);
+}
+
+//! Macro to construct the fourcc code of the codec. Same as CV_FOURCC()
+#define CV_FOURCC_MACRO(c1, c2, c3, c4) (((c1) & 255) + (((c2) & 255) << 8) + (((c3) & 255) << 16) + (((c4) & 255) << 24))
 
 //! @}
 

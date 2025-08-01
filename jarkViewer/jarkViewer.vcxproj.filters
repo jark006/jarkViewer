@@ -42,9 +42,6 @@
     <ClInclude Include="include\avif\avif.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\gif_lib.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\libraw\libraw.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -58,9 +55,6 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\channel.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\png.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\psdsdk.h">
@@ -633,6 +627,12 @@
     <ClInclude Include="include\FileAssociationManager.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\tinyxml2.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\SVGPreprocessor.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\jarkViewer.cpp">
@@ -714,6 +714,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\TextDrawer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tinyxml2.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

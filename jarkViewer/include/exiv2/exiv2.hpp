@@ -19,7 +19,9 @@
 #include "exiv2/exif.hpp"
 #include "exiv2/futils.hpp"
 #include "exiv2/gifimage.hpp"
+#ifdef EXV_ENABLE_WEBREADY
 #include "exiv2/http.hpp"
+#endif
 #include "exiv2/image.hpp"
 #include "exiv2/iptc.hpp"
 #include "exiv2/jp2image.hpp"

@@ -86,6 +86,9 @@ class EXIV2API JpegBase : public Image {
   virtual int writeHeader(BasicIo& oIo) const = 0;
   //@}
 
+  int num_color_components_{-1};      //!< image number of color components
+  std::string sof_encoding_process_;  //!< image encoding process
+
  private:
   //! @name Manipulators
   //@{
@@ -153,6 +156,18 @@ class EXIV2API JpegImage : public JpegBase {
   //! @name Accessors
   //@{
   [[nodiscard]] std::string mimeType() const override;
+  /*!
+    @brief Get the number of color components of the JPEG Image
+  */
+  [[nodiscard]] int numColorComponents() const {
+    return num_color_components_;
+  }
+  /*!
+    @brief Get the encoding process of the JPEG Image derived from the Start of Frame (SOF) markers
+  */
+  [[nodiscard]] std::string encodingProcess() const {
+    return sof_encoding_process_;
+  }
   //@}
 
  protected:

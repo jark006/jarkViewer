@@ -78,8 +78,8 @@ extern "C" {
 // downstream projects to do greater-than preprocessor checks on AVIF_VERSION
 // to leverage in-development code without breaking their stable builds.
 #define AVIF_VERSION_MAJOR 1
-#define AVIF_VERSION_MINOR 2
-#define AVIF_VERSION_PATCH 1
+#define AVIF_VERSION_MINOR 3
+#define AVIF_VERSION_PATCH 0
 #define AVIF_VERSION_DEVEL 0
 #define AVIF_VERSION \
     ((AVIF_VERSION_MAJOR * 1000000) + (AVIF_VERSION_MINOR * 10000) + (AVIF_VERSION_PATCH * 100) + AVIF_VERSION_DEVEL)
@@ -972,10 +972,14 @@ typedef enum avifRGBFormat
     // This format is only supported for YUV -> RGB conversion and when
     // avifRGBImage.depth is set to 8.
     AVIF_RGB_FORMAT_RGB_565,
+    AVIF_RGB_FORMAT_GRAY,
+    AVIF_RGB_FORMAT_GRAYA,
+    AVIF_RGB_FORMAT_AGRAY,
     AVIF_RGB_FORMAT_COUNT
 } avifRGBFormat;
 AVIF_API uint32_t avifRGBFormatChannelCount(avifRGBFormat format);
 AVIF_API avifBool avifRGBFormatHasAlpha(avifRGBFormat format);
+AVIF_API avifBool avifRGBFormatIsGray(avifRGBFormat format);
 
 typedef enum avifChromaUpsampling
 {

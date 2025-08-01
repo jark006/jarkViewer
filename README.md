@@ -27,14 +27,10 @@
 
 还可以选择颜色模式：`彩色`、`黑白`、`黑白文档`、`黑白点阵`。
 
-1. **黑白文档**: 均衡全图亮度差异，突出字迹，避免局部阴影的观感影响，适合打印拍摄的文字纸张图像。
-1. **黑白点阵**: 使用纯黑或纯白二值像素的分布密度模拟灰度值，适合只能打印黑点或白点的打印机，例如超市打印小票或快递面单这类小型的热敏打印机。
+1. **黑白文档**: 均衡全图亮度，突出字迹，避免局部阴影的观感影响，适合打印拍摄的文字纸张图像。
+1. **黑白点阵**: 使用纯黑像素的分布密度模拟像素灰度值。此模式适合针式打印机和热敏打印机，也能打印出较好的图像效果。
 
-## ⚙️ 设置
-
-1. 是否开启 `旋转动画`, `缩放动画`, `切图动画` 等等。
-1. 关联所需文件格式。
-1. 查看软件帮助和关于信息。
+![printerPreview](printerPreview.png)
 
 ## 🗃️ 其他
 
@@ -44,6 +40,8 @@
 1. ♟️ 图片透明区域使用国际象棋棋盘背景
 1. 📖 支持读取AI生成图像（如 Stable-Diffusion、Flux、ComfyUI）的提示词等信息【前提是图片中包含了提示词信息，不是所有的文生图图片都包含提示词信息的】
 
+🔧 若启动时提示缺失 `MSVCP140.dll` 等，请下载并安装 VC++运行库: [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
 ---
 
 ## 📂 支持的图像格式
@@ -52,25 +50,11 @@
 - **动态图像**：`gif webp png apng jxl bpg`  
 - **RAW格式**：`3fr ari arw bay cap cr2 cr3 crw dcr dcs dng drf eip erf fff gpr iiq k25 kdc mdc mef mos mrw nef nrw orf pef ptx r3d raf raw rw2 rwl rwz sr2 srf srw x3f`
 
-## ⚓ 对于v1.26及更旧版本的文件关联：
-
-**关联文件格式**：将脚本 `associate_images.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images.bat)） 放置到 `jarkViewer.exe` 同一目录下，右键管理员身份运行即可关联图片格式。
-
-**取消关联**：将脚本 `associate_images_uninstall.bat` （[下载](https://github.com/jark006/jarkViewer/releases/download/v1.22/associate_images_uninstall.bat)） 右键管理员身份运行即可取消 `jarkViewer` 的关联。
-
-**从 v1.27 版本起，只需在软件的设置页面设置关联即可，不再需要以上bat脚本。**
-
----
-
-## 🔧 DLL 缺失解决方案
-
-请下载并安装 VC++运行库: [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)。
-
 ---
 
 ## 🛠️ 对于开发者
 
-下载仓库时，只需下载最新提交，历史提交存在较多冗余文件。
+下载仓库源码时，只需下载最新提交，历史提交存在较多占空间的冗余文件。
 ```sh
 git clone git@github.com:jark006/jarkViewer.git --depth=1
 ```
@@ -78,26 +62,30 @@ git clone git@github.com:jark006/jarkViewer.git --depth=1
 本软件采用全库静态链接，开发者需要在编译前解压所有第三方静态库文件
 
 1. 解压 `jarkViewer/lib/lib.7z` 所有 `*.lib` 静态库
-2. 解压 `jarkViewer/libavif/libavif.7z` 所有 `*.lib` 静态库
-3. 解压 `jarkViewer/libexiv2/libexiv2.7z` 所有 `*.lib` 静态库
-4. 解压 `jarkViewer/libopencv/libopencv.7z` 所有 `*.lib` 静态库
-5. 解压 `jarkViewer/libpng/libpng16.7z` 所有 `*.lib` 静态库
-6. 解压 `jarkViewer/libwebp2/libwebp2.7z` 所有 `*.lib` 静态库
+1. 解压 `jarkViewer/libavif/libavif.7z` 所有 `*.lib` 静态库
+1. 解压 `jarkViewer/libexiv2/libexiv2.7z` 所有 `*.lib` 静态库
+1. 解压 `jarkViewer/libjxl/libjxl.7z` 所有 `*.lib` 静态库
+1. 解压 `jarkViewer/libopencv/libopencv.7z` 所有 `*.lib` 静态库
+1. 解压 `jarkViewer/libwebp2/libwebp2.7z` 所有 `*.lib` 静态库
 
-或者开启vcpkg支持，然后手动安装第三方库 (后续若有新增，此列表可能更新不及时，需开发者自行根据编译缺失信息补充安装)
+以上静态库除 `OpenCV` 外，均使用vcpkg安装的静态库复制而来。OpenCV静态库的编译指令集基准为AVX2，即只支持`Intel 4代` / `AMD Ryzen系列` 及后续CPU，除了移除dnn/js/java/python绑定等等不需要的组件，还有以下几个主要修改：
+1. 在源码 `opencv-4.12.0\modules\imgcodecs\src\loadsave.cpp` #68-79 移除图像分辨率限制。
+1. 在源码 `opencv-4.12.0\modules\highgui\src\window_w32.cpp` #337 将 `IDC_CROSS` 改为 `IDC_ARROW`，即在 `cv::imshow()` 窗口内不使用十字光标。
+
+
+若不要以上静态库，可在项目属性页开启`vcpkg`支持，然后手动安装第三方库 (后续若有新增，此列表可能更新不及时，需开发者自行根据编译缺失信息补充安装)
 
 ```sh
-vcpkg install giflib:x64-windows-static
 vcpkg install x265:x64-windows-static
 vcpkg install zlib:x64-windows-static
 vcpkg install libyuv:x64-windows-static
 vcpkg install exiv2[core,bmff,png,xmp]:x64-windows-static
 vcpkg install libavif[core,aom,dav1d]:x64-windows-static
-vcpkg install libjxl[core,tools]:x64-windows-static
+vcpkg install libjxl:x64-windows-static
 vcpkg install libheif[core,hevc]:x64-windows-static
 vcpkg install libraw[core,dng-lossy,openmp]:x64-windows-static
 vcpkg install lunasvg:x64-windows-static
-vcpkg install opencv4[core,ade,contrib,ipp,jasper,jpeg,nonfree,openexr,opengl,openjpeg,png,tiff,webp,world]:x64-windows-static
+vcpkg install opencv4[core,contrib,freetype,ipp,jasper,jpeg,jpegxl,nonfree,openexr,opengl,openjpeg,png,tiff,webp,world]:x64-windows-static
 ```
 
 ---

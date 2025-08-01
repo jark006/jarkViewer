@@ -468,7 +468,7 @@ class EXIV2API CommentValue : public StringValueBase {
     CharsetId charsetId_;  //!< Charset id
     const char* name_;     //!< Name of the charset
     const char* code_;     //!< Code of the charset
-  };                       // struct CharsetTable
+  };
 
   //! Charset information lookup functions. Implemented as a static class.
   class EXIV2API CharsetInfo {

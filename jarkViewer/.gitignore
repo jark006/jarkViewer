@@ -5,3 +5,4 @@ libexiv2/*.lib
 libpng/*.lib
 libwebp2/*.lib
 libavif/*.lib
+libjxl/*.lib

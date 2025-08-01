@@ -224,6 +224,7 @@ enum class ErrorCode {
   kerArithmeticOverflow,
   kerMallocFailed,
   kerInvalidIconvEncoding,
+  kerFileAccessDisabled,
 
   kerErrorCount,
 };

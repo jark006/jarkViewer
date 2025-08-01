@@ -276,6 +276,7 @@ class EXIV2API IoCloser {
   IoCloser& operator=(const IoCloser&) = delete;
 };  // class IoCloser
 
+#ifdef EXV_ENABLE_FILESYSTEM
 /*!
   @brief Provides binary file IO by implementing the BasicIo
       interface.
@@ -479,6 +480,7 @@ class EXIV2API FileIo : public BasicIo {
   std::unique_ptr<Impl> p_;
 
 };  // class FileIo
+#endif
 
 /*!
   @brief Provides binary IO on blocks of memory by implementing the BasicIo
@@ -686,7 +688,7 @@ class EXIV2API XPathIo : public MemIo {
    */
   void ReadDataUri(const std::string& path);
 };  // class XPathIo
-#else
+#elif defined(EXV_ENABLE_FILESYSTEM)
 class EXIV2API XPathIo : public FileIo {
  public:
   /*!

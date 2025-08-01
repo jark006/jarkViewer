@@ -33,6 +33,7 @@
 #  define EXIV2LIB_DEPRECATED_NO_EXPORT EXIV2LIB_NO_EXPORT EXIV2LIB_DEPRECATED
 #endif
 
+/* NOLINTNEXTLINE(readability-avoid-unconditional-preprocessor-if) */
 #if 0 /* DEFINE_NO_DEPRECATED */
 #  ifndef EXIV2LIB_NO_DEPRECATED
 #    define EXIV2LIB_NO_DEPRECATED

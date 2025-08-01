@@ -49,12 +49,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>$(ProjectDir)libavif;$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)libjxl;$(ProjectDir)libavif;$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir)libavutil;$(ProjectDir)libavcodec;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LibraryPath>$(ProjectDir)libavif;$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)libjxl;$(ProjectDir)libavif;$(ProjectDir)libwebp2;$(ProjectDir)libpng;$(ProjectDir)libexiv2;$(ProjectDir)libopencv;$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir)libavutil;$(ProjectDir)libavcodec;$(ProjectDir)include/libwebp2;$(ProjectDir)include;$(ProjectDir);$(IncludePath)</IncludePath>
     <LinkIncremental>false</LinkIncremental>
     <CopyCppRuntimeToOutputDir>false</CopyCppRuntimeToOutputDir>
@@ -77,7 +77,7 @@
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -117,7 +117,7 @@
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;UNICODE;_UNICODE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/utf-8 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -126,7 +126,7 @@
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <DebugInformationFormat>None</DebugInformationFormat>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
@@ -161,7 +161,6 @@
     <ClInclude Include="include\D2D1App.h" />
     <ClInclude Include="include\exifParse.h" />
     <ClInclude Include="include\FileAssociationManager.h" />
-    <ClInclude Include="include\gif_lib.h" />
     <ClInclude Include="include\ImageDatabase.h" />
     <ClInclude Include="include\libbpg.h" />
     <ClInclude Include="include\libheif\heif.h" />
@@ -174,7 +173,6 @@
     <ClInclude Include="include\libraw\libraw.h" />
     <ClInclude Include="include\LRU.h" />
     <ClInclude Include="include\lunasvg.h" />
-    <ClInclude Include="include\png.h" />
     <ClInclude Include="include\Printer.h" />
     <ClInclude Include="include\psdsdk.h" />
     <ClInclude Include="include\psdsdk\Psd.h" />
@@ -241,9 +239,11 @@
     <ClInclude Include="include\psdsdk\PsdUnionCast.h" />
     <ClInclude Include="include\psdsdk\PsdVectorMask.h" />
     <ClInclude Include="include\Setting.h" />
+    <ClInclude Include="include\SVGPreprocessor.h" />
     <ClInclude Include="include\TextDrawer.h" />
     <ClInclude Include="include\thread_pool.h" />
     <ClInclude Include="include\jarkUtils.h" />
+    <ClInclude Include="include\tinyxml2.h" />
     <ClInclude Include="include\x265.h" />
     <ClInclude Include="include\x265_config.h" />
     <ClInclude Include="libavcodec\avcodec.h" />
@@ -386,6 +386,7 @@
     <ClCompile Include="src\libbpg.cpp" />
     <ClCompile Include="src\jarkUtils.cpp" />
     <ClCompile Include="src\TextDrawer.cpp" />
+    <ClCompile Include="src\tinyxml2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="jarkViewer.rc" />

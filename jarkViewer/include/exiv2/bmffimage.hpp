@@ -13,7 +13,7 @@
 // *****************************************************************************
 // namespace extensions
 namespace Exiv2 {
-EXIV2API bool enableBMFF(bool enable = true);
+[[deprecated]] EXIV2API bool enableBMFF(bool enable = true);
 }  // namespace Exiv2
 
 #ifdef EXV_ENABLE_BMFF
@@ -56,7 +56,7 @@ class EXIV2API BmffImage : public Image {
     @param create Specifies if an existing image should be read (false)
         or if a new file should be created (true).
    */
-  BmffImage(BasicIo::UniquePtr io, bool create);
+  BmffImage(BasicIo::UniquePtr io, bool create, size_t max_box_depth = 1000);
   //@}
 
   //@{
@@ -138,6 +138,7 @@ class EXIV2API BmffImage : public Image {
   uint16_t xmpID_{0};
   std::map<uint32_t, Iloc> ilocs_;
   bool bReadMetadata_{false};
+  const size_t max_box_depth_;
   //@}
 
   /*!

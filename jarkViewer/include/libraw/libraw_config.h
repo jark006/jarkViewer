@@ -27,7 +27,7 @@ it under the terms of the one of two licenses as you choose:
 #define LIBRAW_USE_DNGLOSSYCODEC 1
 
 /* Define to 1 if LibRaw have been compiled with OpenMP support */
-#define LIBRAW_USE_OPENMP 1
+/* #undef LIBRAW_USE_OPENMP */
 
 /* Define to 1 if LibRaw have been compiled with LCMS support */
 #define LIBRAW_USE_LCMS 1
