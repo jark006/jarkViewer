@@ -1,143 +1,157 @@
 #pragma once
 #include "jarkUtils.h"
-#include "exifParse.h"
 #include "LRU.h"
 
-#include "libraw/libraw.h"
-#include "libheif/heif.h"
-#include "avif/avif.h"
-#include "jxl/decode_cxx.h"
-#include "jxl/resizable_parallel_runner_cxx.h"
-#include "jxl/types.h"
-#include "gif_lib.h"
-#include "webp/decode.h"
-#include "webp/demux.h"
-#include "png.h"
-#include "pngstruct.h"
-#include "psdsdk.h"
-#include "lunasvg.h"
-#include "src/wp2/base.h"
-#include "src/wp2/decode.h"
-#include "libbpg.h"
-#include "minizip/unzip.h"
 #include "videoDecoder.h"
+#include "SVGPreprocessor.h"
 
+// libbpg v0.9.8 End on 2018  https://bellard.org/bpg/
+#include "libbpg.h"
+
+// stb_image v2.30  https://github.com/nothings/stb
 #include "stb_image.h"
+
+// QOI v2025.4.29  https://github.com/phoboslab/qoi
 #include "qoi.h"
 
+// opencv 4.12.0  https://github.com/opencv/opencv
 #pragma comment(lib, "IlmImf.lib")
-#pragma comment(lib, "ippiw.lib")
+#pragma comment(lib, "ipphal.lib")
 #pragma comment(lib, "ippicvmt.lib")
+#pragma comment(lib, "ippiw.lib")
+#pragma comment(lib, "ittnotify.lib")
 #pragma comment(lib, "libjpeg-turbo.lib")
 #pragma comment(lib, "libopenjp2.lib")
 #pragma comment(lib, "libpng.lib")
 #pragma comment(lib, "libprotobuf.lib")
 #pragma comment(lib, "libtiff.lib")
-#pragma comment(lib, "libwebp.lib")
-#pragma comment(lib, "opencv_world4100.lib")
+#pragma comment(lib, "opencv_world4120.lib")
 #pragma comment(lib, "zlib.lib")
-#pragma comment(lib, "ittnotify.lib")
+#pragma comment(lib, "libwebp.lib")
+
+// webp2 v0.0.1  https://chromium.googlesource.com/codecs/libwebp2
+#include "src/wp2/base.h"
+#include "src/wp2/decode.h"
+#pragma comment(lib, "webp2.lib")
+#pragma comment(lib, "imageio.lib")
+
+// heif v1.20.1#1  https://github.com/strukturag/libheif
+#include "libheif/heif.h"
 #pragma comment(lib, "heif.lib")
 #pragma comment(lib, "libde265.lib")
 #pragma comment(lib, "x265-static.lib")
 
-// avif
+// avif v1.3.0  https://github.com/AOMediaCodec/libavif
+#include "avif/avif.h"
 #pragma comment(lib, "avif.lib")
 #pragma comment(lib, "yuv.lib")
 #pragma comment(lib, "dav1d.lib")
 #pragma comment(lib, "aom.lib")
 
-#pragma comment(lib, "gif.lib")
-#pragma comment(lib, "raw.lib")
-#pragma comment(lib, "OpenGL32.Lib")
-#pragma comment(lib, "GlU32.Lib")
+// libraw  v0.21.4  https://www.libraw.org/
+#include "libraw/libraw.h"
+#pragma comment(lib, "raw_r.lib")
 #pragma comment(lib, "freeglut.lib")
-#pragma comment(lib, "lcms2.lib")
 #pragma comment(lib, "jasper.lib")
-#pragma comment(lib, "brotlicommon.lib")
-#pragma comment(lib, "brotlidec.lib")
-#pragma comment(lib, "brotlienc.lib")
-#pragma comment(lib, "charset.lib")
+#pragma comment(lib, "lcms2.lib")
+
+// exiv2  v0.28.5  https://exiv2.org/download.html
+#include "exifParse.h"
 #pragma comment(lib, "exiv2.lib")
+#pragma comment(lib, "charset.lib")
 #pragma comment(lib, "iconv.lib")
 #pragma comment(lib, "inih.lib")
 #pragma comment(lib, "INIReader.lib")
 #pragma comment(lib, "intl.lib")
 #pragma comment(lib, "libexpatMT.lib")
-#pragma comment(lib, "Psapi.lib")
+#pragma comment(lib, "brotlicommon.lib")
+#pragma comment(lib, "brotlidec.lib")
+#pragma comment(lib, "brotlienc.lib")
+
+// libjxl v0.11.1  https://github.com/libjxl/libjxl
+#include "jxl/decode_cxx.h"
+#include "jxl/resizable_parallel_runner_cxx.h"
+#include "jxl/types.h"
 #pragma comment(lib, "jxl.lib")
 #pragma comment(lib, "jxl_cms.lib")
+#pragma comment(lib, "jxl_extras_codec.lib")
 #pragma comment(lib, "jxl_threads.lib")
+
 #pragma comment(lib, "hwy.lib")
-#pragma comment(lib, "libpng16.lib")
 #pragma comment(lib, "FreeImage.lib")
 #pragma comment(lib, "FreeImagePlus.lib")
 #pragma comment(lib, "pixman-1.lib")
 #pragma comment(lib, "fontconfig.lib")
+
+// psdsdk  https://github.com/MolecularMatters/psd_sdk
+#include "psdsdk.h"
 #pragma comment(lib, "Psd_MT.lib")
+
+// lunasvg v3.4.0  https://github.com/sammycage/lunasvg
+#include "lunasvg.h"
 #pragma comment(lib, "lunasvg.lib")
 #pragma comment(lib, "plutovg.lib")
-#pragma comment(lib, "webp2.lib")
-#pragma comment(lib, "imageio.lib")
+
+// minizip  1.3.1#1
+#include "minizip/unzip.h"
 #pragma comment(lib, "minizip.lib")
 #pragma comment(lib, "bz2.lib")
 
-// meson setup builddir --backend=vs --buildtype release -Dloaders="all" -Dtools="all"
-//#pragma comment(lib, "thorvg-0.lib")
 
-// .\gswin64c.exe -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -sOutputFile=d:\aa.png "D:\Downloads\test\perth.eps"
-
-class ImageDatabase :public LRU<wstring, Frames> {
+class ImageDatabase :public LRU<wstring, ImageAsset> {
 public:
 
+    // 自 OpenCV 4.12 起支持的动态图像格式 gif png webp
+    static inline const unordered_set<wstring_view> opencvAnimationExt{
+        L"gif", L"png", L"apng", L"webp",
+    };
+
     static inline const unordered_set<wstring_view> supportExt{
-        L".jpg", L".jp2", L".jpeg", L".jpe", L".bmp", L".dib", L".png", L".apng",
-        L".pbm", L".pgm", L".ppm", L".pxm",L".pnm",L".sr", L".ras",
-        L".exr", L".tiff", L".tif", L".webp", L".hdr", L".pic",
-        L".heic", L".heif", L".avif", L".avifs", L".gif", L".jxl",
-        L".ico", L".icon", L".psd", L".tga", L".svg", L".jfif",
-        L".jxr", L".wp2", L".pfm", L".bpg", L".livp", L".qoi",
+        L"jpg", L"jp2", L"jpeg", L"jpe", L"bmp", L"dib", L"png", L"apng",
+        L"pbm", L"pgm", L"ppm", L"pxm",L"pnm",L"sr", L"ras",
+        L"exr", L"tiff", L"tif", L"webp", L"hdr", L"pic",
+        L"heic", L"heif", L"avif", L"avifs", L"gif", L"jxl",
+        L"ico", L"icon", L"psd", L"tga", L"svg", L"jfif",
+        L"jxr", L"wp2", L"pfm", L"bpg", L"livp", L"qoi",
     };
 
     static inline const unordered_set<wstring_view> supportRaw{
-        L".crw", L".cr2", L".cr3", // Canon
-        L".arw", L".srf", L".sr2", // Sony
-        L".raw", L".dng", // Leica
-        L".nef", // Nikon
-        L".pef", // Pentax
-        L".orf", // Olympus
-        L".rw2", // Panasonic
-        L".raf", // Fujifilm
-        L".kdc", // Kodak
-        L".x3f", // Sigma
-        L".mrw", // Minolta
-        L".3fr", // Hasselblad
-        L".ari", // ARRIRAW
-        L".bay", // Casio
-        L".cap", // Phase One
-        L".dcr", // Kodak
-        L".dcs", // Kodak
-        L".drf", // DNG+
-        L".eip", // Enhanced Image Package, Phase One
-        L".erf", // Epson
-        L".fff", // Imacon/Hasselblad
-        L".gpr", // GoPro
-        L".iiq", // Phase One
-        L".k25", // Kodak
-        L".mdc", // Minolta
-        L".mef", // Mamiya
-        L".mos", // Leaf
-        L".nrw", // Nikon
-        L".ptx", // Pentax
-        L".r3d", // Red Digital Cinema
-        L".rwl", // Leica
-        L".rwz", // Leica
-        L".srw", // Samsung
+        L"crw", L"cr2", L"cr3", // Canon
+        L"arw", L"srf", L"sr2", // Sony
+        L"raw", L"dng", // Leica
+        L"nef", // Nikon
+        L"pef", // Pentax
+        L"orf", // Olympus
+        L"rw2", // Panasonic
+        L"raf", // Fujifilm
+        L"kdc", // Kodak
+        L"x3f", // Sigma
+        L"mrw", // Minolta
+        L"3fr", // Hasselblad
+        L"ari", // ARRIRAW
+        L"bay", // Casio
+        L"cap", // Phase One
+        L"dcr", // Kodak
+        L"dcs", // Kodak
+        L"drf", // DNG+
+        L"eip", // Enhanced Image Package, Phase One
+        L"erf", // Epson
+        L"fff", // Imacon/Hasselblad
+        L"gpr", // GoPro
+        L"iiq", // Phase One
+        L"k25", // Kodak
+        L"mdc", // Minolta
+        L"mef", // Mamiya
+        L"mos", // Leaf
+        L"nrw", // Nikon
+        L"ptx", // Pentax
+        L"r3d", // Red Digital Cinema
+        L"rwl", // Leica
+        L"rwz", // Leica
+        L"srw", // Samsung
     };
 
-    ImageDatabase() {
-        setCapacity(5);
-    }
+    ImageDatabase() = default;
 
     cv::Mat errorTipsMat, homeMat;
 
@@ -168,30 +182,6 @@ public:
             (value << 24);
     }
 
-
-    const std::string jxlStatusCode2String(JxlDecoderStatus status);
-    std::vector<ImageNode> loadJXL(wstring_view path, const vector<uchar>& buf);
-    std::string statusExplain(WP2Status status);
-    std::vector<ImageNode> loadWP2(wstring_view path, const std::vector<uint8_t>& buf);
-    std::vector<ImageNode> loadBPG(wstring_view path, const std::vector<uchar>& buf);
-    std::vector<ImageNode> loadGif(wstring_view path, const vector<uchar>& buf);
-    std::vector<ImageNode> loadWebp(wstring_view path, const std::vector<uint8_t>& buf);
-    std::vector<ImageNode> loadApng(wstring_view path, const std::vector<uint8_t>& buf);
-
-
-    // HEIC ONLY, AVIF not support
-    // https://github.com/strukturag/libheif
-    // vcpkg install libheif:x64-windows-static
-    // vcpkg install libheif[hevc]:x64-windows-static
-    cv::Mat loadHeic(wstring_view path, const vector<uchar>& buf);
-
-    // vcpkg install libavif[core,aom,dav1d]:x64-windows-static
-    // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
-    // TODO 部分图像仍不能正常解码
-    cv::Mat loadAvif(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadRaw(wstring_view path, const vector<uchar>& buf);
-
-
     struct IconDirEntry {
         uint8_t width;
         uint8_t height;
@@ -220,7 +210,7 @@ public:
     cv::Mat readDibFromMemory(const uint8_t* data, size_t size);
 
     // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
-    std::tuple<cv::Mat, string> loadICO(wstring_view path, const vector<uchar>& buf);
+    std::tuple<cv::Mat, string> loadICO(wstring_view path, const vector<uint8_t>& buf);
 
 
     template <typename T, typename DataHolder>
@@ -326,26 +316,24 @@ public:
 
 
     // https://github.com/MolecularMatters/psd_sdk
-    cv::Mat loadPSD(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadTGA_HDR(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadSVG(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadJXR(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadMat(wstring_view path, const vector<uchar>& buf);
-    bool parsePFMHeader(const vector<uchar>& buf, int& width, int& height, float& scaleFactor, bool& isColor, size_t& dataOffset);
-    cv::Mat loadPFM(wstring_view path, const vector<uchar>& buf);
-    cv::Mat loadQOI(wstring_view path, const vector<uchar>& buf);
+    cv::Mat loadPSD(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadTGA_HDR(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadSVG(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadJXR(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadMat(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadPFM(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadQOI(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadHeic(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadAvif(wstring_view path, const vector<uint8_t>& buf);
+    cv::Mat loadRaw(wstring_view path, const vector<uint8_t>& buf);
 
-    std::pair<std::vector<uint8_t>, std::string> unzipLivp(std::vector<uint8_t>& livpFileBuff);
-
-    vector<cv::Mat> loadMats(wstring_view path, const vector<uchar>& buf);
-
-    struct PngSource {
-        const uint8_t* data;
-        size_t size;
-        int    offset;
-    };
-
+    ImageAsset loadJXL(wstring_view path, const vector<uint8_t>& buf);
+    ImageAsset loadWP2(wstring_view path, const std::vector<uint8_t>& buf);
+    ImageAsset loadBPG(wstring_view path, const std::vector<uchar>& buf);
+    ImageAsset loadLivp(wstring_view path, const std::vector<uchar>& buf);
+    ImageAsset loadMVJPEG(wstring_view path, const std::vector<uchar>& buf);
+    ImageAsset loadAnimation(wstring_view path, const vector<uint8_t>& buf);
 
     void handleExifOrientation(int orientation, cv::Mat& img);
-    Frames loader(const wstring& path);
+    ImageAsset loader(const wstring& path);
 };

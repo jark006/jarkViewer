@@ -10,7 +10,7 @@
 #include "qoi.h"
 #endif
 
-const std::string ImageDatabase::jxlStatusCode2String(JxlDecoderStatus status) {
+static std::string jxlStatusCode2String(JxlDecoderStatus status) {
     switch (status) {
     case JXL_DEC_SUCCESS:
         return "Success: Function call finished successfully or decoding is finished.";
@@ -48,9 +48,8 @@ const std::string ImageDatabase::jxlStatusCode2String(JxlDecoderStatus status) {
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uchar>& buf) {
-    std::vector<ImageNode> frames;
-    cv::Mat mat;
+ImageAsset ImageDatabase::loadJXL(wstring_view path, const vector<uint8_t>& buf) {
+    ImageAsset imageAsset;
 
     // Multi-threaded parallel runner.
     auto runner = JxlResizableParallelRunnerMake(nullptr);
@@ -62,7 +61,7 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
         jarkUtils::log("JxlDecoderSubscribeEvents failed\n{}\n{}",
             jarkUtils::wstringToUtf8(path),
             jxlStatusCode2String(status));
-        return frames;
+        return imageAsset;
     }
 
     status = JxlDecoderSetParallelRunner(dec.get(), JxlResizableParallelRunner, runner.get());
@@ -70,7 +69,7 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
         jarkUtils::log("JxlDecoderSetParallelRunner failed\n{}\n{}",
             jarkUtils::wstringToUtf8(path),
             jxlStatusCode2String(status));
-        return frames;
+        return imageAsset;
     }
 
     JxlBasicInfo info{};
@@ -79,6 +78,7 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
     JxlDecoderSetInput(dec.get(), buf.data(), buf.size());
     JxlDecoderCloseInput(dec.get());
 
+    cv::Mat image;
     int duration_ms = 0;
     for (;;) {
         status = JxlDecoderProcessInput(dec.get());
@@ -87,20 +87,20 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
             jarkUtils::log("Decoder error\n{}\n{}",
                 jarkUtils::wstringToUtf8(path),
                 jxlStatusCode2String(status));
-            return frames;
+            break;
         }
         else if (status == JXL_DEC_NEED_MORE_INPUT) {
             jarkUtils::log("Error, already provided all input\n{}\n{}",
                 jarkUtils::wstringToUtf8(path),
                 jxlStatusCode2String(status));
-            return frames;
+            break;
         }
         else if (status == JXL_DEC_BASIC_INFO) {
             if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), &info)) {
                 jarkUtils::log("JxlDecoderGetBasicInfo failed\n{}\n{}",
                     jarkUtils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return frames;
+                break;
             }
 
             duration_ms = info.animation.tps_numerator == 0 ? 0 : (info.animation.tps_denominator * 1000 / info.animation.tps_numerator);
@@ -137,7 +137,7 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
                 jarkUtils::log("JxlDecoderImageOutBufferSize failed\n{}\n{}",
                     jarkUtils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return frames;
+                break;
             }
             auto byteSizeRequire = 4ULL * info.xsize * info.ysize;
             if (buffer_size != byteSizeRequire) {
@@ -145,409 +145,54 @@ std::vector<ImageNode> ImageDatabase::loadJXL(wstring_view path, const vector<uc
                     buffer_size, byteSizeRequire,
                     jarkUtils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return frames;
+                break;
             }
-            mat = cv::Mat(info.ysize, info.xsize, CV_8UC4);
-            status = JxlDecoderSetImageOutBuffer(dec.get(), &format, mat.ptr(), byteSizeRequire);
+            image = cv::Mat(info.ysize, info.xsize, CV_8UC4);
+            status = JxlDecoderSetImageOutBuffer(dec.get(), &format, image.ptr(), byteSizeRequire);
             if (JXL_DEC_SUCCESS != status) {
                 jarkUtils::log("JxlDecoderSetImageOutBuffer failed\n{}\n{}",
                     jarkUtils::wstringToUtf8(path),
                     jxlStatusCode2String(status));
-                return frames;
+                break;
             }
         }
         else if (status == JXL_DEC_FULL_IMAGE) {
-            cv::cvtColor(mat, mat, cv::COLOR_BGRA2RGBA);
-            frames.push_back({ mat.clone(), duration_ms });
+            cv::cvtColor(image, image, cv::COLOR_BGRA2RGBA);
+            imageAsset.frames.push_back(image.clone());
+            imageAsset.frameDurations.push_back(duration_ms);
         }
         else if (status == JXL_DEC_SUCCESS) {
             // All decoding successfully finished.
             // It's not required to call JxlDecoderReleaseInput(dec.get()) here since
             // the decoder will be destroyed.
 
-            return frames;
+            break;
         }
         else {
             jarkUtils::log("Unknown decoder status\n{}\n{}",
                 jarkUtils::wstringToUtf8(path),
                 jxlStatusCode2String(status));
-            return frames;
+            break;
         }
     }
+
+    if (imageAsset.frames.empty()) {
+        imageAsset.format = ImageFormat::None;
+        imageAsset.primaryFrame = getErrorTipsMat();
+    }
+    else if (imageAsset.frames.size() == 1) {
+        imageAsset.format = ImageFormat::Still;
+        imageAsset.primaryFrame = std::move(imageAsset.frames[0]);
+        imageAsset.frames.clear();
+        imageAsset.frameDurations.clear();
+    }
+    else {
+        imageAsset.format = ImageFormat::Animated;
+    }
+    return imageAsset;
 }
 
-
-std::vector<ImageNode> ImageDatabase::loadApng(wstring_view path, const std::vector<uint8_t>& buf) {
-    std::vector<ImageNode> frames;
-
-    if (buf.size() < 8 || png_sig_cmp(buf.data(), 0, 8)) {
-        jarkUtils::log("FInvalid PNG signature in file: {}", jarkUtils::wstringToUtf8(path));
-        return frames;
-    }
-
-    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    if (!png) {
-        jarkUtils::log("Failed to create PNG read struct for file: : {}", jarkUtils::wstringToUtf8(path));
-        return frames;
-    }
-
-    png_infop info = png_create_info_struct(png);
-    if (!info) {
-        png_destroy_read_struct(&png, nullptr, nullptr);
-        jarkUtils::log("Failed to create PNG info struct for file: {}", jarkUtils::wstringToUtf8(path));
-        return frames;
-    }
-
-    if (setjmp(png_jmpbuf(png))) {
-        png_destroy_read_struct(&png, &info, nullptr);
-        jarkUtils::log("Error during PNG file reading: {}", jarkUtils::wstringToUtf8(path));
-        return frames;
-    }
-
-    PngSource pngSource{ buf.data(), buf.size(), 0 };
-    png_set_read_fn(png, &pngSource, [](png_structp png_ptr, png_bytep data, png_size_t length) {
-        PngSource* isource = (PngSource*)png_get_io_ptr(png_ptr);
-        if ((isource->offset + length) <= isource->size) {
-            memcpy(data, isource->data + isource->offset, length);
-            isource->offset += (int)length;
-        }
-        });
-
-    // 读取PNG信息
-    png_read_info(png, info);
-
-    int width = png_get_image_width(png, info);
-    int height = png_get_image_height(png, info);
-    png_byte color_type = png_get_color_type(png, info);
-    png_byte bit_depth = png_get_bit_depth(png, info);
-
-    // 将所有颜色类型转换为RGBA
-    if (bit_depth == 16)
-        png_set_strip_16(png);
-
-    if (color_type == PNG_COLOR_TYPE_PALETTE)
-        png_set_palette_to_rgb(png);
-
-    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
-        png_set_expand_gray_1_2_4_to_8(png);
-
-    if (png_get_valid(png, info, PNG_INFO_tRNS))
-        png_set_tRNS_to_alpha(png);
-
-    if (color_type == PNG_COLOR_TYPE_RGB ||
-        color_type == PNG_COLOR_TYPE_GRAY ||
-        color_type == PNG_COLOR_TYPE_PALETTE)
-        png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
-
-    if (color_type == PNG_COLOR_TYPE_GRAY ||
-        color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
-        png_set_gray_to_rgb(png);
-
-    png_read_update_info(png, info);
-
-    // 读取APNG帧信息
-    png_uint_32 num_frames = 1;
-    png_uint_32 num_plays = 0;
-
-    if (png_get_valid(png, info, PNG_INFO_acTL)) {
-        png_get_acTL(png, info, &num_frames, &num_plays);
-    }
-
-    // 若是静态图像，不再处理
-    if (num_frames <= 1) {
-        png_destroy_read_struct(&png, &info, nullptr);
-        return frames;
-    }
-
-    cv::Mat previous_frame(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
-    cv::Mat canvas(height, width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
-    cv::Mat current_tile;   // 存储当前帧的局部图像（可能小于画布）
-    cv::Mat output_frame;
-
-    for (png_uint_32 frameIdx = 0; frameIdx < num_frames; ++frameIdx) {
-        png_read_frame_head(png, info);
-
-        png_uint_32 frame_width = 0, frame_height = 0;
-        png_uint_32 frame_x_offset = 0, frame_y_offset = 0;
-        png_uint_16 delay_num = 0, delay_den = 0;
-        png_byte dispose_op = 0, blend_op = 0;
-
-        png_get_next_frame_fcTL(png, info, &frame_width, &frame_height, &frame_x_offset, &frame_y_offset,
-            &delay_num, &delay_den, &dispose_op, &blend_op);
-
-        int delay_ms = delay_num * 1000 / (delay_den ? delay_den : 100);
-
-        // 保存渲染前的画布状态（用于DISPOSE_OP_PREVIOUS情况）
-        cv::Mat canvas_before_frame;
-        if (dispose_op == 2) { // PNG_DISPOSE_OP_PREVIOUS
-            canvas.copyTo(canvas_before_frame);
-        }
-
-        // 读取当前帧的数据到current_tile
-        current_tile = cv::Mat(frame_height, frame_width, CV_8UC4, cv::Scalar(0, 0, 0, 0));
-
-        // 为当前帧创建行指针数组
-        std::vector<png_bytep> row_pointers(frame_height);
-        for (png_uint_32 y = 0; y < frame_height; ++y) {
-            row_pointers[y] = current_tile.data + y * current_tile.step;
-        }
-
-        // 读取当前帧的图像数据
-        png_read_image(png, row_pointers.data());
-
-        // 根据blend_op处理当前帧和画布的混合
-        cv::Rect frame_rect(frame_x_offset, frame_y_offset, frame_width, frame_height);
-
-        if (blend_op == 0) { // PNG_BLEND_OP_SOURCE - 直接替换
-            // 创建ROI并直接复制
-            cv::Mat roi = canvas(frame_rect);
-            current_tile.copyTo(roi);
-        }
-        else { // PNG_BLEND_OP_OVER - Alpha混合
-            // 对每个像素进行Alpha混合
-            for (png_uint_32 y = 0; y < frame_height; ++y) {
-                for (png_uint_32 x = 0; x < frame_width; ++x) {
-                    // 跳过画布边界外的像素
-                    if (frame_x_offset + x >= width || frame_y_offset + y >= height)
-                        continue;
-
-                    cv::Vec4b& canvas_pixel = canvas.at<cv::Vec4b>(frame_y_offset + y, frame_x_offset + x);
-                    const cv::Vec4b& tile_pixel = current_tile.at<cv::Vec4b>(y, x);
-
-                    // Alpha混合 RGBA格式：R=0, G=1, B=2, A=3
-                    float alpha_src = tile_pixel[3] / 255.0f;
-                    float alpha_dst = canvas_pixel[3] / 255.0f;
-                    float alpha_out = alpha_src + alpha_dst * (1 - alpha_src);
-
-                    if (alpha_out > 0) {
-                        for (int c = 0; c < 3; ++c) { // RGB通道
-                            canvas_pixel[c] = static_cast<uchar>(
-                                (tile_pixel[c] * alpha_src + canvas_pixel[c] * alpha_dst * (1 - alpha_src)) / alpha_out
-                                );
-                        }
-                        // 更新Alpha通道
-                        canvas_pixel[3] = static_cast<uchar>(alpha_out * 255);
-                    }
-                }
-            }
-        }
-
-        // 保存当前帧作为输出
-        canvas.copyTo(output_frame);
-
-        // 根据dispose_op为下一帧准备画布
-        if (dispose_op == 1) { // PNG_DISPOSE_OP_BACKGROUND
-            // 清除当前帧区域为透明
-            cv::Mat roi = canvas(frame_rect);
-            roi = cv::Scalar(0, 0, 0, 0);
-        }
-        else if (dispose_op == 2) { // PNG_DISPOSE_OP_PREVIOUS
-            // 恢复到渲染当前帧之前的状态
-            canvas_before_frame.copyTo(canvas);
-        }
-        // dispose_op == 0 (PNG_DISPOSE_OP_NONE)情况下什么都不做，保留当前画布
-
-        cv::cvtColor(output_frame, output_frame, cv::COLOR_RGBA2BGRA);
-        frames.push_back({ output_frame.clone(), delay_ms }); // 注意要clone以保持独立副本
-    }
-
-    // 清理
-    png_destroy_read_struct(&png, &info, nullptr);
-
-    return frames;
-}
-
-
-std::vector<ImageNode> ImageDatabase::loadGif(wstring_view path, const vector<uchar>& buf) {
-
-    auto InternalRead_Mem = [](GifFileType* gif, GifByteType* buf, int len) -> int {
-        if (len == 0)
-            return 0;
-
-        GifData* pData = (GifData*)gif->UserData;
-        if (pData->m_nPosition > pData->m_nBufferSize)
-            return 0;
-
-        UINT nRead;
-        if (pData->m_nPosition + len > pData->m_nBufferSize || pData->m_nPosition + len < pData->m_nPosition)
-            nRead = (UINT)(pData->m_nBufferSize - pData->m_nPosition);
-        else
-            nRead = len;
-
-        memcpy((BYTE*)buf, (BYTE*)pData->m_lpBuffer + pData->m_nPosition, nRead);
-        pData->m_nPosition += nRead;
-
-        return nRead;
-        };
-
-    std::vector<ImageNode> frames;
-
-    GifData gifData{ buf.data(), buf.size(), 0 };
-
-    int error;
-    GifFileType* gif = DGifOpen((void*)&gifData, InternalRead_Mem, &error);
-
-    if (gif == nullptr) {
-        jarkUtils::log("DGifOpen: Error: {} {}", jarkUtils::wstringToUtf8(path), GifErrorString(error));
-        return frames;
-    }
-    int retCode = DGifSlurp(gif);
-    //if (retCode != GIF_OK) { // 部分GIF可能无法完全解码
-    //    jarkUtils::log("DGifSlurp Error: {} {}", jarkUtils::wstringToUtf8(path), GifErrorString(gif->Error));
-    //    DGifCloseFile(gif, &error);
-    //    return frames;
-    //}
-
-    // 对画布尺寸进行修正：某些GIF的SWidth、SHeight小于帧的宽、高
-    // https://www.cnblogs.com/stronghorse/p/16002884.html
-    for (int i = 0; i < gif->ImageCount; i++) {
-        const GifImageDesc& ImageDesc = gif->SavedImages[i].ImageDesc;
-        if ((ImageDesc.Width + ImageDesc.Left) > gif->SWidth)
-            gif->SWidth = ImageDesc.Width + ImageDesc.Left;
-        if ((ImageDesc.Height + ImageDesc.Top) > gif->SHeight)
-            gif->SHeight = ImageDesc.Height + ImageDesc.Top;
-    }
-
-    const auto pxNums = gif->SWidth * gif->SHeight;
-    const auto byteSize = 4ULL * pxNums;
-    vector<GifByteType> canvas(byteSize);
-    vector<GifByteType> lastCanvas(byteSize);
-    vector<GifByteType> tmpCanvas(byteSize);
-
-    for (int i = 0; i < gif->ImageCount; ++i) {
-        memset(tmpCanvas.data(), 0, byteSize);
-        SavedImage& image = gif->SavedImages[i];
-        GraphicsControlBlock gcb{};
-        auto retCode = DGifSavedExtensionToGCB(gif, i, &gcb);
-        if (retCode != GIF_OK) {
-            gcb.TransparentColor = -1;
-            gcb.DelayTime = 10;
-        }
-
-        auto colorMap = image.ImageDesc.ColorMap ? image.ImageDesc.ColorMap : gif->SColorMap;
-
-        for (int y = 0; y < image.ImageDesc.Height; ++y) {
-            for (int x = 0; x < image.ImageDesc.Width; ++x) {
-                int gifX = x + image.ImageDesc.Left;
-                int gifY = y + image.ImageDesc.Top;
-                GifByteType colorIndex = image.RasterBits[y * image.ImageDesc.Width + x];
-                if (colorIndex == gcb.TransparentColor) {
-                    continue;
-                }
-                GifColorType& color = colorMap->Colors[colorIndex];
-                size_t pixelIdx = ((size_t)gifY * gif->SWidth + gifX) * 4ULL;
-                tmpCanvas[pixelIdx] = color.Blue;
-                tmpCanvas[pixelIdx + 1] = color.Green;
-                tmpCanvas[pixelIdx + 2] = color.Red;
-                tmpCanvas[pixelIdx + 3] = 255;
-            }
-        }
-
-        if (i == 0) { // 首帧 全量帧
-            memcpy(canvas.data(), tmpCanvas.data(), byteSize);
-        }
-        else {
-            auto canvasPtr = (uint32_t*)canvas.data();
-            auto tmpCanvasPtr = (uint32_t*)tmpCanvas.data();
-            for (int idx = 0; idx < pxNums; idx++) {
-                if (tmpCanvasPtr[idx])
-                    canvasPtr[idx] = tmpCanvasPtr[idx];
-            }
-        }
-
-        frames.emplace_back(cv::Mat(gif->SHeight, gif->SWidth, CV_8UC4, canvas.data()).clone(),
-            gcb.DelayTime * 10);
-
-        if (gcb.DisposalMode <= DISPOSE_DO_NOT) { // 不处理
-        }
-        else if (gcb.DisposalMode == DISPOSE_BACKGROUND) { // 恢复到背景色
-            memset(canvas.data(), 0, byteSize);
-        }
-        else if (gcb.DisposalMode == DISPOSE_PREVIOUS) { // 恢复到前一帧
-            memcpy(canvas.data(), lastCanvas.data(), byteSize);
-        }
-
-        memcpy(lastCanvas.data(), canvas.data(), byteSize);
-    }
-
-    DGifCloseFile(gif, nullptr);
-
-    if (frames.empty()) {
-        jarkUtils::log("Gif decode 0 frames: {}", jarkUtils::wstringToUtf8(path));
-    }
-
-    return frames;
-}
-
-
-std::vector<ImageNode> ImageDatabase::loadWebp(wstring_view path, const std::vector<uint8_t>& buf) {
-    std::vector<ImageNode> frames;
-
-    WebPData webp_data{ buf.data(), buf.size() };
-    WebPDemuxer* demux = WebPDemux(&webp_data);
-    if (!demux) {
-        jarkUtils::log("Failed to create WebP demuxer: {}", jarkUtils::wstringToUtf8(path));
-        frames.push_back({ getErrorTipsMat(), 0 });
-        return frames;
-    }
-
-    uint32_t canvas_width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
-    uint32_t canvas_height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
-
-    WebPIterator iter;
-    cv::Mat lastFrame(canvas_height, canvas_width, CV_8UC4, cv::Vec4b(0, 0, 0, 0)); // Initialize the global canvas with transparency
-    cv::Mat canvas(canvas_height, canvas_width, CV_8UC4, cv::Vec4b(0, 0, 0, 0)); // Initialize the global canvas with transparency
-
-    if (WebPDemuxGetFrame(demux, 1, &iter)) {
-        do {
-            WebPDecoderConfig config;
-            if (!WebPInitDecoderConfig(&config)) {
-                WebPDemuxReleaseIterator(&iter);
-                WebPDemuxDelete(demux);
-
-                jarkUtils::log("Failed to initialize WebP decoder config: {}", jarkUtils::wstringToUtf8(path));
-                frames.push_back({ getErrorTipsMat(), 0 });
-                return frames;
-            }
-
-            config.output.colorspace = WEBP_CSP_MODE::MODE_bgrA;
-
-            if (WebPDecode(iter.fragment.bytes, iter.fragment.size, &config) != VP8_STATUS_OK) {
-                WebPFreeDecBuffer(&config.output);
-                WebPDemuxReleaseIterator(&iter);
-                WebPDemuxDelete(demux);
-
-                jarkUtils::log("Failed to decode WebP frame: {}", jarkUtils::wstringToUtf8(path));
-                frames.push_back({ getErrorTipsMat(), 0 });
-                return frames;
-            }
-
-            cv::Mat frame(config.output.height, config.output.width, CV_8UC4, config.output.u.RGBA.rgba);
-            cv::Mat roi = canvas(cv::Rect(iter.x_offset, iter.y_offset, config.output.width, config.output.height));
-            frame.copyTo(roi);
-
-            for (int y = 0; y < canvas.rows; ++y) {
-                for (int x = 0; x < canvas.cols; ++x) {
-                    cv::Vec4b srcPixel = canvas.at<cv::Vec4b>(y, x);
-                    if (srcPixel[3] != 0) {
-                        lastFrame.at<cv::Vec4b>(y, x) = srcPixel;
-                    }
-                }
-            }
-
-            frames.push_back({ lastFrame.clone(), iter.duration });
-
-            WebPFreeDecBuffer(&config.output);
-        } while (WebPDemuxNextFrame(&iter));
-        WebPDemuxReleaseIterator(&iter);
-    }
-
-    WebPDemuxDelete(demux);
-    return frames;
-}
-
-
-std::string ImageDatabase::statusExplain(WP2Status status) {
+static std::string statusExplain(WP2Status status) {
     switch (status) {
     case WP2_STATUS_OK:
         return "Operation completed successfully.";
@@ -592,8 +237,8 @@ std::string ImageDatabase::statusExplain(WP2Status status) {
 
 // https://chromium.googlesource.com/codecs/libwebp2  commit 96720e6410284ebebff2007d4d87d7557361b952  Date:   Mon Sep 9 18:11:04 2024 +0000
 // 网络找的不少wp2图像无法解码，使用 libwebp2 的 cwp2.exe 工具编码的 .wp2 图片可以正常解码
-std::vector<ImageNode> ImageDatabase::loadWP2(wstring_view path, const std::vector<uint8_t>& buf) {
-    std::vector<ImageNode> frames;
+ImageAsset ImageDatabase::loadWP2(wstring_view path, const std::vector<uint8_t>& buf) {
+    ImageAsset imageAsset;
 
     WP2::ArrayDecoder decoder(buf.data(), buf.size());
     uint32_t duration_ms = 0;
@@ -665,8 +310,10 @@ std::vector<ImageNode> ImageDatabase::loadWP2(wstring_view path, const std::vect
         } break;
         }
 
-        if (!img.empty())
-            frames.push_back({ img.clone(), (int)duration_ms });
+        if (!img.empty()) {
+            imageAsset.frames.push_back(img.clone());
+            imageAsset.frameDurations.push_back(duration_ms);
+        }
     }
 
 #ifndef NDEBUG
@@ -676,18 +323,31 @@ std::vector<ImageNode> ImageDatabase::loadWP2(wstring_view path, const std::vect
     }
 #endif
 
-    return frames;
+    if (imageAsset.frames.empty()) {
+        imageAsset.format = ImageFormat::None;
+        imageAsset.primaryFrame = getErrorTipsMat();
+    }
+    else if (imageAsset.frames.size() == 1) {
+        imageAsset.format = ImageFormat::Still;
+        imageAsset.primaryFrame = std::move(imageAsset.frames[0]);
+        imageAsset.frames.clear();
+        imageAsset.frameDurations.clear();
+    }
+    else {
+        imageAsset.format = ImageFormat::Animated;
+    }
+    return imageAsset;
 }
 
 
-std::vector<ImageNode> ImageDatabase::loadBPG(wstring_view path, const std::vector<uchar>& buf) {
+ImageAsset ImageDatabase::loadBPG(wstring_view path, const std::vector<uchar>& buf) {
     auto decoderContext = bpg_decoder_open();
     if (bpg_decoder_decode(decoderContext, buf.data(), (int)buf.size()) < 0) {
         jarkUtils::log("cvMat cannot decode: {}", jarkUtils::wstringToUtf8(path));
         return {};
     }
 
-    std::vector<ImageNode> frames;
+    ImageAsset imageAsset;
     BPGImageInfo img_info{};
     bpg_decoder_get_info(decoderContext, &img_info);
 
@@ -695,37 +355,57 @@ std::vector<ImageNode> ImageDatabase::loadBPG(wstring_view path, const std::vect
     auto height = img_info.height;
 
     cv::Mat frame(height, width, CV_8UC4);
-    uint32_t* ptr = (uint32_t*)frame.data;
 
     if (img_info.has_animation) {
         while (true) {
             if (bpg_decoder_start(decoderContext, BPG_OUTPUT_FORMAT_RGBA32) == 0) {
                 for (uint32_t y = 0; y < height; y++) {
-                    bpg_decoder_get_line(decoderContext, ptr + width * y);
+                    bpg_decoder_get_line(decoderContext, frame.ptr<uchar>(y));
                 }
                 cv::cvtColor(frame, frame, cv::COLOR_RGBA2BGRA);
 
                 int num, den;
                 bpg_decoder_get_frame_duration(decoderContext, &num, &den);
-                frames.push_back({ frame.clone(), den == 0 ? 100 : (num * 1000 / den) });
+                imageAsset.frames.push_back(frame.clone());
+                imageAsset.frameDurations.push_back(den == 0 ? 100 : (num * 1000 / den));
             }
             else {
                 break;
             }
         }
+
+        if (imageAsset.frames.empty()) {
+            imageAsset.format = ImageFormat::None;
+            imageAsset.primaryFrame = getErrorTipsMat();
+        }
+        else if (imageAsset.frames.size() == 1) {
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.primaryFrame = std::move(imageAsset.frames[0]);
+            imageAsset.frames.clear();
+            imageAsset.frameDurations.clear();
+        }
+        else {
+            imageAsset.format = ImageFormat::Animated;
+        }
     }
     else {
         if (bpg_decoder_start(decoderContext, BPG_OUTPUT_FORMAT_RGBA32) == 0) {
             for (uint32_t y = 0; y < height; y++) {
-                bpg_decoder_get_line(decoderContext, ptr + width * y);
+                bpg_decoder_get_line(decoderContext, frame.ptr<uchar>(y));
             }
             cv::cvtColor(frame, frame, cv::COLOR_RGBA2BGRA);
-            frames.push_back({ frame, 0 });
+
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.primaryFrame = std::move(frame);
+        }
+        else {
+            imageAsset.format = ImageFormat::None;
+            imageAsset.primaryFrame = getErrorTipsMat();
         }
     }
 
     bpg_decoder_close(decoderContext);
-    return frames;
+    return imageAsset;
 }
 
 
@@ -733,7 +413,7 @@ std::vector<ImageNode> ImageDatabase::loadBPG(wstring_view path, const std::vect
 // https://github.com/strukturag/libheif
 // vcpkg install libheif:x64-windows-static
 // vcpkg install libheif[hevc]:x64-windows-static
-cv::Mat ImageDatabase::loadHeic(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadHeic(wstring_view path, const vector<uint8_t>& buf) {
     if (buf.empty())
         return {};
 
@@ -801,7 +481,7 @@ cv::Mat ImageDatabase::loadHeic(wstring_view path, const vector<uchar>& buf) {
 // vcpkg install libavif[core,aom,dav1d]:x64-windows-static
 // https://github.com/AOMediaCodec/libavif/issues/1451#issuecomment-1606903425
 // TODO 部分图像仍不能正常解码
-cv::Mat ImageDatabase::loadAvif(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadAvif(wstring_view path, const vector<uint8_t>& buf) {
     avifImage* image = avifImageCreateEmpty();
     if (image == nullptr) {
         jarkUtils::log("avifImageCreateEmpty failure: {}", jarkUtils::wstringToUtf8(path));
@@ -854,7 +534,7 @@ cv::Mat ImageDatabase::loadAvif(wstring_view path, const vector<uchar>& buf) {
             memcpy(ret.ptr(), rgb.pixels, (size_t)rgb.width * rgb.height * 4);
         }
         else {
-            size_t minStep = rgb.rowBytes < ret.step ? rgb.rowBytes : ret.step;
+            size_t minStep = rgb.rowBytes < ret.step ? (size_t)rgb.rowBytes : ret.step;
             for (uint32_t y = 0; y < rgb.height; y++) {
                 memcpy(ret.ptr() + ret.step * y, rgb.pixels + rgb.rowBytes * y, minStep);
             }
@@ -882,7 +562,7 @@ cv::Mat ImageDatabase::loadAvif(wstring_view path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadRaw(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadRaw(wstring_view path, const vector<uint8_t>& buf) {
     if (buf.empty()) {
         jarkUtils::log("Buf is empty: {}", jarkUtils::wstringToUtf8(path));
         return {};
@@ -1065,12 +745,12 @@ cv::Mat ImageDatabase::readDibFromMemory(const uint8_t* data, size_t size) {
                 // 读取透明掩码
                 int transparencyBit = (maskData[byteIndex] >> bitIndex) & 1;
                 if (transparencyBit == 1)
-                    image.at<uint32_t>(y, x) = 0;
+                    image.at<cv::Vec4b>(y, x) = cv::Vec4b(0, 0, 0, 0);
 
                 // 读取图像掩码
                 //int imageBit = (maskData[totalSize + byteIndex] >> bitIndex) & 1;
                 //if (imageBit == 0)
-                //    image.at<uint32_t>(y, x) = 0;
+                //    image.at<cv::Vec4b>(y, x) = cv::Vec4b(0, 0, 0, 0);
             }
         }
     }
@@ -1079,7 +759,7 @@ cv::Mat ImageDatabase::readDibFromMemory(const uint8_t* data, size_t size) {
 
 
 // https://github.com/corkami/pics/blob/master/binary/ico_bmp.png
-std::tuple<cv::Mat, string> ImageDatabase::loadICO(wstring_view path, const vector<uchar>& buf) {
+std::tuple<cv::Mat, string> ImageDatabase::loadICO(wstring_view path, const vector<uint8_t>& buf) {
     if (buf.size() < 6) {
         jarkUtils::log("Invalid ICO file: {}", jarkUtils::wstringToUtf8(path));
         return { cv::Mat(),"" };
@@ -1182,7 +862,7 @@ std::tuple<cv::Mat, string> ImageDatabase::loadICO(wstring_view path, const vect
 
 
 // https://github.com/MolecularMatters/psd_sdk
-cv::Mat ImageDatabase::loadPSD(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadPSD(wstring_view path, const vector<uint8_t>& buf) {
     const int32_t CHANNEL_NOT_FOUND = UINT_MAX;
 
     cv::Mat img;
@@ -1300,8 +980,6 @@ cv::Mat ImageDatabase::loadPSD(wstring_view path, const vector<uchar>& buf) {
             std::wstringstream layerName;
             if (layer->utf16Name)
             {
-                //In Windows wchar_t is utf16
-                PSD_STATIC_ASSERT(sizeof(wchar_t) == sizeof(uint16_t));
                 layerName << reinterpret_cast<wchar_t*>(layer->utf16Name);
             }
             else
@@ -1412,7 +1090,7 @@ cv::Mat ImageDatabase::loadPSD(wstring_view path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadTGA_HDR(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadTGA_HDR(wstring_view path, const vector<uint8_t>& buf) {
     int width, height, channels;
 
     // 使用stb_image从内存缓冲区加载图像
@@ -1441,9 +1119,9 @@ cv::Mat ImageDatabase::loadTGA_HDR(wstring_view path, const vector<uchar>& buf) 
     return result;
 }
 
-// TODO 某些带文字的svg在第一次加载时有概率无法渲染文本，再次加载才会，怀疑是字体初始化有问题：lunasvg_add_font_face_from_data
-cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
-    const int maxEdge = 3840;
+
+cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uint8_t>& buf) {
+    const int maxEdge = 4000;
     static bool isInitFont = false;
 
     if (!isInitFont) {
@@ -1458,7 +1136,13 @@ cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
         }
     }
 
-    auto document = lunasvg::Document::loadFromData((const char*)buf.data(), buf.size());
+    SVGPreprocessor preprocessor;
+    auto SVGData = preprocessor.preprocessSVG((const char*)buf.data(), buf.size());
+
+    auto dataPtr = SVGData.empty() ? (const char*)buf.data() : SVGData.data();
+    size_t dataBytes = SVGData.empty() ? buf.size() : SVGData.length();
+
+    auto document = lunasvg::Document::loadFromData(dataPtr, dataBytes);
     if (!document) {
         jarkUtils::log("Failed to load SVG data {}", jarkUtils::wstringToUtf8(path));
         return {};
@@ -1494,7 +1178,7 @@ cv::Mat ImageDatabase::loadSVG(wstring_view path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadJXR(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadJXR(wstring_view path, const vector<uint8_t>& buf) {
     HRESULT hr = CoInitialize(NULL);
     if (FAILED(hr)) {
         std::cerr << "Failed to initialize COM library." << std::endl;
@@ -1618,18 +1302,34 @@ cv::Mat ImageDatabase::loadJXR(wstring_view path, const vector<uchar>& buf) {
     return mat;
 }
 
+// 已支持 gif apng png webp 动图
+ImageAsset ImageDatabase::loadAnimation(wstring_view path, const vector<uint8_t>& buf) {
+    cv::Animation animation;
+    ImageAsset imageAsset;
 
-vector<cv::Mat> ImageDatabase::loadMats(wstring_view path, const vector<uchar>& buf) {
-    vector<cv::Mat> imgs;
+    bool success = cv::imdecodeanimation(buf, animation);
 
-    if (!cv::imdecodemulti(buf, cv::IMREAD_UNCHANGED, imgs)) {
-        return imgs;
+    if (!success || animation.frames.empty()) {
+        imageAsset.primaryFrame = getErrorTipsMat();
     }
-    return imgs;
+    else if (animation.frames.size() == 1) {
+        imageAsset.format = ImageFormat::Still;
+        imageAsset.primaryFrame = std::move(animation.frames[0]);
+    }
+    else {
+        imageAsset.format = ImageFormat::Animated;
+        imageAsset.frames = std::move(animation.frames);
+        imageAsset.frameDurations = std::move(animation.durations);
+        for (auto& duration : imageAsset.frameDurations) {
+            if (0 == duration)
+                duration = 16;
+        }
+    }
+    return imageAsset;
 }
 
 
-cv::Mat ImageDatabase::loadMat(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadMat(wstring_view path, const vector<uint8_t>& buf) {
     cv::Mat img;
     try {
         img = cv::imdecode(buf, cv::IMREAD_UNCHANGED);
@@ -1673,7 +1373,7 @@ cv::Mat ImageDatabase::loadMat(wstring_view path, const vector<uchar>& buf) {
 
 
 // 辅助函数，用于从 PFM 头信息中提取尺寸和比例因子
-bool ImageDatabase::parsePFMHeader(const vector<uchar>& buf, int& width, int& height, float& scaleFactor, bool& isColor, size_t& dataOffset) {
+static bool parsePFMHeader(const vector<uint8_t>& buf, int& width, int& height, float& scaleFactor, bool& isColor, size_t& dataOffset) {
     string header(reinterpret_cast<const char*>(buf.data()), 2);
 
     // 判断是否是RGB（PF）或灰度（Pf）
@@ -1727,7 +1427,7 @@ bool ImageDatabase::parsePFMHeader(const vector<uchar>& buf, int& width, int& he
 }
 
 
-cv::Mat ImageDatabase::loadPFM(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadPFM(wstring_view path, const vector<uint8_t>& buf) {
     int width, height;
     float scaleFactor;
     bool isColor;
@@ -1761,10 +1461,10 @@ cv::Mat ImageDatabase::loadPFM(wstring_view path, const vector<uchar>& buf) {
 }
 
 
-cv::Mat ImageDatabase::loadQOI(wstring_view path, const vector<uchar>& buf) {
+cv::Mat ImageDatabase::loadQOI(wstring_view path, const vector<uint8_t>& buf) {
     cv::Mat mat;
     qoi_desc desc;
-    auto pixels = qoi_decode(buf.data(), buf.size(), &desc, 0);
+    auto pixels = qoi_decode(buf.data(), (int)buf.size(), &desc, 0);
     if (!pixels)
         return mat;
 
@@ -1785,20 +1485,17 @@ cv::Mat ImageDatabase::loadQOI(wstring_view path, const vector<uchar>& buf) {
 }
 
 
-std::pair<std::vector<uint8_t>, std::string> ImageDatabase::unzipLivp(std::vector<uint8_t>& livpFileBuff) {
-    // 创建内存文件句柄
+static std::tuple<std::vector<uint8_t>, std::vector<uint8_t>, std::string> unzipLivp(const std::vector<uint8_t>& livpFileBuff) {
     zlib_filefunc_def memory_filefunc;
     memset(&memory_filefunc, 0, sizeof(zlib_filefunc_def));
 
-    // 准备内存访问结构
     struct membuf {
-        std::vector<uint8_t>& buffer;
+        const std::vector<uint8_t>& buffer;
         size_t position;
     } mem = { livpFileBuff, 0 };
 
     memory_filefunc.opaque = (voidpf)&mem;
 
-    // 实现内存读取函数
     memory_filefunc.zopen_file = [](voidpf opaque, const char* filename, int mode) -> voidpf {
         return opaque;
         };
@@ -1811,11 +1508,11 @@ std::pair<std::vector<uint8_t>, std::string> ImageDatabase::unzipLivp(std::vecto
             memcpy(buf, mem->buffer.data() + mem->position, to_read);
             mem->position += to_read;
         }
-        return to_read;
+        return (uLong)to_read;
         };
 
     memory_filefunc.zwrite_file = [](voidpf, voidpf, const void*, uLong) -> uLong {
-        return 0; // 不需要写入
+        return 0;
         };
 
     memory_filefunc.ztell_file = [](voidpf opaque, voidpf stream) -> long {
@@ -1849,66 +1546,81 @@ std::pair<std::vector<uint8_t>, std::string> ImageDatabase::unzipLivp(std::vecto
         };
 
     memory_filefunc.zclose_file = [](voidpf, voidpf) -> int {
-        return 0; // 不需要关闭
+        return 0;
         };
 
     memory_filefunc.zerror_file = [](voidpf, voidpf) -> int {
-        return 0; // 无错误
+        return 0;
         };
 
-    // 打开ZIP文件
     unzFile zipfile = unzOpen2("__memory__", &memory_filefunc);
     if (!zipfile) {
-        return {}; // 打开失败返回空vector
+        return {};
     }
 
-    // 遍历ZIP文件中的文件
     if (unzGoToFirstFile(zipfile) != UNZ_OK) {
         unzClose(zipfile);
         return {};
     }
 
     std::vector<uint8_t> image_data;
-    std::string extName;
+    std::vector<uint8_t> video_data;
+    std::string imgExt;
+
     do {
         unz_file_info file_info;
-        char filename[256];
+        char filename[256] = { 0 };
 
         if (unzGetCurrentFileInfo(zipfile, &file_info, filename, sizeof(filename), nullptr, 0, nullptr, 0) != UNZ_OK) {
             continue;
         }
 
         std::string file_name(filename);
-        std::transform(file_name.begin(), file_name.end(), file_name.begin(), ::tolower);
+        if (file_name.empty() || file_name.length() < 4)
+            continue;
 
-        // 检查是否是图像文件
-        if (file_name.ends_with(".jpg") || file_name.ends_with(".jpeg") ||
-            file_name.ends_with(".heic") || file_name.ends_with(".heif")) {
+        for (int i = file_name.length() - 4; i < file_name.length(); i++)
+            file_name[i] = std::tolower(file_name[i]);
 
-            // 打开当前文件
+        if (file_name.ends_with("jpg") || file_name.ends_with("jpeg") ||
+            file_name.ends_with("heic") || file_name.ends_with("heif")) {
+
             if (unzOpenCurrentFile(zipfile) != UNZ_OK) {
                 continue;
             }
 
-            // 读取文件内容
             image_data.resize(file_info.uncompressed_size);
             int bytes_read = unzReadCurrentFile(zipfile, image_data.data(), file_info.uncompressed_size);
 
             unzCloseCurrentFile(zipfile);
 
             if (bytes_read > 0 && static_cast<uLong>(bytes_read) == file_info.uncompressed_size) {
-                extName = file_name.size() >= 4 ? file_name.substr(file_name.length() - 4, 4) : "";
-                for (auto& c : extName)	c = std::tolower(c);
-                break; // 成功读取图像文件
+                imgExt = (file_name.ends_with("heic") || file_name.ends_with("heif")) ? "heic" : "jpg";
             }
             else {
-                image_data.clear(); // 读取失败，清空数据
+                image_data.clear();
+            }
+        }
+
+        if (file_name.ends_with("mov") || file_name.ends_with("mp4")) {
+            if (unzOpenCurrentFile(zipfile) != UNZ_OK) {
+                continue;
+            }
+
+            video_data.resize(file_info.uncompressed_size);
+            int bytes_read = unzReadCurrentFile(zipfile, video_data.data(), file_info.uncompressed_size);
+
+            unzCloseCurrentFile(zipfile);
+
+            if (bytes_read <= 0 || static_cast<uLong>(bytes_read) != file_info.uncompressed_size) {
+                video_data.clear();
             }
         }
     } while (unzGoToNextFile(zipfile) == UNZ_OK);
 
     unzClose(zipfile);
-    return { image_data, extName };
+
+    return { image_data, video_data, imgExt };
 }
 
 
@@ -1943,26 +1655,101 @@ void ImageDatabase::handleExifOrientation(int orientation, cv::Mat& img) {
     }
 }
 
+// 苹果实况照片
+ImageAsset ImageDatabase::loadLivp(wstring_view path, const vector<uint8_t>& fileBuf) {
+    auto [imageFileData, videoFileData, imageExt] = unzipLivp(fileBuf);
+    if (imageFileData.empty()) {
+        auto exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+        return { ImageFormat::Still, getErrorTipsMat(), {}, {}, exifInfo };
+    }
 
-Frames ImageDatabase::loader(const wstring& path) {
+    cv::Mat img;
+    if (imageExt == "heic" || imageExt == "heif") {
+        img = loadHeic(path, imageFileData);
+    }
+    else if (imageExt == "jpg" || imageExt == "jpeg") {
+        img = loadMat(path, imageFileData);
+    }
+
+    auto exifTmp = ExifParse::getExif(path, imageFileData.data(), imageFileData.size());
+    if (imageExt == "jpg" || imageExt == "jpeg") { //heic 已经在解码过程应用了裁剪/旋转/镜像等操作
+        const size_t idx = exifTmp.find("\n方向: ");
+        if (idx != string::npos) {
+            handleExifOrientation(exifTmp[idx + 9] - '0', img);
+        }
+    }
+    auto exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
+
+    if (videoFileData.empty()) {
+        return { ImageFormat::Still, img, {}, {}, exifInfo };
+    }
+
+    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(videoFileData.data(), videoFileData.size());
+
+    if (frames.empty()) {
+        return { ImageFormat::Still, img, {}, {}, exifInfo };
+    }
+
+    return { ImageFormat::LivePhoto, img, frames, durations,  exifInfo };
+}
+
+// 小米 实况照片
+ImageAsset ImageDatabase::loadMVJPEG(wstring_view path, const vector<uint8_t>& fileBuf) {
+    cv::Mat img;
+
+    img = loadMat(path, fileBuf);
+
+    if (img.empty()) {
+        auto exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+        return { ImageFormat::Still, getErrorTipsMat(), {}, {}, exifInfo };
+    }
+
+    auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
+    const size_t idx = exifTmp.find("\n方向: ");
+    if (idx != string::npos) {
+        handleExifOrientation(exifTmp[idx + 9] - '0', img);
+    }
+    auto exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
+
+    const std::vector<uint8_t> mp4Header = { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 };
+    auto result = std::ranges::search(fileBuf, mp4Header);
+
+    if (result.empty()) {
+        return { ImageFormat::Still, img, {}, {}, exifInfo };
+    }
+
+    size_t mp4Offset = std::distance(fileBuf.begin(), result.begin());
+    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(fileBuf.data() + mp4Offset, fileBuf.size() - mp4Offset);
+
+    if (frames.empty()) {
+        return { ImageFormat::Still, img, {}, {}, exifInfo };
+    }
+
+    return { ImageFormat::LivePhoto, img, frames, durations,  exifInfo };
+}
+
+ImageAsset ImageDatabase::loader(const wstring& path) {
+    FunctionTimeCount FunctionTimeCount(__func__);
+    jarkUtils::log("loading: {}", jarkUtils::wstringToUtf8(path));
+
     if (path.length() < 4) {
         jarkUtils::log("path.length() < 4: {}", jarkUtils::wstringToUtf8(path));
-        return { {{getErrorTipsMat(), 0}}, "" };
+        return { ImageFormat::Still, getErrorTipsMat(), {}, {}, "" };
     }
 
     auto f = _wfopen(path.data(), L"rb");
     if (f == nullptr) {
         jarkUtils::log("path canot open: {}", jarkUtils::wstringToUtf8(path));
-        return { {{getErrorTipsMat(), 0}}, "" };
+        return { ImageFormat::Still, getErrorTipsMat(), {}, {}, "" };
     }
 
     fseek(f, 0, SEEK_END);
     auto fileSize = ftell(f);
 
-    if (fileSize == 0) {
+    if (fileSize < 16) {
         fclose(f);
-        jarkUtils::log("path fileSize == 0: {}", jarkUtils::wstringToUtf8(path));
-        return { {{getErrorTipsMat(), 0}}, "" };
+        jarkUtils::log("path fileSize < 16: {}", jarkUtils::wstringToUtf8(path));
+        return { ImageFormat::Still, getErrorTipsMat(), {}, {}, "" };
     }
 
     fseek(f, 0, SEEK_SET);
@@ -1972,156 +1759,147 @@ Frames ImageDatabase::loader(const wstring& path) {
 
     auto dotPos = path.rfind(L'.');
     auto ext = wstring((dotPos != std::wstring::npos && dotPos < path.size() - 1) ?
-        path.substr(dotPos) : path);
+        path.substr(dotPos + 1) : path);
     for (auto& c : ext)	c = std::tolower(c);
 
-    Frames ret;
 
-    if (ext == L".gif") { //静态或动画
-        ret.imgList = loadGif(path, fileBuf);
-        if (ret.imgList.empty()) {
-            ret.imgList.push_back({ getErrorTipsMat(), 0 });
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
-                "\n文件头32字节: " + jarkUtils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
+    if (opencvAnimationExt.contains(ext)) {
+        auto imageAsset = loadAnimation(path, fileBuf);
+
+        if (imageAsset.format == ImageFormat::None) {
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+            return imageAsset;
+        }
+        else if (imageAsset.format == ImageFormat::Still) {
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.primaryFrame.cols, imageAsset.primaryFrame.rows,
+                fileBuf.data(), fileBuf.size())
+                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
+            return imageAsset;
+        }
+
+        // 以下情况是动图
+        if (ext == L"gif") {
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.frames[0].cols, imageAsset.frames[0].rows, fileBuf.data(), fileBuf.size());
         }
         else {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.frames[0].cols, imageAsset.frames[0].rows, fileBuf.data(), fileBuf.size())
+                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
-        return ret;
+        return imageAsset;
     }
 
-    if (ext == L".bpg") { //静态或动画
-        ret.imgList = loadBPG(path, fileBuf);
-        if (ret.imgList.empty()) {
-            ret.imgList.push_back({ getErrorTipsMat(), 0 });
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
-                "\n文件头32字节: " + jarkUtils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
+    if (ext == L"bpg") { //静态或动画
+        auto imageAsset = loadBPG(path, fileBuf);
+
+        if (imageAsset.format == ImageFormat::None) {
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+        }
+        else if (imageAsset.format == ImageFormat::Still) {
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.primaryFrame.cols, imageAsset.primaryFrame.rows,
+                fileBuf.data(), fileBuf.size())
+                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
         else {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.frames[0].cols, imageAsset.frames[0].rows, fileBuf.data(), fileBuf.size())
                 + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
-        return ret;
+        return imageAsset;
     }
 
-    if (ext == L".jxl") { //静态或动画
-        ret.imgList = loadJXL(path, fileBuf);
-        if (ret.imgList.empty()) {
-            ret.imgList.push_back({ getErrorTipsMat(), 0 });
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
-                "\n文件头32字节: " + jarkUtils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
+    if (ext == L"jxl") { //静态或动画
+        auto imageAsset = loadJXL(path, fileBuf);
+
+        if (imageAsset.format == ImageFormat::None) {
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+        }
+        else if (imageAsset.format == ImageFormat::Still) {
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.primaryFrame.cols, imageAsset.primaryFrame.rows,
+                fileBuf.data(), fileBuf.size())
+                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
         else {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.frames[0].cols, imageAsset.frames[0].rows, fileBuf.data(), fileBuf.size())
                 + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
-        return ret;
+        return imageAsset;
     }
 
-    if (ext == L".wp2") { // webp2 静态或动画
-        ret.imgList = loadWP2(path, fileBuf);
-        if (ret.imgList.empty()) {
-            ret.imgList.push_back({ getErrorTipsMat(), 0 });
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size()) +
-                "\n文件头32字节: " + jarkUtils::bin2Hex(fileBuf.data(), fileBuf.size() > 32 ? 32 : fileBuf.size());
+    if (ext == L"wp2") { // webp2 静态或动画
+        auto imageAsset = loadWP2(path, fileBuf);
+        if (imageAsset.format == ImageFormat::None) {
+            imageAsset.format = ImageFormat::Still;
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+        }
+        else if (imageAsset.format == ImageFormat::Still) {
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.primaryFrame.cols, imageAsset.primaryFrame.rows,
+                fileBuf.data(), fileBuf.size())
+                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
         else {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
+            imageAsset.exifInfo = ExifParse::getSimpleInfo(path, imageAsset.frames[0].cols, imageAsset.frames[0].rows, fileBuf.data(), fileBuf.size())
                 + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
         }
-        return ret;
+        return imageAsset;
     }
 
-    if (ext == L".webp") { //静态或动画
-        ret.imgList = loadWebp(path, fileBuf);
-        if (!ret.imgList.empty()) {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
-                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-            return ret;
-        }
-        // 若空白则往下执行，使用opencv读取
+
+    if (ext == L"livp") {
+        return loadLivp(path, fileBuf);
     }
 
-    if (ext == L".png" || ext == L".apng") {
-        ret.imgList = loadApng(path, fileBuf); //若是静态图像则不解码，返回空
-        if (!ret.imgList.empty()) {
-            auto& img = ret.imgList.front().img;
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size())
-                + ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-            return ret;
-        }
-        // 若空白则往下执行，使用opencv读取
+    if (ext == L"jpg" || ext == L"jpeg") {
+        return loadMVJPEG(path, fileBuf);
     }
 
     cv::Mat img;
+    string exifInfo;
 
-    if (ext == L".livp") {
-        auto [picBuff, extName] = unzipLivp(fileBuf);
-        if (picBuff.empty()) {
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
-            if (img.empty()) {
-                img = getErrorTipsMat();
-            }
-        }
-        else {
-            fileBuf = std::move(picBuff);
-            if (extName == "heic" || extName == "heif") {
-                img = loadHeic(path, fileBuf);
-                ext = L".heic";
-            }
-            else if (extName == ".jpg" || extName == "jpeg") {
-                img = loadMat(path, fileBuf);
-                ext = L".jpg";
-            }
-        }
-    }
-    else if (ext == L".heic" || ext == L".heif") {
+    if (ext == L"heic" || ext == L"heif") {
         img = loadHeic(path, fileBuf);
     }
-    else if (ext == L".avif" || ext == L".avifs") {
+    else if (ext == L"avif" || ext == L"avifs") {
         img = loadAvif(path, fileBuf);
     }
-    else if (ext == L".jxr") {
+    else if (ext == L"jxr") {
         img = loadJXR(path, fileBuf);
     }
-    else if (ext == L".tga" || ext == L".hdr") {
+    else if (ext == L"tga" || ext == L"hdr") {
         img = loadTGA_HDR(path, fileBuf);
+        exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
     }
-    else if (ext == L".svg") {
+    else if (ext == L"svg") {
         img = loadSVG(path, fileBuf);
-        ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+        exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
         if (img.empty()) {
             img = getErrorTipsMat();
         }
     }
-    else if (ext == L".qoi") {
+    else if (ext == L"qoi") {
         img = loadQOI(path, fileBuf);
-        ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+        exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
         if (img.empty()) {
             img = getErrorTipsMat();
         }
     }
-    else if (ext == L".ico" || ext == L".icon") {
-        std::tie(img, ret.exifStr) = loadICO(path, fileBuf);
+    else if (ext == L"ico" || ext == L"icon") {
+        std::tie(img, exifInfo) = loadICO(path, fileBuf);
     }
-    else if (ext == L".psd") {
+    else if (ext == L"psd") {
         img = loadPSD(path, fileBuf);
         if (img.empty())
             img = getErrorTipsMat();
     }
-    else if (ext == L".pfm") {
+    else if (ext == L"pfm") {
         img = loadPFM(path, fileBuf);
         if (img.empty()) {
             img = getErrorTipsMat();
-            ret.exifStr = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
+            exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
         }
         else {
-            ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
+            exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size());
         }
     }
     else if (supportRaw.contains(ext)) {
@@ -2133,21 +1911,19 @@ Frames ImageDatabase::loader(const wstring& path) {
     if (img.empty())
         img = loadMat(path, fileBuf);
 
-    if (ret.exifStr.empty()) {
+    if (exifInfo.empty()) {
         auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-        if (ext != L".heic" && ext != L".heif") { //此格式已经在解码过程应用了裁剪/旋转/镜像等操作
+        if (ext != L"heic" && ext != L"heif" && !supportRaw.contains(ext)) { //heif/raw格式已经在解码过程应用了裁剪/旋转/镜像等操作
             const size_t idx = exifTmp.find("\n方向: ");
             if (idx != string::npos) {
                 handleExifOrientation(exifTmp[idx + 9] - '0', img);
             }
         }
-        ret.exifStr = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
+        exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
     }
 
     if (img.empty())
         img = getErrorTipsMat();
 
-    ret.imgList.emplace_back(img, 0);
-
-    return ret;
+    return { ImageFormat::Still, std::move(img), {}, {}, exifInfo };
 }
