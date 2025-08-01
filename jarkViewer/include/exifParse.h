@@ -1,17 +1,19 @@
 #pragma once
-#include "jarkUtils.h"
+#include <string>
+#include <mutex>
+#include <stdint.h>
 #include "exiv2/exiv2.hpp"
 
 
 class ExifParse {
 public:
-    static std::string getSimpleInfo(wstring_view path, int width, int height, const uint8_t* buf, size_t fileSize);
-    static std::string handleMathDiv(string_view str);
-    static std::string exifDataToString(wstring_view path, const Exiv2::ExifData& exifData);
-    static std::string xmpDataToString(wstring_view path, const Exiv2::XmpData& xmpData);
-    static std::string iptcDataToString(wstring_view path, const Exiv2::IptcData& IptcData);
-    static std::string AI_Prompt(wstring_view path, const uint8_t* buf);
-    static std::string getExif(wstring_view path, const uint8_t* buf, int fileSize);
+    static std::string getSimpleInfo(std::wstring_view path, int width, int height, const uint8_t* buf, size_t fileSize);
+    static std::string handleMathDiv(std::string_view str);
+    static std::string exifDataToString(std::wstring_view path, const Exiv2::ExifData& exifData);
+    static std::string xmpDataToString(std::wstring_view path, const Exiv2::XmpData& xmpData);
+    static std::string iptcDataToString(std::wstring_view path, const Exiv2::IptcData& IptcData);
+    static std::string AI_Prompt(std::wstring_view path, const uint8_t* buf);
+    static std::string getExif(std::wstring_view path, const uint8_t* buf, size_t fileSize);
 
 private:
     // https://exiv2.org/tags.html

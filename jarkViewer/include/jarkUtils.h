@@ -32,8 +32,8 @@ using std::endl;
 
 #include "framework.h"
 #include "resource.h"
-#include "psapi.h"
 
+#include "psapi.h"
 #include <dxgi1_4.h>
 #include <D3D11.h>
 #include <d2d1_3.h>
@@ -45,14 +45,15 @@ using std::endl;
 #include <shellapi.h>
 #include <winspool.h>
 #include <dwmapi.h>
-
 #include <mfapi.h>
 #include <mfidl.h>
 #include <shlwapi.h>
 #include <mfreadwrite.h>
 #include <mferror.h>
 #include <wmcodecdsp.h>
+#include <shlobj.h>
 
+#pragma comment(lib, "Psapi.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dwrite.lib" )
@@ -63,7 +64,6 @@ using std::endl;
 #pragma comment(lib, "Winmm.lib")
 #pragma comment(lib ,"imm32.lib")
 #pragma comment(lib, "dwmapi.lib")
-
 #pragma comment(lib, "mfplat.lib")
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "mfreadwrite.lib")
@@ -81,7 +81,12 @@ using std::endl;
 #define TIME_COUNT_END_US jarkUtils::log("{}(): {} us", __FUNCTION__, std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start_clock).count())
 #define TIME_COUNT_END_NS jarkUtils::log("{}(): {} ns", __FUNCTION__, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now() - start_clock).count())
 
+
 struct SettingParameter {
+    // 常见格式
+    static inline std::string_view defaultExtList{ 
+        "apng,avif,bmp,bpg,gif,heic,heif,ico,jfif,jp2,jpe,jpeg,jpg,jxl,jxr,livp,pbm,pfm,pgm,png,pnm,ppm,qoi,svg,tga,tif,tiff,webp,wp2" };
+
     uint8_t header[32];
     RECT rect{};                           // 窗口大小位置
     uint32_t showCmd = SW_MAXIMIZE;        // 窗口模式
@@ -104,11 +109,15 @@ struct SettingParameter {
     int pptOrder = 0;                       // 幻灯片模式  0: 顺序  1:逆序  2:随机
     int pptTimeout = 5;                     // 幻灯片模式  切换间隔 1 ~ 300 秒
 
-    uint32_t reserve[803];
+    int UI_Mode = 0;                        // 界面主题 0:跟随系统  1:浅色  2:深色
 
-    // 常见格式
-    char extCheckedListStr[800] = "apng,avif,bmp,bpg,gif,heic,heif,ico,jfif,jp2,jpe,jpeg,jpg,jxl,jxr,livp,png,qoi,svg,tga,tif,tiff,webp,wp2";
+    uint32_t reserve[802];
 
+    char extCheckedListStr[800];
+
+    SettingParameter() {
+        memcpy(extCheckedListStr, defaultExtList.data(), defaultExtList.length() + 1);
+    }
 };
 
 static_assert(sizeof(SettingParameter) == 4096, "sizeof(SettingParameter) != 4096");
@@ -205,19 +214,19 @@ struct std::formatter<Cood> {
     }
 };
 
-struct ImageNode {
-    cv::Mat img;
-    int delay;
-};
-struct Frames {
-    std::vector<ImageNode> imgList;
-    string exifStr;
+enum class ImageFormat {
+    None = 0,       // 解码失败
+    Still,          // 静态图: jpg/bmp ...
+    Animated,       // 动态图: gif/apng ...
+    LivePhoto       // 实况图: livp/MVIMG ...
 };
 
-struct GifData {
-    const unsigned char* m_lpBuffer;
-    size_t m_nBufferSize;
-    size_t m_nPosition;
+struct ImageAsset {
+    ImageFormat format;                 // 图像类型：静态/动图/实况
+    cv::Mat primaryFrame;               // 静态图或实况的静态图
+    std::vector<cv::Mat> frames;        // 动态图或实况的视频
+    std::vector<int> frameDurations;    // 每帧时长
+    string exifInfo;                    // 图像EXIF等信息
 };
 
 enum class ActionENUM:int64_t {
@@ -360,4 +369,59 @@ public:
     static void wstringReplace(std::wstring& src, std::wstring_view oldBlock, std::wstring_view newBlock);
 
     static void activateWindow(HWND hwnd);
+
+    static inline const char COMPILE_DATE_TIME[32] = {
+        __DATE__[7],
+        __DATE__[8],
+        __DATE__[9],
+        __DATE__[10],// YYYY year
+        '-',
+
+        // First month letter, Oct Nov Dec = '1' otherwise '0'
+        (__DATE__[0] == 'O' || __DATE__[0] == 'N' || __DATE__[0] == 'D') ? '1' : '0',
+
+        // Second month letter Jan, Jun or Jul
+        (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? '1'
+        : ((__DATE__[2] == 'n') ? '6' : '7'))
+        : (__DATE__[0] == 'F') ? '2'// Feb
+        : (__DATE__[0] == 'M') ? (__DATE__[2] == 'r') ? '3' : '5'// Mar or May
+        : (__DATE__[0] == 'A') ? (__DATE__[1] == 'p') ? '4' : '8'// Apr or Aug
+        : (__DATE__[0] == 'S') ? '9'// Sep
+        : (__DATE__[0] == 'O') ? '0'// Oct
+        : (__DATE__[0] == 'N') ? '1'// Nov
+        : (__DATE__[0] == 'D') ? '2'// Dec
+        : 'X',
+
+        '-',
+        __DATE__[4] == ' ' ? '0' : __DATE__[4],// First day letter, replace space with digit
+        __DATE__[5],// Second day letter
+        ' ',
+        __TIME__[0],
+        __TIME__[1],
+        __TIME__[2],
+        __TIME__[3],
+        __TIME__[4],
+        __TIME__[5],
+        __TIME__[6],
+        __TIME__[7],
+        '\0',
+    };
+};
+
+class FunctionTimeCount {
+public:
+#ifndef NDEBUG
+    string_view funcName;
+    std::chrono::system_clock::time_point start_clock;
+
+    FunctionTimeCount(string_view funcName) : funcName(funcName) {
+        start_clock = std::chrono::system_clock::now();
+    }
+
+    ~FunctionTimeCount() {
+        jarkUtils::log("{}(): {} ms", funcName, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_clock).count());
+    }
+#else
+    FunctionTimeCount(string_view funcName) {}
+#endif
 };

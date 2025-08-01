@@ -28,33 +28,31 @@ void D2D1App::SafeRelease(Interface*& pInterfaceToRelease) {
 }
 
 void D2D1App::loadSettings() {
-    const int MAX_PATH_LEN = 512;
-    TCHAR szPath[MAX_PATH_LEN];
+    wchar_t appDataPath[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appDataPath)))
+        return;
 
-    if (GetModuleFileNameW(NULL, szPath, MAX_PATH_LEN) != 0) {
+    settingPath = std::wstring(appDataPath) + L"\\jarkViewer.db";
 
-        exePath = wstring(szPath);
-        settingPath = exePath.substr(0, exePath.length() - 3) + L"db";
+    auto f = _wfopen(settingPath.c_str(), L"rb");
+    if (!f)
+        return;
 
-        auto f = _wfopen(settingPath.c_str(), L"rb");
-        if (f) {
-            SettingParameter tmp{ 0 };
-            auto readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
-            fclose(f);
+    SettingParameter tmp;
+    auto readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
+    fclose(f);
 
-            if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length() + 1))
-                memcpy(&settingPar, &tmp, sizeof(SettingParameter));
+    if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length()))
+        memcpy(&settingPar, &tmp, sizeof(SettingParameter));
 
-            if (settingPar.showCmd == SW_NORMAL) {
-                int screenWidth = (::GetSystemMetrics(SM_CXFULLSCREEN));
-                int screenHeight = (::GetSystemMetrics(SM_CYFULLSCREEN));
+    if (settingPar.showCmd == SW_NORMAL) {
+        int screenWidth = (::GetSystemMetrics(SM_CXFULLSCREEN));
+        int screenHeight = (::GetSystemMetrics(SM_CYFULLSCREEN));
 
-                if (settingPar.rect.left >= screenWidth || settingPar.rect.bottom >= screenHeight ||
-                    (settingPar.rect.right - settingPar.rect.left) >= screenWidth ||
-                    (settingPar.rect.bottom - settingPar.rect.top) >= screenHeight) {
-                    settingPar.rect = { screenWidth / 4, screenHeight / 4, screenWidth * 3 / 4, 100 + screenHeight * 3 / 4 };
-                }
-            }
+        if (settingPar.rect.left >= screenWidth || settingPar.rect.bottom >= screenHeight ||
+            (settingPar.rect.right - settingPar.rect.left) >= screenWidth ||
+            (settingPar.rect.bottom - settingPar.rect.top) >= screenHeight) {
+            settingPar.rect = { screenWidth / 4, screenHeight / 4, screenWidth * 3 / 4, 100 + screenHeight * 3 / 4 };
         }
     }
 }
@@ -72,7 +70,7 @@ void D2D1App::saveSettings() {
         settingPar.rect = {};
     }
 
-    memcpy(settingPar.header, settingHeader.data(), settingHeader.length() + 1);
+    memcpy(settingPar.header, settingHeader.data(), settingHeader.length());
 
     auto f = _wfopen(settingPath.c_str(), L"wb");
     if (f) {

@@ -17,7 +17,7 @@ public:
         Cleanup();
     }
 
-    HRESULT Initialize(const std::vector<uint8_t>& videoBuffer) {
+    HRESULT Initialize(const uint8_t* videoBuffer, size_t size) {
         HRESULT hr = S_OK;
 
         // 初始化Media Foundation
@@ -38,7 +38,7 @@ public:
 
         // 将视频数据写入字节流
         ULONG bytesWritten = 0;
-        hr = pByteStream->Write(videoBuffer.data(), static_cast<ULONG>(videoBuffer.size()), &bytesWritten);
+        hr = pByteStream->Write(videoBuffer, size, &bytesWritten);
         if (FAILED(hr)) {
             pByteStream->Release();
             return hr;
@@ -313,18 +313,14 @@ private:
 
 class VideoDecoder {
 public:
-    static std::vector<ImageNode> DecodeVideoFrames(const std::vector<uint8_t>& videoFileBuf) {
+    static std::pair<std::vector<cv::Mat>, std::vector<int>> DecodeVideoFrames(const uint8_t* videoBuffer, size_t size) {
         H264VideoDecoder decoder;
 
-        HRESULT hr = decoder.Initialize(videoFileBuf);
+        HRESULT hr = decoder.Initialize(videoBuffer, size);
         if (FAILED(hr)) {
             std::cerr << "Failed to initialize decoder, HRESULT: 0x" << std::hex << hr << std::endl;
             return {};
         }
-
-        std::vector<ImageNode> ret;
-        for (auto& frame : decoder.DecodeAllFrames())
-            ret.push_back({ frame, 33 });
-        return ret;
+        return { decoder.DecodeAllFrames(), std::vector<int>(decoder.DecodeAllFrames().size(), 33) };
     }
 };

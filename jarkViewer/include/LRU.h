@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <list>
 #include <thread>
+#include <chrono>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
@@ -20,7 +21,8 @@ private:
     // 原有的缓存结构，但使用shared_ptr
     std::unordered_map<keyType, ListIterator> cache_map;
     std::list<std::pair<keyType, ValuePtr>> cache_list;
-    size_t CAPACITY = 20;
+    size_t CAPACITY = 5;
+    keyType loadingKey;  // 预读取线程正在加载数据中的key
 
     // 预读取相关的成员
     std::thread preload_thread;
@@ -39,31 +41,33 @@ private:
 
             if (stop_preload) break;
 
-            keyType key = preload_queue.front();
+            loadingKey = preload_queue.front();
             preload_queue.pop();
-            preload_pending.erase(key);
+            preload_pending.erase(loadingKey);
             lock.unlock();
 
             // 检查是否已经在缓存中（使用读锁）
             {
                 std::shared_lock<std::shared_mutex> cache_lock(cache_mutex);
-                if (cache_map.find(key) != cache_map.end()) {
+                if (cache_map.contains(loadingKey)) {
+                    loadingKey = {};
                     continue;
                 }
             }
 
             // 执行预读取
             try {
-                valueType value = loader(key);
+                valueType value = loader(loadingKey);
                 auto value_ptr = std::make_shared<valueType>(std::move(value));
 
                 // 将预读取的数据放入缓存（使用写锁）
                 std::unique_lock<std::shared_mutex> cache_lock(cache_mutex);
-                putInternal(key, value_ptr);
+                putInternal(loadingKey, value_ptr);
             }
             catch (...) {
                 // 预读取失败，忽略错误继续处理下一个
             }
+            loadingKey = {};
         }
     }
 
@@ -105,6 +109,13 @@ public:
 
     // 安全的获取函数，返回shared_ptr
     std::shared_ptr<valueType> getSafePtr(const keyType& key) {
+        int cnt_16ms = 0;
+        while (key == loadingKey) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 因windows系统限制 实际最小 15.625ms
+            if (++cnt_16ms > 640) // 最多等10秒
+                break;
+        }
+
         std::unique_lock<std::shared_mutex> lock(cache_mutex);
         auto it = cache_map.find(key);
         if (it != cache_map.end()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024 Samuel Ugochukwu <sammycageagle@gmail.com>
+ * Copyright (c) 2020-2025 Samuel Ugochukwu <sammycageagle@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,18 +28,8 @@
 #include <string>
 #include <vector>
 
-#define LUNASVG_BUILD_STATIC 1
-
-#if !defined(LUNASVG_BUILD_STATIC) && (defined(_WIN32) || defined(__CYGWIN__))
-#define LUNASVG_EXPORT __declspec(dllexport)
-#define LUNASVG_IMPORT __declspec(dllimport)
-#elif defined(__GNUC__) && (__GNUC__ >= 4)
-#define LUNASVG_EXPORT __attribute__((__visibility__("default")))
-#define LUNASVG_IMPORT
-#else
 #define LUNASVG_EXPORT
 #define LUNASVG_IMPORT
-#endif
 
 #ifdef LUNASVG_BUILD
 #define LUNASVG_API LUNASVG_EXPORT
@@ -48,7 +38,7 @@
 #endif
 
 #define LUNASVG_VERSION_MAJOR 3
-#define LUNASVG_VERSION_MINOR 0
+#define LUNASVG_VERSION_MINOR 4
 #define LUNASVG_VERSION_MICRO 0
 
 #define LUNASVG_VERSION_ENCODE(major, minor, micro) (((major) * 10000) + ((minor) * 100) + ((micro) * 1))
@@ -245,9 +235,9 @@ public:
     /**
      * @brief Checks if the bitmap is valid.
      * @deprecated This function has been deprecated. Use `isNull()` instead to check whether the bitmap is null.
-     * @return True if the bitmap is null, false otherwise.
+     * @return True if the bitmap is valid, false otherwise.
      */
-    bool valid() const { return isNull(); }
+    bool valid() const { return !isNull(); }
 
     /**
      * @brief Writes the bitmap to a PNG file.
@@ -517,6 +507,12 @@ public:
     bool isNull() const { return m_node == nullptr; }
 
     /**
+     * @brief Checks if the node is not null.
+     * @return True if the node is not null, false otherwise.
+     */
+    operator bool() const { return !isNull(); }
+
+    /**
      * @brief Checks if two nodes are equal.
      * @param element The node to compare.
      * @return True if equal, otherwise false.
@@ -646,10 +642,12 @@ public:
 
 private:
     Element(SVGElement* element);
-    SVGElement* element() const;
+    SVGElement* element(bool layoutIfNeeded = false) const;
     friend class Node;
     friend class Document;
 };
+
+using ElementList = std::vector<Element>;
 
 class SVGRootElement;
 
@@ -685,6 +683,19 @@ public:
     static std::unique_ptr<Document> loadFromData(const char* data, size_t length);
 
     /**
+     * @brief Applies a CSS stylesheet to the document.
+     * @param content A string containing the CSS rules to apply, with comments removed.
+     */
+    void applyStyleSheet(const std::string& content);
+
+    /**
+     * @brief Selects all elements that match the given CSS selector(s).
+     * @param content A string containing the CSS selector(s) to match elements.
+     * @return A list of elements matching the selector(s).
+     */
+    ElementList querySelectorAll(const std::string& content) const;
+
+    /**
      * @brief Returns the intrinsic width of the document in pixels.
      * @return The width of the document.
      */
@@ -703,9 +714,14 @@ public:
     Box boundingBox() const;
 
     /**
-     * @brief Updates the layout of the document.
+     * @brief Updates the layout of the document if needed.
      */
     void updateLayout();
+
+    /**
+     * @brief Forces an immediate layout update.
+     */
+    void forceLayout();
 
     /**
      * @brief Renders the document onto a bitmap using a transformation matrix.
@@ -724,6 +740,14 @@ public:
     Bitmap renderToBitmap(int width = -1, int height = -1, uint32_t backgroundColor = 0x00000000) const;
 
     /**
+     * @brief Returns the topmost element under the specified point.
+     * @param x The x-coordinate in viewport space.
+     * @param y The y-coordinate in viewport space.
+     * @return The topmost Element at the given point, or a null `Element` if no match is found.
+     */
+    Element elementFromPoint(float x, float y) const;
+
+    /**
      * @brief Retrieves an element by its ID.
      * @param id The ID of the element to retrieve.
      * @return The Element with the specified ID, or a null `Element` if not found.
@@ -736,11 +760,6 @@ public:
      */
     Element documentElement() const;
 
-    /**
-     * @internal
-     */
-    SVGRootElement* rootElement() const { return m_rootElement.get(); }
-
     Document(Document&&);
     Document& operator=(Document&&);
     ~Document();
@@ -749,10 +768,13 @@ private:
     Document();
     Document(const Document&) = delete;
     Document& operator=(const Document&) = delete;
+    SVGRootElement* rootElement(bool layoutIfNeeded = false) const;
     bool parse(const char* data, size_t length);
     std::unique_ptr<SVGRootElement> m_rootElement;
+    friend class SVGURIReference;
+    friend class SVGNode;
 };
 
-} //namespace lunasvg
+} // namespace lunasvg
 
 #endif // LUNASVG_H

@@ -5,7 +5,7 @@
 #include "D2D1App.h"
 #include "FileAssociationManager.h"
 
-extern std::wstring_view appBuildInfo;
+extern std::wstring_view appVersion;
 extern std::wstring_view jarkLink;
 extern std::wstring_view GithubLink;
 extern std::wstring_view BaiduLink;
@@ -86,6 +86,7 @@ private:
         };
         generalTabRadioList = {
             {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
+            {{50, 360, 600, 50}, {"界面主题", "跟随系统", "浅色", "深色"}, &settingParameter->UI_Mode },
         };
 
         // AssociateTab
@@ -93,7 +94,7 @@ private:
         allSupportExtW.insert(ImageDatabase::supportExt.begin(), ImageDatabase::supportExt.end());
         allSupportExtW.insert(ImageDatabase::supportRaw.begin(), ImageDatabase::supportRaw.end());
         for (const auto& ext : allSupportExtW)
-            allSupportExt.push_back(jarkUtils::wstringToUtf8(ext.substr(1)));
+            allSupportExt.push_back(jarkUtils::wstringToUtf8(ext));
 
         auto checkedExtVec = jarkUtils::splitString(settingParameter->extCheckedListStr, ",");
         auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
@@ -106,7 +107,7 @@ public:
     static inline volatile bool isWorking = false;
     static inline volatile HWND hwnd = nullptr;
 
-    Setting(const cv::Mat& image, SettingParameter* settingPar) {
+    Setting(SettingParameter* settingPar) {
         settingParameter = settingPar;
         requestExitFlag = false;
         isWorking = true;
@@ -212,7 +213,9 @@ public:
 
     void refreshAboutTab() {
         jarkUtils::overlayImg(winCanvas, aboutPage, 0, 50);
-        textDrawer.putAlignCenter(winCanvas, { 0, 580, 400, 40 }, jarkUtils::wstringToUtf8(appBuildInfo).c_str(), { 186, 38, 60, 255 });
+        textDrawer.putAlignCenter(winCanvas, { 0, 580, 400, 40 }, jarkUtils::wstringToUtf8(appVersion).c_str(), { 186, 38, 60, 255 });
+        textDrawer.putAlignCenter(winCanvas, { 0, 670, 400, 40 }, "[Build time]", {186, 38, 60, 255});
+        textDrawer.putAlignCenter(winCanvas, { 0, 700, 400, 40 }, jarkUtils::COMPILE_DATE_TIME, { 186, 38, 60, 255 });
     }
 
     void refreshUI() {
@@ -316,8 +319,9 @@ public:
                 params->isParamsChange = true;
             }
             else if (isInside(x, y, btnRectList[0])) { // 恢复默认勾选
-                std::string_view defaultExtList{ "apng,avif,bmp,bpg,gif,heic,heif,ico,jfif,jp2,jpe,jpeg,jpg,jxl,jxr,livp,png,qoi,svg,tga,tif,tiff,webp,wp2" };
-                memcpy(settingParameter->extCheckedListStr, defaultExtList.data(), defaultExtList.length() + 1);
+                memcpy(settingParameter->extCheckedListStr, 
+                    SettingParameter::defaultExtList.data(), 
+                    SettingParameter::defaultExtList.length() + 1);
 
                 auto checkedExtVec = jarkUtils::splitString(settingParameter->extCheckedListStr, ",");
                 auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
@@ -389,16 +393,16 @@ public:
         SettingParams* params = static_cast<SettingParams*>(userdata);
 
         if (event == cv::EVENT_LBUTTONUP) {
-            if (isInside(x, y, { 550, 100, 50, 50 })) {
+            if (isInside(x, y, { 440, 100, 300, 120 })) {
                 jarkUtils::openUrl(jarkLink.data());
             }
-            if (isInside(x, y, { 440, 230, 520, 90 })) {
+            if (isInside(x, y, { 440, 280, 520, 90 })) {
                 jarkUtils::openUrl(GithubLink.data());
             }
-            if (isInside(x, y, { 440, 335, 520, 110 })) {
+            if (isInside(x, y, { 440, 380, 520, 110 })) {
                 jarkUtils::openUrl(BaiduLink.data());
             }
-            if (isInside(x, y, { 440, 460, 520, 90 })) {
+            if (isInside(x, y, { 440, 510, 520, 90 })) {
                 jarkUtils::openUrl(LanzouLink.data());
             }
         }

@@ -1,3 +1,4 @@
+#include "jarkUtils.h"
 #include "exifParse.h"
 
 
@@ -364,7 +365,11 @@ std::string ExifParse::AI_Prompt(wstring_view path, const uint8_t* buf) {
     return "";
 }
 
-std::string ExifParse::getExif(wstring_view path, const uint8_t* buf, int fileSize) {
+std::string ExifParse::getExif(wstring_view path, const uint8_t* buf, size_t fileSize) {
+    static std::mutex mtx;
+
+    std::lock_guard<std::mutex> lock(mtx);
+
     try {
         auto image = Exiv2::ImageFactory::open(buf, fileSize);
         image->readMetadata();

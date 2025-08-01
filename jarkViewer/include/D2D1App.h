@@ -96,8 +96,7 @@ protected:
     // 手动交换链
     DXGI_PRESENT_PARAMETERS             m_parameters;
 
-    wstring exePath;
     wstring settingPath;
-    string_view settingHeader = "JarkViewerSetting";
+    string_view settingHeader{ "JarkViewerSetting" };
     SettingParameter settingPar;
 };
