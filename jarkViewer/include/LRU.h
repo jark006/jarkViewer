@@ -135,7 +135,8 @@ public:
 
     // 带预读取的安全获取函数
     std::shared_ptr<valueType> getSafePtr(const keyType& key, const keyType& nextKey) {
-        requestPreload(nextKey);
+        if(key != nextKey)
+            requestPreload(nextKey);
         return getSafePtr(key);
     }
 

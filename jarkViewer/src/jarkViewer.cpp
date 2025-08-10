@@ -21,7 +21,7 @@
 */
 
 std::wstring_view appName = L"JarkViewer v1.27";
-std::wstring_view appBuildInfo = L"v1.27 (Build 20250705)";
+std::wstring_view appVersion = L"v1.27";
 std::wstring_view jarkLink = L"https://github.com/jark006";
 std::wstring_view GithubLink = L"https://github.com/jark006/jarkViewer";
 std::wstring_view BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
@@ -42,11 +42,10 @@ struct CurImageParameter {
     int curFrameIdxMax;     // 若是动画则为帧数量
     int curFrameDelay;      // 当前帧延迟
     Cood slideCur, slideTarget;
-    std::shared_ptr<Frames> framesPtr;
+    std::shared_ptr<ImageAsset> imageAssetPtr;
 
     vector<int64_t> zoomList;
     int zoomIndex = 0;
-    bool isAnimation = false;
     bool isAnimationPause = false;
     int width = 0;
     int height = 0;
@@ -66,11 +65,17 @@ struct CurImageParameter {
         rotation = 0;
         isAnimationPause = false;
 
-        if (framesPtr) {
-            isAnimation = framesPtr->imgList.size() > 1;
-            curFrameIdxMax = (int)framesPtr->imgList.size() - 1;
-            width = framesPtr->imgList[0].img.cols;
-            height = framesPtr->imgList[0].img.rows;
+        if (imageAssetPtr) {
+            curFrameIdxMax = imageAssetPtr->format == ImageFormat::Animated ? (int)imageAssetPtr->frames.size() - 1 : 1;
+
+            if (imageAssetPtr->format == ImageFormat::Animated) {
+                width = imageAssetPtr->frames[0].cols;
+                height = imageAssetPtr->frames[0].rows;
+            }
+            else {
+                width = imageAssetPtr->primaryFrame.cols;
+                height = imageAssetPtr->primaryFrame.rows;
+            }
 
             //适应显示窗口宽高的缩放比例
             int64_t zoomFitWindow = std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height);
@@ -85,7 +90,6 @@ struct CurImageParameter {
             zoomIndex = (it != zoomList.end()) ? (int)std::distance(zoomList.begin(), it) : (int)(ZOOM_LIST.size() / 2);
         }
         else {
-            isAnimation = false;
             curFrameIdxMax = 0;
             width = 0;
             height = 0;
@@ -98,7 +102,7 @@ struct CurImageParameter {
     }
 
     void updateZoomList(int winWidth = 0, int winHeight = 0) {
-        if (winHeight == 0 || winWidth == 0 || framesPtr == nullptr)
+        if (winHeight == 0 || winWidth == 0 || imageAssetPtr == nullptr)
             return;
 
         //适应显示窗口宽高的缩放比例
@@ -194,10 +198,15 @@ class JarkViewerApp : public D2D1App {
 public:
     static const int BG_GRID_WIDTH = 16;
     static const uint32_t BG_COLOR = 0x46;
-    static const uint32_t GRID_DARK = 0xFF282828;
-    static const uint32_t GRID_LIGHT = 0xFF3C3C3C;
+
+    static const uint32_t BLACK_GRID_DARK = 0xFF282828;
+    static const uint32_t WHITE_GRID_DARK = 0xFF3C3C3C;
+    static const uint32_t BLACK_GRID_LIGHT = 0xFFFFFFFF;
+    static const uint32_t WHITE_GRID_LIGHT = 0xFFDDDDDD;
 
     static inline bool isLowZoom = false;
+    static inline uint32_t BLACK_GRID = BLACK_GRID_DARK;
+    static inline uint32_t WHITE_GRID = WHITE_GRID_DARK;
 
     OperateQueue operateQueue;
 
@@ -273,11 +282,13 @@ public:
                 if (!entry.is_regular_file())continue;
 
                 std::wstring ext = entry.path().extension().wstring();
+                if (ext.length() < 2)continue;
+                
+                ext = ext.substr(1);
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
                 if (ImageDatabase::supportExt.contains(ext) || ImageDatabase::supportRaw.contains(ext)) {
                     fileNameList.push_back(entry.path().filename().wstring());
-                    jarkUtils::log(L"add fileNameList: {}", fileNameList.back());
                 }
             }
 
@@ -288,7 +299,6 @@ public:
             for (auto& fileName : fileNameList) {
                 auto fullpath = (workDir / fileName).wstring();
                 imgFileList.push_back(fullpath);
-                jarkUtils::log(L"add fullpath imgFileList: {}", fullpath);
                 if (curFileIdx == -1 && openFileName == fileName) {
                     curFileIdx = (int)imgFileList.size() - 1;
                 }
@@ -302,25 +312,79 @@ public:
             if (filePath.empty()) { //直接打开软件，没有传入参数
                 imgFileList.emplace_back(appName);
                 curFileIdx = 0;
-                imgDB.put(wstring(appName), { {{imgDB.getHomeMat(), 0}}, "请在图像文件右键使用本软件打开" });
+                imgDB.put(wstring(appName), { ImageFormat::Still, imgDB.getHomeMat(), {}, {}, "请在图像文件右键使用本软件打开" });
             }
             else { // 打开的文件不支持，默认加到尾部
                 imgFileList.emplace_back(fullPath.wstring());
                 curFileIdx = (int)imgFileList.size() - 1;
-                imgDB.put(fullPath.wstring(), { {{imgDB.getErrorTipsMat(), 0}}, "图像格式不支持或已删除" });
+                imgDB.put(fullPath.wstring(), { ImageFormat::Still, imgDB.getErrorTipsMat(), {}, {}, "图像格式不支持或已删除" });
             }
         }
 
-        curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
+        curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
         curPar.Init(winWidth, winHeight);
+    }
+
+    inline void handleAnimationControl(int x, int y) {
+        // 按钮ID  0:上一帧  1:暂停/继续  2:下一帧  3:保存该帧
+        int buttonIdx = (abs(winWidth / 2 - x) > 100 ? -1 : (x + 100 - winWidth / 2) / 50);
+        if (curPar.imageAssetPtr->format == ImageFormat::Animated && buttonIdx >= 0) {
+            if (curPar.isAnimationPause) {
+                switch (buttonIdx)
+                {
+                case 0: {
+                    if (--curPar.curFrameIdx < 0)
+                        curPar.curFrameIdx = curPar.curFrameIdxMax;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }break;
+                case 1: {
+                    curPar.isAnimationPause = !curPar.isAnimationPause;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }break;
+                case 2: {
+                    if (++curPar.curFrameIdx > curPar.curFrameIdxMax)
+                        curPar.curFrameIdx = 0;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }break;
+                case 3: {
+                    auto path = jarkUtils::saveImageDialog();
+                    if (path.length() <= 2)
+                        break;
+
+                    cv::Mat srcImg;
+                    if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                        srcImg = curPar.imageAssetPtr->primaryFrame;
+                    else
+                        srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
+                    cv::imwrite(path.c_str(), srcImg);
+                }break;
+                }
+            }
+            else {
+                if (buttonIdx == 1) {
+                    curPar.isAnimationPause = !curPar.isAnimationPause;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+            }
+        }
     }
 
     void OnMouseDown(WPARAM btnState, int x, int y) {
         switch ((long long)btnState)
         {
         case WM_LBUTTONDOWN: {//左键
-            if (cursorPos == CursorPos::centerArea)
+            if (cursorPos == CursorPos::centerArea) {
                 mouseIsPressing = true;
+
+                auto now = std::chrono::system_clock::now();
+                auto elapsed = duration_cast<std::chrono::milliseconds>(now - lastClickTimestamp).count();
+                lastClickTimestamp = now;
+
+                if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
+                    jarkUtils::ToggleFullScreen(m_hWnd);
+                }
+            }
 
             mousePressPos = { x, y };
 
@@ -337,45 +401,7 @@ public:
             else if (cursorPos == CursorPos::rightDown)
                 operateQueue.push({ ActionENUM::setting });
             else if (cursorPos == CursorPos::centerTop) {
-                // 按钮ID  0:上一帧  1:暂停/继续  2:下一帧  3:保存该帧
-                int buttonIdx = (abs(winWidth / 2 - x) > 100 ? -1 : (x + 100 - winWidth / 2) / 50);
-                if (curPar.isAnimation && buttonIdx >= 0) {
-                    if (curPar.isAnimationPause) {
-                        switch (buttonIdx)
-                        {
-                        case 0: {
-                            if (--curPar.curFrameIdx < 0)
-                                curPar.curFrameIdx = curPar.curFrameIdxMax;
-                            operateQueue.push({ ActionENUM::normalFresh });
-                        }break;
-                        case 1: {
-                            curPar.isAnimationPause = !curPar.isAnimationPause;
-                            operateQueue.push({ ActionENUM::normalFresh });
-                        }break;
-                        case 2: {
-                            if (++curPar.curFrameIdx > curPar.curFrameIdxMax)
-                                curPar.curFrameIdx = 0;
-                            operateQueue.push({ ActionENUM::normalFresh });
-                        }break;
-                        case 3: {
-                            const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-                            std::thread saveImageThread([](cv::Mat image) {
-                                auto path = jarkUtils::saveImageDialog();
-                                if (path.length() > 2) {
-                                    cv::imwrite(path.c_str(), image);
-                                }
-                                }, srcImg);
-                            saveImageThread.detach();
-                        }break;
-                        }
-                    }
-                    else {
-                        if (buttonIdx == 1) {
-                            curPar.isAnimationPause = !curPar.isAnimationPause;
-                            operateQueue.push({ ActionENUM::normalFresh });
-                        }
-                    }
-                }
+                handleAnimationControl(x, y);
             }
             return;
         }
@@ -394,22 +420,10 @@ public:
     }
 
     void OnMouseUp(WPARAM btnState, int x, int y) {
-        using namespace std::chrono;
-
         switch ((long long)btnState)
         {
         case WM_LBUTTONUP: {//左键
             mouseIsPressing = false;
-
-            if (cursorPos == CursorPos::centerArea) {
-                auto now = system_clock::now();
-                auto elapsed = duration_cast<milliseconds>(now - lastClickTimestamp).count();
-                lastClickTimestamp = now;
-
-                if (10 < elapsed && elapsed < 300) { // 10 ~ 300 ms
-                    jarkUtils::ToggleFullScreen(m_hWnd);
-                }
-            }
             operateQueue.push({ ActionENUM::normalFresh });
             return;
         }
@@ -515,7 +529,7 @@ public:
                 break;
 
             case CursorPos::centerTop:
-                if (curPar.isAnimation) {
+                if (curPar.imageAssetPtr->format == ImageFormat::Animated) {
                     extraUIFlag = ShowExtraUI::animationBar;
                     operateQueue.push({ ActionENUM::normalFresh });
                 }
@@ -594,8 +608,8 @@ public:
             }break;
 
             //case 'S': { // Ctrl + S  动图 批量保存每一帧
-            //    if (curPar.isAnimation) {
-            //        const auto& imgs = curPar.framesPtr->imgList;
+            //    if (curPar.imageAssetPtr->format == ImageFormat::Animated) {
+            //        const auto& imgs = curPar.imageAssetPtr->imgList;
             //        wstring& filePath = imgFileList[curFileIdx];
             //        auto dotIdx = filePath.find_last_of(L".");
             //        if (dotIdx == string::npos)
@@ -607,7 +621,12 @@ public:
             //}break;
 
             case 'C': { // Ctrl + C  复制到剪贴板
-                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
                 jarkUtils::copyImageToClipboard(srcImg);
             }break;
 
@@ -621,7 +640,7 @@ public:
             {
 
             case 'J': { // 上一帧
-                if (curPar.isAnimation && curPar.isAnimationPause) {
+                if (curPar.imageAssetPtr->format == ImageFormat::Animated && curPar.isAnimationPause) {
                     curPar.curFrameIdx--;
                     if (curPar.curFrameIdx < 0)
                         curPar.curFrameIdx = curPar.curFrameIdxMax;
@@ -630,14 +649,14 @@ public:
             }break;
 
             case 'K': { // 动图 暂停/继续
-                if (curPar.isAnimation) {
+                if (curPar.imageAssetPtr->format == ImageFormat::Animated) {
                     curPar.isAnimationPause = !curPar.isAnimationPause;
                     operateQueue.push({ ActionENUM::normalFresh });
                 }
             }break;
 
             case 'L': { // 下一帧
-                if (curPar.isAnimation && curPar.isAnimationPause) {
+                if (curPar.imageAssetPtr->format == ImageFormat::Animated && curPar.isAnimationPause) {
                     curPar.curFrameIdx++;
                     if (curPar.curFrameIdx > curPar.curFrameIdxMax)
                         curPar.curFrameIdx = 0;
@@ -650,7 +669,7 @@ public:
             }break;
 
             case 'C': { // 复制图像信息到剪贴板
-                jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(imgDB.getSafePtr(imgFileList[curFileIdx])->exifStr));
+                jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(curPar.imageAssetPtr->exifInfo));
             }break;
 
             case VK_F11: {
@@ -710,7 +729,21 @@ public:
                 operateQueue.push({ ActionENUM::preImg });
             }break;
 
-            case VK_SPACE:
+            case VK_SPACE: {
+                if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
+                    curPar.imageAssetPtr->format = ImageFormat::Animated;
+                    curPar.Init(winWidth, winHeight);
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+                else if (curPar.imageAssetPtr->format == ImageFormat::Animated) {
+                    curPar.isAnimationPause = !curPar.isAnimationPause;
+                    operateQueue.push({ ActionENUM::normalFresh });
+                }
+                else {
+                    operateQueue.push({ ActionENUM::nextImg });
+                }
+            }break;
+
             case VK_NEXT:
             case VK_RIGHT: {
                 operateQueue.push({ ActionENUM::nextImg });
@@ -810,7 +843,7 @@ public:
 
         if (srcPx[3] == 255) return srcPx.u32;
 
-        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? GRID_DARK : GRID_LIGHT;
+        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BLACK_GRID : WHITE_GRID;
         if (srcPx[3] == 0) return bgPx.u32;
 
         const int alpha = srcPx[3];
@@ -903,6 +936,8 @@ public:
 
         const float zoomInvert = (float)curPar.ZOOM_BASE / curPar.zoomCur;
         isLowZoom = curPar.zoomCur < curPar.ZOOM_BASE;
+        BLACK_GRID = settingPar.UI_Mode >= 2 ? BLACK_GRID_DARK : BLACK_GRID_LIGHT;
+        WHITE_GRID = settingPar.UI_Mode >= 2 ? WHITE_GRID_DARK : WHITE_GRID_LIGHT;
 
         switch (srcImg.type()) {
         case CV_8UC4: {
@@ -1101,7 +1136,12 @@ public:
             return;
         auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         drawCanvas(srcImg, tmpCanvas);
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
@@ -1127,7 +1167,12 @@ public:
             return;
         auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         drawCanvas(srcImg, tmpCanvas);
         cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.cols / 2));
 
@@ -1195,7 +1240,12 @@ public:
     void mainCanvasSlideToPreAnimationHorizontal() {
         using namespace std::chrono;
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
         drawExifInfo(nextmainCanvas);
@@ -1232,7 +1282,12 @@ public:
     void mainCanvasSlideToNextAnimationHorizontal() {
         using namespace std::chrono;
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
         drawExifInfo(nextmainCanvas);
@@ -1269,7 +1324,12 @@ public:
     void mainCanvasSlideToPreAnimationVertical() {
         using namespace std::chrono;
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
         drawExifInfo(nextmainCanvas);
@@ -1306,7 +1366,12 @@ public:
     void mainCanvasSlideToNextAnimationVertical() {
         using namespace std::chrono;
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        else
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
         auto nextmainCanvas = cv::Mat(mainCanvas.size(), mainCanvas.type());
         drawCanvas(srcImg, nextmainCanvas);
         drawExifInfo(nextmainCanvas);
@@ -1344,7 +1409,7 @@ public:
             const int padding = 10;
             const int areaWidth = (canvas.cols - 2 * padding) / 4;
             cv::Rect rect{ padding, padding, std::max(areaWidth, 400), canvas.rows - 2 * padding };
-            textDrawer.putAlignLeft(canvas, rect, curPar.framesPtr->exifStr.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
+            textDrawer.putAlignLeft(canvas, rect, curPar.imageAssetPtr->exifInfo.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
         }
     }
 
@@ -1421,7 +1486,8 @@ public:
         if (operateAction.action == ActionENUM::none &&
             curPar.zoomCur == curPar.zoomTarget &&
             curPar.slideCur == curPar.slideTarget &&
-            (!curPar.isAnimation || (curPar.isAnimation && curPar.isAnimationPause))) {
+            (curPar.imageAssetPtr->format != ImageFormat::Animated || 
+                (curPar.imageAssetPtr->format == ImageFormat::Animated && curPar.isAnimationPause))) {
 
             Sleep(1); // Windows机制限制，实际时长最小只能 15.6ms
             return;
@@ -1433,10 +1499,16 @@ public:
             }
             else {
                 Setting::requestExit(); // OpenCV窗口暂时不能同时共存
-                const auto& imgs = curPar.framesPtr->imgList;
+
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame.clone();
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx].clone();
+
                 std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
                     Printer printer(image, settingParameter);
-                    }, imgs[curPar.curFrameIdx].img, & settingPar);
+                    }, srcImg, &settingPar);
                 printerThread.detach();
             }
             return;
@@ -1448,10 +1520,9 @@ public:
             }
             else {
                 Printer::requestExit(); // OpenCV窗口暂时不能同时共存
-                const auto& imgs = curPar.framesPtr->imgList;
-                std::thread settingThread([](cv::Mat image, SettingParameter* settingParameter) {
-                    Setting setting(image, settingParameter);
-                    }, imgs.front().img, &settingPar);
+                std::thread settingThread([](SettingParameter* settingParameter) {
+                    Setting setting(settingParameter);
+                    }, &settingPar);
                 settingThread.detach();
             }
             return;
@@ -1488,16 +1559,21 @@ public:
         case ActionENUM::preImg: {
             if (imgFileList.size() <= 1)
                 break;
-            
+
             if (settingPar.switchImageAnimationMode) {// 开动画时才需要
-                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
                 drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
                 drawExifInfo(mainCanvas);
             }
 
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
-            curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + imgFileList.size() - 1) % imgFileList.size()]);
+            curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + imgFileList.size() - 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
             if (settingPar.switchImageAnimationMode == 1)
@@ -1512,16 +1588,21 @@ public:
         case ActionENUM::nextImg: {
             if (imgFileList.size() <= 1)
                 break;
-            
+
             if (settingPar.switchImageAnimationMode) {// 开动画时才需要
-                const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
                 drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
                 drawExifInfo(mainCanvas);
             }
 
             if (++curFileIdx >= (int)imgFileList.size())
                 curFileIdx = 0;
-            curPar.framesPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
+            curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
             if (settingPar.switchImageAnimationMode == 1)
@@ -1653,14 +1734,21 @@ public:
             }
         }
 
-        const auto& [srcImg, delay] = curPar.framesPtr->imgList[curPar.curFrameIdx];
-        curPar.curFrameDelay = (delay <= 0 ? 10 : delay);
+        cv::Mat srcImg;
+        if (curPar.imageAssetPtr->format == ImageFormat::None ||
+            curPar.imageAssetPtr->format == ImageFormat::Still) {
+            srcImg = curPar.imageAssetPtr->primaryFrame;
+        }
+        else {
+            srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+            curPar.curFrameDelay = curPar.imageAssetPtr->frameDurations[curPar.curFrameIdx];
+        }
 
         drawCanvas(srcImg, mainCanvas);
         drawExifInfo(mainCanvas);
         drawExtraUI(mainCanvas);
 
-        if (curPar.isAnimation && curPar.isAnimationPause) {
+        if (curPar.imageAssetPtr->format == ImageFormat::Animated && curPar.isAnimationPause) {
             wstring str = std::format(L"逐帧浏览 [{}/{}] {}% ",
                 curPar.curFrameIdx + 1, curPar.curFrameIdxMax + 1,
                 curPar.zoomCur * 100ULL / curPar.ZOOM_BASE)
@@ -1681,7 +1769,7 @@ public:
 
         updateMainCanvas();
 
-        if (curPar.isAnimation && curPar.isAnimationPause == false) {
+        if (curPar.imageAssetPtr->format == ImageFormat::Animated && curPar.isAnimationPause == false) {
             if (delayRemain <= 0)
                 delayRemain = curPar.curFrameDelay;
 
@@ -1696,8 +1784,16 @@ public:
             if (delayRemain <= 0) {
                 delayRemain = curPar.curFrameDelay;
                 curPar.curFrameIdx++;
-                if (curPar.curFrameIdx > curPar.curFrameIdxMax)
+                if (curPar.curFrameIdx > curPar.curFrameIdxMax) {
                     curPar.curFrameIdx = 0;
+
+                    // 动态帧播放完，若有主图，则是当前实况图像
+                    if (!curPar.imageAssetPtr->primaryFrame.empty()) {
+                        curPar.imageAssetPtr->format = ImageFormat::Still;
+                        curPar.Init(winWidth, winHeight);
+                        operateQueue.push({ ActionENUM::normalFresh });
+                    }
+                }
             }
         }
     }

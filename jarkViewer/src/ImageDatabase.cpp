@@ -1690,7 +1690,7 @@ ImageAsset ImageDatabase::loadLivp(wstring_view path, const vector<uint8_t>& fil
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    return { ImageFormat::LivePhoto, img, frames, durations,  exifInfo };
+    return { ImageFormat::Animated, img, frames, durations,  exifInfo };
 }
 
 // 小米 实况照片
@@ -1725,7 +1725,7 @@ ImageAsset ImageDatabase::loadMVJPEG(wstring_view path, const vector<uint8_t>& f
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    return { ImageFormat::LivePhoto, img, frames, durations,  exifInfo };
+    return { ImageFormat::Animated, img, frames, durations,  exifInfo };
 }
 
 ImageAsset ImageDatabase::loader(const wstring& path) {

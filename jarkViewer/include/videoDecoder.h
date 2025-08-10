@@ -321,6 +321,10 @@ public:
             std::cerr << "Failed to initialize decoder, HRESULT: 0x" << std::hex << hr << std::endl;
             return {};
         }
-        return { decoder.DecodeAllFrames(), std::vector<int>(decoder.DecodeAllFrames().size(), 33) };
+
+        // TODO 暂未处理视频旋转方向
+        auto frames = decoder.DecodeAllFrames();
+        std::vector<int> durations(frames.size(), 33);
+        return { frames, durations };
     }
 };
