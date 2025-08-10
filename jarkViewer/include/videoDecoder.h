@@ -9,6 +9,7 @@ private:
     IMFMediaType* m_pDecoderOutputType = nullptr;
     GUID m_outputFormat = GUID_NULL;
     bool m_initialized = false;
+    UINT32 m_rotation = MFVideoRotationFormat_0;
 
 public:
     H264VideoDecoder() = default;
@@ -23,7 +24,7 @@ public:
         // 初始化Media Foundation
         hr = MFStartup(MF_VERSION);
         if (FAILED(hr)) {
-            std::cerr << "Failed to initialize Media Foundation" << std::endl;
+            jarkUtils::log("Failed to initialize Media Foundation");
             return hr;
         }
 
@@ -32,7 +33,7 @@ public:
         hr = MFCreateTempFile(MF_ACCESSMODE_READWRITE, MF_OPENMODE_DELETE_IF_EXIST,
             MF_FILEFLAGS_NONE, &pByteStream);
         if (FAILED(hr)) {
-            std::cerr << "Failed to create byte stream" << std::endl;
+            jarkUtils::log("Failed to create byte stream");
             return hr;
         }
 
@@ -70,7 +71,7 @@ public:
         pByteStream->Release();
 
         if (FAILED(hr)) {
-            std::cerr << "Failed to create source reader" << std::endl;
+            jarkUtils::log("Failed to create source reader");
             return hr;
         }
 
@@ -91,20 +92,15 @@ public:
         IMFMediaType* pNativeType = nullptr;
         hr = m_pSourceReader->GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &pNativeType);
         if (FAILED(hr)) {
-            std::cerr << "Failed to get native media type" << std::endl;
+            jarkUtils::log("Failed to get native media type");
             return hr;
         }
 
         // 输出原始格式信息用于调试
         GUID subtype;
         if (SUCCEEDED(pNativeType->GetGUID(MF_MT_SUBTYPE, &subtype))) {
-            std::wcout << L"Native subtype: ";
-            if (subtype == MFVideoFormat_H264) {
-                std::wcout << L"H264" << std::endl;
-            }
-            else {
-                std::wcout << L"Other format" << std::endl;
-            }
+            jarkUtils::log("Native subtype: {}",
+                subtype == MFVideoFormat_H264 ? "H264" : "Other format");
         }
 
         pNativeType->Release();
@@ -129,7 +125,7 @@ public:
 
         // 如果NV12失败，尝试YUY2
         if (FAILED(hr)) {
-            std::cout << "NV12 failed, trying YUY2..." << std::endl;
+            jarkUtils::log("NV12 failed, trying YUY2...");
             hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_YUY2);
             if (SUCCEEDED(hr)) {
                 hr = m_pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
@@ -139,7 +135,7 @@ public:
 
         // 如果YUY2也失败，尝试RGB32
         if (FAILED(hr)) {
-            std::cout << "YUY2 failed, trying RGB32..." << std::endl;
+            jarkUtils::log("YUY2 failed, trying RGB32...");
             hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
             if (SUCCEEDED(hr)) {
                 hr = m_pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
@@ -148,7 +144,7 @@ public:
         }
 
         if (FAILED(hr)) {
-            std::cerr << "Failed to set any supported output format, HRESULT: 0x" << std::hex << hr << std::endl;
+            jarkUtils::log("Failed to set any supported output format, HRESULT: 0x{}", hr);
         }
         else {
             // 获取并确认最终设置的媒体类型
@@ -156,18 +152,18 @@ public:
             hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pCurrentType);
             if (SUCCEEDED(hr)) {
                 if (SUCCEEDED(pCurrentType->GetGUID(MF_MT_SUBTYPE, &m_outputFormat))) {
-                    std::cout << "Successfully set output format: ";
+                    jarkUtils::log("Successfully set output format: ");
                     if (m_outputFormat == MFVideoFormat_NV12) {
-                        std::cout << "NV12" << std::endl;
+                        jarkUtils::log("NV12");
                     }
                     else if (m_outputFormat == MFVideoFormat_YUY2) {
-                        std::cout << "YUY2" << std::endl;
+                        jarkUtils::log("YUY2");
                     }
                     else if (m_outputFormat == MFVideoFormat_RGB32) {
-                        std::cout << "RGB32" << std::endl;
+                        jarkUtils::log("RGB32");
                     }
                     else {
-                        std::cout << "Unknown format" << std::endl;
+                        jarkUtils::log("Unknown format");
                     }
                 }
                 pCurrentType->Release();
@@ -181,7 +177,7 @@ public:
         std::vector<cv::Mat> frames;
 
         if (!m_initialized) {
-            std::cerr << "Decoder not initialized" << std::endl;
+            jarkUtils::log("Decoder not initialized");
             return frames;
         }
 
@@ -194,20 +190,26 @@ public:
         IMFMediaType* pMediaType = nullptr;
         hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pMediaType);
         if (FAILED(hr)) {
-            std::cerr << "Failed to get media type" << std::endl;
+            jarkUtils::log("Failed to get media type");
             return frames;
         }
 
         UINT32 width, height;
         hr = MFGetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, &width, &height);
+
+        // 读取旋转信息
+        if (FAILED(pMediaType->GetUINT32(MF_MT_VIDEO_ROTATION, &m_rotation))) {
+            m_rotation = MFVideoRotationFormat_0; // 默认不旋转
+        }
+
         pMediaType->Release();
 
         if (FAILED(hr)) {
-            std::cerr << "Failed to get frame size" << std::endl;
+            jarkUtils::log("Failed to get frame size");
             return frames;
         }
 
-        std::cout << "Video dimensions: " << width << "x" << height << std::endl;
+        jarkUtils::log("Video dimensions: {}x{}", width, height);
 
         // 解码所有帧
         while (true) {
@@ -215,12 +217,12 @@ public:
                 0, nullptr, &streamFlags, &timeStamp, &pSample);
 
             if (FAILED(hr)) {
-                std::cerr << "Failed to read sample" << std::endl;
+                jarkUtils::log("Failed to read sample");
                 break;
             }
 
             if (streamFlags & MF_SOURCE_READERF_ENDOFSTREAM) {
-                std::cout << "End of stream reached" << std::endl;
+                jarkUtils::log("End of stream reached");
                 break;
             }
 
@@ -234,18 +236,16 @@ public:
             }
         }
 
-        std::cout << "Decoded " << frames.size() << " frames" << std::endl;
         return frames;
     }
 
-private:
     cv::Mat ConvertSampleToMat(IMFSample* pSample, UINT32 width, UINT32 height) {
         HRESULT hr = S_OK;
         IMFMediaBuffer* pBuffer = nullptr;
 
         hr = pSample->ConvertToContiguousBuffer(&pBuffer);
         if (FAILED(hr)) {
-            std::cerr << "Failed to convert to contiguous buffer" << std::endl;
+            jarkUtils::log("Failed to convert to contiguous buffer");
             return cv::Mat();
         }
 
@@ -255,41 +255,48 @@ private:
         hr = pBuffer->Lock(&pData, &maxLength, &currentLength);
         if (FAILED(hr)) {
             pBuffer->Release();
-            std::cerr << "Failed to lock buffer" << std::endl;
+            jarkUtils::log("Failed to lock buffer");
             return cv::Mat();
         }
 
         cv::Mat result;
 
-        // 根据保存的格式进行转换
         if (m_outputFormat == MFVideoFormat_NV12) {
-            // NV12格式：Y平面 + UV交错平面
             cv::Mat yuvFrame(height * 3 / 2, width, CV_8UC1, pData);
             cv::cvtColor(yuvFrame, result, cv::COLOR_YUV2BGR_NV12);
         }
         else if (m_outputFormat == MFVideoFormat_YUY2) {
-            // YUY2格式：YUYV交错
             cv::Mat yuvFrame(height, width, CV_8UC2, pData);
             cv::cvtColor(yuvFrame, result, cv::COLOR_YUV2BGR_YUY2);
         }
         else if (m_outputFormat == MFVideoFormat_RGB32) {
-            // RGB32格式：BGRA
             cv::Mat bgraFrame(height, width, CV_8UC4, pData);
             cv::cvtColor(bgraFrame, result, cv::COLOR_BGRA2BGR);
-            // 可能需要垂直翻转
             cv::flip(result, result, 0);
         }
         else {
-            std::cerr << "Unsupported format for conversion" << std::endl;
+            jarkUtils::log("Unsupported format for conversion");
         }
 
-        // 创建副本，因为原始数据将被释放
-        cv::Mat finalResult = result.clone();
+        // 应用旋转
+        switch (m_rotation) {
+        case MFVideoRotationFormat_90:
+            cv::rotate(result, result, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case MFVideoRotationFormat_180:
+            cv::rotate(result, result, cv::ROTATE_180);
+            break;
+        case MFVideoRotationFormat_270:
+            cv::rotate(result, result, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+        default:
+            break; // 不旋转
+        }
 
         pBuffer->Unlock();
         pBuffer->Release();
 
-        return finalResult;
+        return result;
     }
 
     void Cleanup() {
@@ -318,11 +325,11 @@ public:
 
         HRESULT hr = decoder.Initialize(videoBuffer, size);
         if (FAILED(hr)) {
-            std::cerr << "Failed to initialize decoder, HRESULT: 0x" << std::hex << hr << std::endl;
+            jarkUtils::log("Failed to initialize decoder, HRESULT: 0x{:x}", hr);
             return {};
         }
 
-        // TODO 暂未处理视频旋转方向
+        // TODO MFVideoFormat_NV12 的视频存在颜色帧和细节亮度帧对不上
         auto frames = decoder.DecodeAllFrames();
         std::vector<int> durations(frames.size(), 33);
         return { frames, durations };

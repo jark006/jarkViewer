@@ -1570,6 +1570,11 @@ public:
                 drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
                 drawExifInfo(mainCanvas);
             }
+            
+            // 播放过的实况图，状态会变成静态图，切走前恢复一下
+            if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
+                curPar.imageAssetPtr->format = ImageFormat::Animated;
+            }
 
             if (--curFileIdx < 0)
                 curFileIdx = (int)imgFileList.size() - 1;
@@ -1598,6 +1603,11 @@ public:
 
                 drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
                 drawExifInfo(mainCanvas);
+            }
+
+            // 播放过的实况图，状态会变成静态图，切走前恢复一下
+            if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
+                curPar.imageAssetPtr->format = ImageFormat::Animated;
             }
 
             if (++curFileIdx >= (int)imgFileList.size())
