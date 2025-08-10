@@ -59,14 +59,9 @@
 git clone git@github.com:jark006/jarkViewer.git --depth=1
 ```
 
-本软件采用全库静态链接，开发者需要在编译前解压所有第三方静态库文件
+本软件采用全库静态链接，开发者需要在编译前备好所有第三方静态库文件，请在以下链接下载对应版本的第三方静态库文件压缩包，按说明解压到对应位置。
 
-1. 解压 `jarkViewer/lib/lib.7z` 所有 `*.lib` 静态库
-1. 解压 `jarkViewer/libavif/libavif.7z` 所有 `*.lib` 静态库
-1. 解压 `jarkViewer/libexiv2/libexiv2.7z` 所有 `*.lib` 静态库
-1. 解压 `jarkViewer/libjxl/libjxl.7z` 所有 `*.lib` 静态库
-1. 解压 `jarkViewer/libopencv/libopencv.7z` 所有 `*.lib` 静态库
-1. 解压 `jarkViewer/libwebp2/libwebp2.7z` 所有 `*.lib` 静态库
+静态库下载： [https://github.com/jark006/jarkViewer/releases/tag/static_lib](https://github.com/jark006/jarkViewer/releases/tag/static_lib)
 
 以上静态库除 `OpenCV` 外，均使用vcpkg安装的静态库复制而来。OpenCV静态库的编译指令集基准为AVX2，即只支持`Intel 4代` / `AMD Ryzen系列` 及后续CPU，除了移除dnn/js/java/python绑定等等不需要的组件，还有以下几个主要修改：
 1. 在源码 `opencv-4.12.0\modules\imgcodecs\src\loadsave.cpp` #68-79 移除图像分辨率限制。
@@ -92,7 +87,7 @@ vcpkg install opencv4[core,contrib,freetype,ipp,jasper,jpeg,jpegxl,nonfree,opene
 
 ## ❤ 支持开发
 
-软件开发不易，1毛也是心意
+软件开发不易，多少都是心意
 
 ![donate](donate.png)
 

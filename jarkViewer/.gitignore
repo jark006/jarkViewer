@@ -1,3 +1,4 @@
+*.aps
 x64
 lib/*.lib
 libopencv/*.lib
