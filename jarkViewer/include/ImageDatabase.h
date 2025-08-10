@@ -331,7 +331,7 @@ public:
     ImageAsset loadWP2(wstring_view path, const std::vector<uint8_t>& buf);
     ImageAsset loadBPG(wstring_view path, const std::vector<uchar>& buf);
     ImageAsset loadLivp(wstring_view path, const std::vector<uchar>& buf);
-    ImageAsset loadMVJPEG(wstring_view path, const std::vector<uchar>& buf);
+    ImageAsset loadMotionPhoto(wstring_view path, const std::vector<uchar>& buf, bool isJPG);
     ImageAsset loadAnimation(wstring_view path, const vector<uint8_t>& buf);
 
     void handleExifOrientation(int orientation, cv::Mat& img);

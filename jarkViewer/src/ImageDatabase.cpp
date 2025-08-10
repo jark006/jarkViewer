@@ -1693,34 +1693,75 @@ ImageAsset ImageDatabase::loadLivp(wstring_view path, const vector<uint8_t>& fil
     return { ImageFormat::Animated, img, frames, durations,  exifInfo };
 }
 
-// 小米 实况照片
-ImageAsset ImageDatabase::loadMVJPEG(wstring_view path, const vector<uint8_t>& fileBuf) {
-    cv::Mat img;
+// 从xmp获取视频数据大小  https://developer.android.com/media/platform/motion-photo-format?hl=zh-cn
+// 旧标准（MicroVideo）    Xmp.GCamera.MicroVideoOffset: xxxx
+// 新标准（MotionPhoto）   Xmp.Container.Directory[xxx]/Item:Length: xxxx
+static size_t getVideoSize(string_view exifStr) {
+    constexpr std::string_view targetKey1 = "Xmp.GCamera.MicroVideoOffset: ";
+    constexpr size_t targetKey1Len = targetKey1.length();
 
-    img = loadMat(path, fileBuf);
+    size_t valueStart = 0;
+    size_t pos = exifStr.find(targetKey1);
+    if (pos != std::string::npos) {
+        valueStart = pos + targetKey1Len;
+    }
+    else {
+        pos = exifStr.find("Item:Semantic: MotionPhoto");
+        if (pos == std::string::npos) {
+            return 0;
+        }
+        constexpr std::string_view targetKey2 = "Item:Length: ";
+        constexpr size_t targetKey2Len = targetKey2.length();
+        pos = exifStr.find(targetKey2, pos);
+        if (pos == std::string::npos) {
+            return 0;
+        }
+        valueStart = pos + targetKey2Len;
+    }
 
+    size_t valueEnd = valueStart;
+    while ('0' <= exifStr[valueEnd] && exifStr[valueEnd] <= '9') valueEnd++;
+
+    if (valueEnd <= valueStart || valueEnd >= exifStr.length()) {
+        return 0;
+    }
+
+    std::string_view valueStr(exifStr.data() + valueStart, valueEnd - valueStart);
+
+    int value = 0;
+    try {
+        value = std::stoi(std::string(valueStr));
+    }
+    catch (const std::exception&) {
+        return 0;
+    }
+    return value;
+}
+
+// Android 实况照片 jpg/jpeg/heic/heif
+ImageAsset ImageDatabase::loadMotionPhoto(wstring_view path, const vector<uint8_t>& fileBuf, bool isJPG = false) {
+    auto img = isJPG ? loadMat(path, fileBuf) : loadHeic(path, fileBuf);
     if (img.empty()) {
         auto exifInfo = ExifParse::getSimpleInfo(path, 0, 0, fileBuf.data(), fileBuf.size());
         return { ImageFormat::Still, getErrorTipsMat(), {}, {}, exifInfo };
     }
 
-    auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-    const size_t idx = exifTmp.find("\n方向: ");
-    if (idx != string::npos) {
-        handleExifOrientation(exifTmp[idx + 9] - '0', img);
+    auto exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) +
+        ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
+
+    if (isJPG) {
+        const size_t idx = exifInfo.find("\n方向: ");
+        if (idx != string::npos) {
+            handleExifOrientation(exifInfo[idx + 9] - '0', img);
+        }
     }
-    auto exifInfo = ExifParse::getSimpleInfo(path, img.cols, img.rows, fileBuf.data(), fileBuf.size()) + exifTmp;
 
-    const std::vector<uint8_t> mp4Header = { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 };
-    auto result = std::ranges::search(fileBuf, mp4Header);
-
-    if (result.empty()) {
+    auto videoSize = getVideoSize(exifInfo);
+    if (videoSize == 0 || videoSize >= fileBuf.size()) {
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    size_t mp4Offset = std::distance(fileBuf.begin(), result.begin());
-    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(fileBuf.data() + mp4Offset, fileBuf.size() - mp4Offset);
-
+    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(fileBuf.data() + fileBuf.size() - videoSize, videoSize);
     if (frames.empty()) {
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
@@ -1762,7 +1803,7 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
         path.substr(dotPos + 1) : path);
     for (auto& c : ext)	c = std::tolower(c);
 
-
+    // 动态图
     if (opencvAnimationExt.contains(ext)) {
         auto imageAsset = loadAnimation(path, fileBuf);
 
@@ -1788,8 +1829,7 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
         }
         return imageAsset;
     }
-
-    if (ext == L"bpg") { //静态或动画
+    else if (ext == L"bpg") { //静态或动画
         auto imageAsset = loadBPG(path, fileBuf);
 
         if (imageAsset.format == ImageFormat::None) {
@@ -1807,8 +1847,7 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
         }
         return imageAsset;
     }
-
-    if (ext == L"jxl") { //静态或动画
+    else if (ext == L"jxl") { //静态或动画
         auto imageAsset = loadJXL(path, fileBuf);
 
         if (imageAsset.format == ImageFormat::None) {
@@ -1826,8 +1865,7 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
         }
         return imageAsset;
     }
-
-    if (ext == L"wp2") { // webp2 静态或动画
+    else if (ext == L"wp2") { // webp2 静态或动画
         auto imageAsset = loadWP2(path, fileBuf);
         if (imageAsset.format == ImageFormat::None) {
             imageAsset.format = ImageFormat::Still;
@@ -1845,22 +1883,22 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
         return imageAsset;
     }
 
-
+    // 实况照片 包含一张图片和一段简短视频
     if (ext == L"livp") {
         return loadLivp(path, fileBuf);
     }
-
-    if (ext == L"jpg" || ext == L"jpeg") {
-        return loadMVJPEG(path, fileBuf);
+    else if (ext == L"jpg" || ext == L"jpeg") {
+        return loadMotionPhoto(path, fileBuf, true);
+    }
+    else if (ext == L"heic" || ext == L"heif") {
+        return loadMotionPhoto(path, fileBuf);
     }
 
+    //以下是静态图
     cv::Mat img;
     string exifInfo;
 
-    if (ext == L"heic" || ext == L"heif") {
-        img = loadHeic(path, fileBuf);
-    }
-    else if (ext == L"avif" || ext == L"avifs") {
+    if (ext == L"avif" || ext == L"avifs") {
         img = loadAvif(path, fileBuf);
     }
     else if (ext == L"jxr") {
@@ -1913,7 +1951,7 @@ ImageAsset ImageDatabase::loader(const wstring& path) {
 
     if (exifInfo.empty()) {
         auto exifTmp = ExifParse::getExif(path, fileBuf.data(), fileBuf.size());
-        if (ext != L"heic" && ext != L"heif" && !supportRaw.contains(ext)) { //heif/raw格式已经在解码过程应用了裁剪/旋转/镜像等操作
+        if (!supportRaw.contains(ext)) { // RAW 格式已经在解码过程应用了裁剪/旋转/镜像等操作
             const size_t idx = exifTmp.find("\n方向: ");
             if (idx != string::npos) {
                 handleExifOrientation(exifTmp[idx + 9] - '0', img);
