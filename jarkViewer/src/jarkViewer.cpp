@@ -20,20 +20,42 @@
 1. 部分AVIF图像仍不能正常解码 AVIF_RESULT_BMFF_PARSE_FAILED
 */
 
-std::wstring_view appName = L"JarkViewer v1.27";
-std::wstring_view appVersion = L"v1.27";
+std::wstring_view appName = L"JarkViewer";
+std::wstring_view appVersion = L"v1.28";
 std::wstring_view jarkLink = L"https://github.com/jark006";
 std::wstring_view GithubLink = L"https://github.com/jark006/jarkViewer";
 std::wstring_view BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
 std::wstring_view LanzouLink = L"https://jark006.lanzout.com/b0ko7mczg"; // 密码 6666
 
 
+static constexpr auto generate_zoom_list() {
+    // 原始缩放级别数组（2^10 到 2^22）
+    constexpr std::array<int64_t, 13> base = {
+        1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14,
+        1 << 15, 1 << 16, 1 << 17, 1 << 18, 1 << 19,
+        1 << 20, 1 << 21, 1 << 22
+    };
+    constexpr double baseScale = 1.148698354997035;// std::pow(2.0, 0.2);
+
+    std::array<int64_t, 5 * base.size() - 4> result{};
+
+    size_t index = 0;
+    for (size_t i = 0; i < base.size(); ++i) {
+        result[index++] = base[i];
+
+        if (i < base.size() - 1) {
+            result[index++] = (int64_t)(base[i] * baseScale);
+            result[index++] = (int64_t)(base[i] * baseScale * baseScale);
+            result[index++] = (int64_t)(base[i] * baseScale * baseScale * baseScale);
+            result[index++] = (int64_t)(base[i] * baseScale * baseScale * baseScale * baseScale);
+        }
+    }
+    return result;
+}
+
 
 struct CurImageParameter {
-    static const inline std::vector<int64_t> ZOOM_LIST{
-    1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16,
-    1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22,
-    };
+    static constexpr auto ZOOM_LIST = generate_zoom_list();
     static constexpr int64_t ZOOM_BASE = (1 << 16); // 100%缩放
 
     int64_t zoomTarget;     // 设定的缩放比例
@@ -82,8 +104,8 @@ struct CurImageParameter {
             zoomTarget = (height > winHeight || width > winWidth) ? zoomFitWindow : ZOOM_BASE;
             zoomCur = zoomTarget;
 
-            zoomList = ZOOM_LIST;
-            if (!jarkUtils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+            zoomList = std::vector<int64_t>(ZOOM_LIST.begin(), ZOOM_LIST.end());
+            if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
                 zoomList.push_back(zoomFitWindow);
             std::sort(zoomList.begin(), zoomList.end());
             auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
@@ -94,7 +116,7 @@ struct CurImageParameter {
             width = 0;
             height = 0;
 
-            zoomList = ZOOM_LIST;
+            zoomList = std::vector<int64_t>(ZOOM_LIST.begin(), ZOOM_LIST.end());
             zoomIndex = (int)(ZOOM_LIST.size() / 2);
             zoomTarget = ZOOM_BASE;
             zoomCur = ZOOM_BASE;
@@ -110,8 +132,8 @@ struct CurImageParameter {
             std::min(winWidth * ZOOM_BASE / width, winHeight * ZOOM_BASE / height):
             std::min(winWidth * ZOOM_BASE / height, winHeight * ZOOM_BASE / width);
 
-        zoomList = ZOOM_LIST;
-        if (!jarkUtils::is_power_of_two(zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+        zoomList = std::vector<int64_t>(ZOOM_LIST.begin(), ZOOM_LIST.end());
+        if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
             zoomList.push_back(zoomFitWindow);
         else {
             if (zoomIndex >= zoomList.size())
@@ -171,25 +193,25 @@ public:
 class ExtraUIRes
 {
 public:
-    cv::Mat imgData, leftArrow, rightArrow, leftRotate, rightRotate, printer, setting, animationBarPlaying, animationBarPausing;
+    cv::Mat mainRes, leftArrow, rightArrow, leftRotate, rightRotate, printer, setting, animationBarPlaying, animationBarPausing;
 
     ExtraUIRes() {
         rcFileInfo rc;
 
         rc = jarkUtils::GetResource(IDB_PNG_MAIN_RES, L"PNG");
-        auto mainRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        mainRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        leftRotate = mainRes({ 0, 0, 50, 50 }).clone();
-        rightRotate = mainRes({ 50, 0, 50, 50 }).clone();
+        leftRotate = mainRes({ 0, 0, 50, 50 });
+        rightRotate = mainRes({ 50, 0, 50, 50 });
 
-        printer = mainRes({ 0, 50, 50, 50 }).clone();
-        setting = mainRes({ 50, 50, 50, 50 }).clone();
+        printer = mainRes({ 0, 50, 50, 50 });
+        setting = mainRes({ 50, 50, 50, 50 });
 
-        leftArrow = mainRes({ 100, 0, 50, 100 }).clone();
-        rightArrow = mainRes({ 150, 0, 50, 100 }).clone();
+        leftArrow = mainRes({ 100, 0, 50, 100 });
+        rightArrow = mainRes({ 150, 0, 50, 100 });
 
-        animationBarPlaying = mainRes({ 0, 100, 200, 50 }).clone();
-        animationBarPausing = mainRes({ 0, 150, 200, 50 }).clone();
+        animationBarPlaying = mainRes({ 0, 100, 200, 50 });
+        animationBarPausing = mainRes({ 0, 150, 200, 50 });
     }
     ~ExtraUIRes() {}
 };
@@ -242,7 +264,7 @@ public:
     std::chrono::system_clock::time_point lastClickTimestamp;
 
     JarkViewerApp() {
-        m_wndCaption = appName;
+        m_wndCaption = std::format(L"{} {}", appName, appVersion);
 
         UINT dpi = GetDpiForSystem(); // 100%: 96 150%: 144 200%: 192
         if (dpi >= 144) {
@@ -308,16 +330,16 @@ public:
             curFileIdx = -1;
         }
 
-        if (curFileIdx == -1) {
+        if (curFileIdx < 0) {
             if (filePath.empty()) { //直接打开软件，没有传入参数
-                imgFileList.emplace_back(appName);
+                imgFileList.emplace_back(m_wndCaption);
                 curFileIdx = 0;
-                imgDB.put(wstring(appName), { ImageFormat::Still, imgDB.getHomeMat(), {}, {}, "请在图像文件右键使用本软件打开" });
+                imgDB.put(m_wndCaption, { ImageFormat::Still, imgDB.getHomeMat(), {}, {}, "使用Ctrl+O或拖入图像文件打开" });
             }
             else { // 打开的文件不支持，默认加到尾部
                 imgFileList.emplace_back(fullPath.wstring());
                 curFileIdx = (int)imgFileList.size() - 1;
-                imgDB.put(fullPath.wstring(), { ImageFormat::Still, imgDB.getErrorTipsMat(), {}, {}, "图像格式不支持或已删除" });
+                imgDB.put(fullPath.wstring(), { ImageFormat::Still, imgDB.getErrorTipsMat(), {}, {}, "图像格式不支持" });
             }
         }
 
@@ -1502,9 +1524,9 @@ public:
 
                 cv::Mat srcImg;
                 if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
-                    srcImg = curPar.imageAssetPtr->primaryFrame.clone();
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
                 else
-                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx].clone();
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
 
                 std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
                     Printer printer(image, settingParameter);

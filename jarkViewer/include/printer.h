@@ -34,7 +34,7 @@ private:
 
     PrintParams params{};
     TextDrawer textDrawer;
-    cv::Mat buttonPrint, buttonNormal, buttonInvert, trackbarBg;
+    cv::Mat printerRes, buttonPrint, buttonNormal, buttonInvert, trackbarBg;
     std::vector<cv::Mat> buttonColorMode;
     SettingParameter *settingParameter = nullptr;
 
@@ -46,18 +46,18 @@ private:
 
         rcFileInfo rc;
         rc = jarkUtils::GetResource(IDB_PNG_PRINTER_RES, L"PNG");
-        auto printerRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        printerRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        buttonColorMode.push_back(printerRes({ 0, 0, 400, 50 }).clone());
-        buttonColorMode.push_back(printerRes({ 400, 0, 400, 50 }).clone());
-        buttonColorMode.push_back(printerRes({ 0, 50, 400, 50 }).clone());
-        buttonColorMode.push_back(printerRes({ 400, 50, 400, 50 }).clone());
+        buttonColorMode.push_back(printerRes({ 0, 0, 400, 50 }));
+        buttonColorMode.push_back(printerRes({ 400, 0, 400, 50 }));
+        buttonColorMode.push_back(printerRes({ 0, 50, 400, 50 }));
+        buttonColorMode.push_back(printerRes({ 400, 50, 400, 50 }));
 
-        buttonNormal = printerRes({ 0, 100, 200, 50 }).clone();
-        buttonInvert = printerRes({ 200, 100, 200, 50 }).clone();
+        buttonNormal = printerRes({ 0, 100, 200, 50 });
+        buttonInvert = printerRes({ 200, 100, 200, 50 });
 
-        buttonPrint = printerRes({ 400, 100, 200, 50 }).clone();
-        trackbarBg = printerRes({ 0, 150, 800, 100 }).clone();
+        buttonPrint = printerRes({ 400, 100, 200, 50 });
+        trackbarBg = printerRes({ 0, 150, 800, 100 });
 
         params.brightness = settingParameter->printerBrightness;
         params.contrast = settingParameter->printerContrast;

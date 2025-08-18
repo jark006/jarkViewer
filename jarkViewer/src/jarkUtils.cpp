@@ -3,10 +3,6 @@
 #include "jarkUtils.h"
 
 
-bool jarkUtils::is_power_of_two(int64_t num) {
-    return (num <= 0) ? 0 : ((num & (num - 1)) == 0);
-}
-
 std::string jarkUtils::bin2Hex(const void* bytes, const size_t len) {
     auto charList = "0123456789ABCDEF";
     if (len == 0) return "";
@@ -468,16 +464,22 @@ void jarkUtils::overlayImg(cv::Mat& canvas, cv::Mat& img, int xOffset, int yOffs
     int imgWidth = img.cols;
 
     for (int y = 0; y < imgHeight; y++) {
-        if ((yOffset + y) <= 0 || canvasHeight <= (yOffset + y))
+        int canvasY = yOffset + y;
+        if (canvasY < 0)
             continue;
+        if (canvasHeight <= canvasY)
+            break;
 
-        auto canvasPtr = (intUnion*)(canvas.ptr() + canvas.step1() * (static_cast<size_t>(yOffset) + y));
-        auto imgPtr = (intUnion*)(img.ptr() + img.step1() * y);
+        auto canvasPtr = canvas.ptr<intUnion>(canvasY);
+        auto imgPtr = img.ptr<intUnion>(y);
         for (int x = 0; x < imgWidth; x++) {
-            if ((xOffset + x) <= 0 || canvasWidth <= (xOffset + x))
+            int canvasX = xOffset + x;
+            if (canvasX < 0)
                 continue;
+            if (canvasWidth <= canvasX)
+                break;
 
-            auto& canvasPx = canvasPtr[xOffset + x];
+            auto& canvasPx = canvasPtr[canvasX];
             auto imgPx = imgPtr[x];
             uint32_t alpha = imgPx[3];
 

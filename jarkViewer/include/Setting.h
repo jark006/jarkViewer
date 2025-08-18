@@ -48,7 +48,7 @@ private:
 
     SettingParams params{};
     TextDrawer textDrawer;
-    cv::Mat winCanvas, tabTitleMat, helpPage, aboutPage;
+    cv::Mat winCanvas, settingRes, tabTitleMat, helpPage, aboutPage;
 
     static inline SettingParameter* settingParameter = nullptr;
 
@@ -72,11 +72,11 @@ private:
 
         rcFileInfo rc;
         rc = jarkUtils::GetResource(IDB_PNG_SETTING_RES, L"PNG");
-        auto settingRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
+        settingRes = cv::imdecode(cv::Mat(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr), cv::IMREAD_UNCHANGED);
 
-        tabTitleMat = settingRes({ 0, 0, 400, 50 }).clone();
-        helpPage = settingRes({ 0, 100, 1000, 750 }).clone();
-        aboutPage = settingRes({ 0, 850, 1000, 750 }).clone();
+        tabTitleMat = settingRes({ 0, 0, 400, 50 });
+        helpPage = settingRes({ 0, 100, 1000, 750 });
+        aboutPage = settingRes({ 0, 850, 1000, 750 });
 
         // GeneralTab
         generalTabCheckBoxList = {

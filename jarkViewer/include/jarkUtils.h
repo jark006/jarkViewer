@@ -303,8 +303,6 @@ public:
 #endif
     }
 
-    static bool is_power_of_two(int64_t num);
-
     static string bin2Hex(const void* bytes, const size_t len);
 
     static std::wstring ansiToWstring(string_view str);
