@@ -963,10 +963,10 @@ public:
                     break;
                 }                
 
-                 //如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (GlobalVar::settingParameter.isOptimizeSlide && 
-                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
+                //如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
+                if (GlobalVar::settingParameter.isOptimizeSlide &&
+                    (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE * 2 ||
+                        curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((y & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
                     //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     //}
@@ -1025,8 +1025,8 @@ public:
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
                 if (GlobalVar::settingParameter.isOptimizeSlide &&
-                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
+                    (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE * 2 ||
+                        curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
                     //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     //}
@@ -1078,8 +1078,8 @@ public:
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
                 if (GlobalVar::settingParameter.isOptimizeSlide &&
-                    (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
-                    curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
+                    (mouseIsPressing || curPar.zoomCur >= curPar.ZOOM_BASE * 2 ||
+                        curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
                     //    memcpy(((uint32_t*)canvas.ptr()) + y * canvasW, ptr, canvasW * 4ULL);
                     //}

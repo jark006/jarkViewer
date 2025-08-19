@@ -8,7 +8,7 @@
 
 ## ✨ 操作方式
 
-1. **⏭ 切换图片**：窗口左右边缘 `单击/滚轮` / `左/右` 方向键 / `空格` 键
+1. **⏭ 切换图片**：窗口左右边缘 `单击/滚轮` / `左/右` 方向键
 1. **🔍 放大缩小**：窗口中间滚轮 / `上/下`方向键
 1. **🔄 旋转图片**：窗口左上角或右上角 `单击/滚轮` / `Q/E` 键
 1. **🖱️ 平移图片**：鼠标拖动 / `W/A/S/D` 键
@@ -17,6 +17,7 @@
 1. **📋 复制图像**：`Ctrl + C`
 1. **🖨 打印图像**：窗口左下角 `单击` / `Ctrl + P`
 1. **🎞️ 逐帧浏览**：窗口顶部控制栏 / `J:上帧` `K:暂停/继续` `L:下帧`
+1. **⌨️ 空格按键**：若当前是静态图则切换下一张，若是动图则暂停/播放
 1. **❌ 快捷退出**：右键单击 / `ESC` 键
 
 ---
@@ -82,14 +83,6 @@ vcpkg install libraw[core,dng-lossy,openmp]:x64-windows-static
 vcpkg install lunasvg:x64-windows-static
 vcpkg install opencv4[core,contrib,freetype,ipp,jasper,jpeg,jpegxl,nonfree,openexr,opengl,openjpeg,png,tiff,webp,world]:x64-windows-static
 ```
-
----
-
-## ❤ 支持开发
-
-软件开发不易，多少都是心意
-
-![donate](donate.png)
 
 ---
 
