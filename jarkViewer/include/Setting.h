@@ -11,6 +11,10 @@ extern std::wstring_view GithubLink;
 extern std::wstring_view BaiduLink;
 extern std::wstring_view LanzouLink;
 
+struct labelBox {
+    cv::Rect rect{};
+    string_view text;
+};
 struct generalTabCheckBox {
     cv::Rect rect{};
     string_view text;
@@ -50,14 +54,13 @@ private:
     TextDrawer textDrawer;
     cv::Mat winCanvas, settingRes, tabTitleMat, helpPage, aboutPage;
 
-    static inline SettingParameter* settingParameter = nullptr;
-
     static inline volatile bool requestExitFlag = false;
     std::vector<string> allSupportExt;
     std::set<string> checkedExt;
 
     std::vector<generalTabCheckBox> generalTabCheckBoxList;
     std::vector<generalTabRadio> generalTabRadioList;
+    std::vector<labelBox> labelList;
 
     void Init() {
         textDrawer.setSize(24);
@@ -80,13 +83,13 @@ private:
 
         // GeneralTab
         generalTabCheckBoxList = {
-            { {50, 100, 180, 50}, "旋转动画", &settingParameter->isAllowRotateAnimation },
-            { {50, 150, 180, 50}, "缩放动画", &settingParameter->isAllowZoomAnimation },
-            { {50, 200, 760, 50}, "平移图像加速 (拖动图像时优化渲染速度，图像会微微失真)", &settingParameter->isOptimizeSlide },
+            { {50, 100, 180, 50}, "旋转动画", &GlobalVar::settingParameter.isAllowRotateAnimation },
+            { {50, 150, 180, 50}, "缩放动画", &GlobalVar::settingParameter.isAllowZoomAnimation },
+            { {50, 200, 760, 50}, "平移图像加速 (拖动图像时优化渲染速度，图像会微微失真)", &GlobalVar::settingParameter.isOptimizeSlide },
         };
         generalTabRadioList = {
-            {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &settingParameter->switchImageAnimationMode },
-            {{50, 360, 600, 50}, {"界面主题", "跟随系统", "浅色", "深色"}, &settingParameter->UI_Mode },
+            {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &GlobalVar::settingParameter.switchImageAnimationMode },
+            {{50, 360, 600, 50}, {"界面主题", "跟随系统", "浅色", "深色"}, &GlobalVar::settingParameter.UI_Mode },
         };
 
         // AssociateTab
@@ -96,7 +99,7 @@ private:
         for (const auto& ext : allSupportExtW)
             allSupportExt.push_back(jarkUtils::wstringToUtf8(ext));
 
-        auto checkedExtVec = jarkUtils::splitString(settingParameter->extCheckedListStr, ",");
+        auto checkedExtVec = jarkUtils::splitString(GlobalVar::settingParameter.extCheckedListStr, ",");
         auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
         checkedExt.clear();
         if (!filtered.empty())
@@ -107,8 +110,7 @@ public:
     static inline volatile bool isWorking = false;
     static inline volatile HWND hwnd = nullptr;
 
-    Setting(SettingParameter* settingPar) {
-        settingParameter = settingPar;
+    Setting() {
         requestExitFlag = false;
         isWorking = true;
 
@@ -167,6 +169,15 @@ public:
                 cv::Rect rect3 = { radio.rect.x + itemWidth * (i), radio.rect.y , itemWidth, radio.rect.height };
                 textDrawer.putAlignCenter(winCanvas, rect3, radio.text[i].data(), cv::Scalar(0, 0, 0, 255));
             }
+        }
+
+        for (auto& labelBox : labelList) {
+            cv::Rect rect = {
+                labelBox.rect.x + labelBox.rect.height,
+                labelBox.rect.y,
+                labelBox.rect.width - labelBox.rect.height,
+                labelBox.rect.height };
+            textDrawer.putAlignCenter(winCanvas, rect, labelBox.text.data(), cv::Scalar(0, 0, 0, 255));
         }
     }
 
@@ -252,6 +263,10 @@ public:
                     if (0 <= clickIdx && clickIdx < radio.text.size() - 1) {
                         *radio.valuePtr = clickIdx;
                         params->isParamsChange = true;
+
+                        if (radio.text.front() == "界面主题") {
+                            GlobalVar::isNeedUpdateTheme = true;
+                        }
                     }
                 }
             }
@@ -319,11 +334,11 @@ public:
                 params->isParamsChange = true;
             }
             else if (isInside(x, y, btnRectList[0])) { // 恢复默认勾选
-                memcpy(settingParameter->extCheckedListStr, 
+                memcpy(GlobalVar::settingParameter.extCheckedListStr, 
                     SettingParameter::defaultExtList.data(), 
                     SettingParameter::defaultExtList.length() + 1);
 
-                auto checkedExtVec = jarkUtils::splitString(settingParameter->extCheckedListStr, ",");
+                auto checkedExtVec = jarkUtils::splitString(GlobalVar::settingParameter.extCheckedListStr, ",");
                 auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
                 params->checkedExt->clear();
                 if (!filtered.empty())
@@ -380,9 +395,9 @@ public:
         if (checkedList.back() == ',')
             checkedList.pop_back();
         if (checkedList.empty())
-            memset(settingParameter->extCheckedListStr, 0, 4);
+            memset(GlobalVar::settingParameter.extCheckedListStr, 0, 4);
         else
-            memcpy(settingParameter->extCheckedListStr, checkedList.data(), checkedList.length() + 1);
+            memcpy(GlobalVar::settingParameter.extCheckedListStr, checkedList.data(), checkedList.length() + 1);
     }
 
     static bool isInside(int x, int y, cv::Rect rect) {
@@ -451,7 +466,8 @@ public:
                 SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
                 SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             }
-            DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &D2D1App::isDarkMode, sizeof(BOOL));
+            BOOL themeMode = GlobalVar::settingParameter.UI_Mode == 0 ? GlobalVar::isSystemDarkMode : (GlobalVar::settingParameter.UI_Mode == 1 ? 0 : 1);
+            DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &themeMode, sizeof(BOOL));
         }
 
         while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {

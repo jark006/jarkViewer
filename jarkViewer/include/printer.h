@@ -59,10 +59,10 @@ private:
         buttonPrint = printerRes({ 400, 100, 200, 50 });
         trackbarBg = printerRes({ 0, 150, 800, 100 });
 
-        params.brightness = settingParameter->printerBrightness;
-        params.contrast = settingParameter->printerContrast;
-        params.colorMode = settingParameter->printercolorMode;
-        params.invertColors = settingParameter->printerInvertColors;
+        params.brightness = GlobalVar::settingParameter.printerBrightness;
+        params.contrast = GlobalVar::settingParameter.printerContrast;
+        params.colorMode = GlobalVar::settingParameter.printercolorMode;
+        params.invertColors = GlobalVar::settingParameter.printerInvertColors;
 
         // 异常情况则恢复默认值
         if (params.brightness < 0 || params.brightness > 200 || params.contrast < 0 || params.brightness > 200 ||
@@ -78,16 +78,16 @@ public:
     static inline volatile bool isWorking = false;
     static inline volatile HWND hwnd = nullptr;
 
-    Printer(const cv::Mat& image, SettingParameter* settingParameter) : settingParameter(settingParameter) {
+    Printer(cv::Mat image) {
         requestExitFlag = false;
         isWorking = true;
 
         Init();
         PrintMatImage(image);
-        settingParameter->printerBrightness = params.brightness;
-        settingParameter->printerContrast = params.contrast;
-        settingParameter->printercolorMode = params.colorMode;
-        settingParameter->printerInvertColors = params.invertColors;
+        GlobalVar::settingParameter.printerBrightness = params.brightness;
+        GlobalVar::settingParameter.printerContrast = params.contrast;
+        GlobalVar::settingParameter.printercolorMode = params.colorMode;
+        GlobalVar::settingParameter.printerInvertColors = params.invertColors;
 
         requestExitFlag = false;
         isWorking = false;
@@ -545,7 +545,8 @@ public:
                 SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
                 SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             }
-            DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &D2D1App::isDarkMode, sizeof(BOOL));
+            BOOL themeMode = GlobalVar::settingParameter.UI_Mode == 0 ? GlobalVar::isSystemDarkMode : (GlobalVar::settingParameter.UI_Mode == 1 ? 0 : 1);
+            DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &themeMode, sizeof(BOOL));
         }
 
         // 事件循环

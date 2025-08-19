@@ -12,8 +12,6 @@
 
 class D2D1App {
 public:
-    static inline BOOL isDarkMode = 0;
-
     // 构造函数
     D2D1App();
     // 析构函数
@@ -46,7 +44,7 @@ protected:
     void SafeRelease(Interface*& pInterfaceToRelease);
 
     void loadSettings();
-    void saveSettings();
+    void saveSettings() const;
 
     // 消息处理：鼠标
     virtual void OnMouseDown(WPARAM btnState, int x, int y) {}
@@ -95,8 +93,4 @@ protected:
     D3D_FEATURE_LEVEL                   m_featureLevel;
     // 手动交换链
     DXGI_PRESENT_PARAMETERS             m_parameters;
-
-    wstring settingPath;
-    string_view settingHeader{ "JarkViewerSetting" };
-    SettingParameter settingPar;
 };

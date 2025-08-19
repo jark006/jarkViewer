@@ -153,42 +153,6 @@ struct CurImageParameter {
     }
 };
 
-class OperateQueue {
-private:
-    std::queue<Action> queue;
-    std::mutex mtx;
-
-public:
-    void push(Action action) {
-        std::unique_lock<std::mutex> lock(mtx);
-
-        if (!queue.empty() && action.action == ActionENUM::slide) {
-            Action& back = queue.back();
-
-            if (back.action == ActionENUM::slide) {
-                back.x += action.x;
-                back.y += action.y;
-            }
-            else {
-                queue.push(action);
-            }
-        }
-        else {
-            queue.push(action);
-        }
-    }
-
-    Action get() {
-        std::unique_lock<std::mutex> lock(mtx);
-
-        if (queue.empty())
-            return { ActionENUM::none };
-
-        Action res = queue.front();
-        queue.pop();
-        return res;
-    }
-};
 
 class ExtraUIRes
 {
@@ -218,17 +182,8 @@ public:
 
 class JarkViewerApp : public D2D1App {
 public:
-    static const int BG_GRID_WIDTH = 16;
-    static const uint32_t BG_COLOR = 0x46;
-
-    static const uint32_t BLACK_GRID_DARK = 0xFF282828;
-    static const uint32_t WHITE_GRID_DARK = 0xFF3C3C3C;
-    static const uint32_t BLACK_GRID_LIGHT = 0xFFFFFFFF;
-    static const uint32_t WHITE_GRID_LIGHT = 0xFFDDDDDD;
-
+    static constexpr int BG_GRID_WIDTH = 16;
     static inline bool isLowZoom = false;
-    static inline uint32_t BLACK_GRID = BLACK_GRID_DARK;
-    static inline uint32_t WHITE_GRID = WHITE_GRID_DARK;
 
     OperateQueue operateQueue;
 
@@ -283,6 +238,8 @@ public:
             return S_FALSE;
 
         jarkUtils::setWindowIcon(m_hWnd, IDI_JARKVIEWER);
+
+        GlobalVar::theme = GlobalVar::settingParameter.UI_Mode == 0 ? (GlobalVar::isSystemDarkMode ? deepTheme : lightTheme) : (GlobalVar::settingParameter.UI_Mode == 1 ? lightTheme : deepTheme);
 
         return S_OK;
     }
@@ -865,7 +822,7 @@ public:
 
         if (srcPx[3] == 255) return srcPx.u32;
 
-        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? BLACK_GRID : WHITE_GRID;
+        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? GlobalVar::theme.BLACK_GRID_COLOR : GlobalVar::theme.WHITE_GRID_COLOR;
         if (srcPx[3] == 0) return bgPx.u32;
 
         const int alpha = srcPx[3];
@@ -927,39 +884,40 @@ public:
         if (yEnd > canvasH) yEnd = canvasH;
 
         // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
-        memset(canvas.ptr(), BG_COLOR, 4ULL * canvasH * canvasW);
+        memset(canvas.ptr(), GlobalVar::theme.BG_COLOR, 4ULL * canvasH * canvasW);
 
         if (((srcH == 600 and srcW == 800) or (srcH == 800 and srcW == 600)) and *((uint32_t*)srcImg.ptr()) == 0xFF464646) {
             // 内置的用于提示的图像
         }
         else { // 普通图像  画边框
+            const uint32_t lineColor = GlobalVar::settingParameter.UI_Mode == 0 ? (GlobalVar::isSystemDarkMode ? 0xFF888888 : 0xFF000000) : (GlobalVar::settingParameter.UI_Mode == 1 ? 0xFF000000 : 0xFF888888);
             if (0 < xStart and xStart < canvasW) {
-                for (int y = std::max(yStart - 1, 0); 0 <= y and y < std::min(yEnd + 1, canvasH - 1); y++) {
-                    ((uint32_t*)canvas.ptr())[y * canvasW + xStart - 1] = 0xFF000000;
+                const int yMax = std::min(yEnd + 1, canvasH);
+                for (int y = std::max(yStart - 1, 0); y < yMax; y++) {
+                    ((uint32_t*)canvas.ptr())[y * canvasW + xStart - 1] = lineColor;
                 }
             }
             if (0 < xEnd and xEnd < canvasW) {
-                for (int y = std::max(yStart - 1, 0); 0 <= y and y < std::min(yEnd + 1, canvasH - 1); y++) {
-                    ((uint32_t*)canvas.ptr())[y * canvasW + xEnd] = 0xFF000000;
+                const int yMax = std::min(yEnd + 1, canvasH);
+                for (int y = std::max(yStart - 1, 0); y < yMax; y++) {
+                    ((uint32_t*)canvas.ptr())[y * canvasW + xEnd] = lineColor;
                 }
             }
 
             if (0 < yStart and yStart < canvasH) {
-                for (int x = std::max(xStart - 1, 0); 0 <= x and x < std::min(xEnd + 1, canvasW - 1); x++) {
-                    ((uint32_t*)canvas.ptr())[(yStart - 1) * canvasW + x] = 0xFF000000;
+                for (int x = xStart; x < xEnd; x++) {
+                    ((uint32_t*)canvas.ptr())[(yStart - 1) * canvasW + x] = lineColor;
                 }
             }
             if (0 < yEnd and yEnd < canvasH) {
-                for (int x = std::max(xStart - 1, 0); 0 <= x and x < std::min(xEnd + 1, canvasW - 1); x++) {
-                    ((uint32_t*)canvas.ptr())[yEnd * canvasW + x] = 0xFF000000;
+                for (int x = xStart; x < xEnd; x++) {
+                    ((uint32_t*)canvas.ptr())[yEnd * canvasW + x] = lineColor;
                 }
             }
         }
 
         const float zoomInvert = (float)curPar.ZOOM_BASE / curPar.zoomCur;
         isLowZoom = curPar.zoomCur < curPar.ZOOM_BASE;
-        BLACK_GRID = settingPar.UI_Mode >= 2 ? BLACK_GRID_DARK : BLACK_GRID_LIGHT;
-        WHITE_GRID = settingPar.UI_Mode >= 2 ? WHITE_GRID_DARK : WHITE_GRID_LIGHT;
 
         switch (srcImg.type()) {
         case CV_8UC4: {
@@ -972,7 +930,7 @@ public:
                 //int srcY = (int)((int64_t)(y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur); // 2K屏 50%缩放一帧34ms 100%缩放一帧14ms
                 int srcY = (int)((y - deltaH) * zoomInvert); // 快一点  2K屏 50%缩放一帧28ms 100%缩放一帧14ms
 
-                srcY = std::clamp(srcY, 0, srcH);
+                srcY = std::clamp(srcY, 0, srcH - 1);
 
                 switch (curPar.rotation) {
                 case 0:
@@ -1006,7 +964,7 @@ public:
                 }                
 
                  //如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (settingPar.isOptimizeSlide && 
+                if (GlobalVar::settingParameter.isOptimizeSlide && 
                     (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE || 
                     curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((y & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数y行，否则透明图拖动/平移时背景格子上下单行像素抖动
@@ -1032,7 +990,7 @@ public:
                 //int srcY = (int)((int64_t)(y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
                 int srcY = (int)((y - deltaH) * zoomInvert);
 
-                srcY = std::clamp(srcY, 0, srcH);
+                srcY = std::clamp(srcY, 0, srcH - 1);
 
                 switch (curPar.rotation) {
                 case 0:
@@ -1066,7 +1024,7 @@ public:
                 }
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (settingPar.isOptimizeSlide &&
+                if (GlobalVar::settingParameter.isOptimizeSlide &&
                     (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
                     curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
@@ -1082,10 +1040,10 @@ public:
         case CV_8UC1: {
             for (int y = yStart; y < yEnd; y++) {
                 auto ptr = ((uint32_t*)canvas.ptr()) + y * canvasW;
-                //int srcY = (int)(((int64_t)y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
+                //int srcY = (int)((int64_t)(y - deltaH) * curPar.ZOOM_BASE / curPar.zoomCur);
                 int srcY = (int)((y - deltaH) * zoomInvert);
 
-                srcY = std::clamp(srcY, 0, srcH);
+                srcY = std::clamp(srcY, 0, srcH - 1);
 
                 switch (curPar.rotation) {
                 case 0:
@@ -1119,7 +1077,7 @@ public:
                 }
 
                 // 如果正在拖动/缩放/平移时，则偷懒：每隔一行就直接用上一行数据
-                if (settingPar.isOptimizeSlide &&
+                if (GlobalVar::settingParameter.isOptimizeSlide &&
                     (mouseIsPressing || curPar.zoomCur > curPar.ZOOM_BASE ||
                     curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget)) {
                     //if ((srcY & 1) && (++y < yEnd)) {  // 必须固定奇数或偶数srcY行，否则原图拖动/平移上下单行像素抖动
@@ -1143,7 +1101,7 @@ public:
 
         cv::Mat rotatedImage;
         cv::warpAffine(image, rotatedImage, rotationMatrix, image.size(),
-            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(BG_COLOR, BG_COLOR, BG_COLOR));
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         return rotatedImage;
     }
@@ -1156,7 +1114,7 @@ public:
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
-        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         cv::Mat srcImg;
         if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
@@ -1187,7 +1145,7 @@ public:
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
-        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(BG_COLOR, BG_COLOR, BG_COLOR));
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         cv::Mat srcImg;
         if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
@@ -1504,6 +1462,14 @@ public:
 
 
     void DrawScene() {
+        if (GlobalVar::isNeedUpdateTheme) {
+            GlobalVar::isNeedUpdateTheme = false;
+            GlobalVar::theme = GlobalVar::settingParameter.UI_Mode == 0 ? 
+                (GlobalVar::isSystemDarkMode ? deepTheme : lightTheme) : 
+                (GlobalVar::settingParameter.UI_Mode == 1 ? lightTheme : deepTheme);
+            operateQueue.push({ ActionENUM::normalFresh });
+        }
+
         auto operateAction = operateQueue.get();
         if (operateAction.action == ActionENUM::none &&
             curPar.zoomCur == curPar.zoomTarget &&
@@ -1528,9 +1494,9 @@ public:
                 else
                     srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
 
-                std::thread printerThread([](cv::Mat image, SettingParameter* settingParameter) {
-                    Printer printer(image, settingParameter);
-                    }, srcImg, &settingPar);
+                std::thread printerThread([](cv::Mat image) {
+                    Printer printer(image);
+                    }, srcImg);
                 printerThread.detach();
             }
             return;
@@ -1542,9 +1508,9 @@ public:
             }
             else {
                 Printer::requestExit(); // OpenCV窗口暂时不能同时共存
-                std::thread settingThread([](SettingParameter* settingParameter) {
-                    Setting setting(settingParameter);
-                    }, &settingPar);
+                std::thread settingThread([]() {
+                    Setting setting;
+                    });
                 settingThread.detach();
             }
             return;
@@ -1582,7 +1548,7 @@ public:
             if (imgFileList.size() <= 1)
                 break;
 
-            if (settingPar.switchImageAnimationMode) {// 开动画时才需要
+            if (GlobalVar::settingParameter.switchImageAnimationMode) {// 开动画时才需要
                 cv::Mat srcImg;
                 if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
                     srcImg = curPar.imageAssetPtr->primaryFrame;
@@ -1603,9 +1569,9 @@ public:
             curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + imgFileList.size() - 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
-            if (settingPar.switchImageAnimationMode == 1)
+            if (GlobalVar::settingParameter.switchImageAnimationMode == 1)
                 mainCanvasSlideToPreAnimationVertical();      // 竖直滑动
-            else if (settingPar.switchImageAnimationMode == 2)
+            else if (GlobalVar::settingParameter.switchImageAnimationMode == 2)
                 mainCanvasSlideToPreAnimationHorizontal();    // 水平滑动
 
             lastTimestamp = std::chrono::steady_clock::now();
@@ -1616,7 +1582,7 @@ public:
             if (imgFileList.size() <= 1)
                 break;
 
-            if (settingPar.switchImageAnimationMode) {// 开动画时才需要
+            if (GlobalVar::settingParameter.switchImageAnimationMode) {// 开动画时才需要
                 cv::Mat srcImg;
                 if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
                     srcImg = curPar.imageAssetPtr->primaryFrame;
@@ -1637,9 +1603,9 @@ public:
             curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
-            if (settingPar.switchImageAnimationMode == 1)
+            if (GlobalVar::settingParameter.switchImageAnimationMode == 1)
                 mainCanvasSlideToNextAnimationVertical();   // 竖直滑动
-            else if (settingPar.switchImageAnimationMode == 2)
+            else if (GlobalVar::settingParameter.switchImageAnimationMode == 2)
                 mainCanvasSlideToNextAnimationHorizontal(); // 水平滑动
 
             lastTimestamp = std::chrono::steady_clock::now();
@@ -1691,6 +1657,10 @@ public:
         } break;
 
         case ActionENUM::zoomOut: {
+            // 不宜缩太小
+            if (curPar.zoomTarget <= curPar.ZOOM_BASE && (curPar.zoomTarget * std::min(curPar.width, curPar.height) / curPar.ZOOM_BASE) < 50)
+                break;
+
             if (curPar.zoomIndex > 0) {
                 curPar.zoomIndex--;
 
@@ -1705,7 +1675,7 @@ public:
         } break;
 
         case ActionENUM::rotateLeft: {
-            if (settingPar.isAllowRotateAnimation) {
+            if (GlobalVar::settingParameter.isAllowRotateAnimation) {
                 rotateLeftAnimation();
             }
             curPar.rotation = (curPar.rotation + 1) & 0b11;
@@ -1714,7 +1684,7 @@ public:
         } break;
 
         case ActionENUM::rotateRight: {
-            if (settingPar.isAllowRotateAnimation) {
+            if (GlobalVar::settingParameter.isAllowRotateAnimation) {
                 rotateRightAnimation();
             }
             curPar.rotation = (curPar.rotation + 4 - 1) & 0b11;
@@ -1730,7 +1700,7 @@ public:
         }
 
         if (curPar.zoomCur != curPar.zoomTarget || curPar.slideCur != curPar.slideTarget) {
-            if (settingPar.isAllowZoomAnimation && smoothShift) { // 简单缩放动画
+            if (GlobalVar::settingParameter.isAllowZoomAnimation && smoothShift) { // 简单缩放动画
                 const int progressMax = 1 << 8;
                 static int progressCnt = progressMax;
                 static int64_t zoomInit = 0;

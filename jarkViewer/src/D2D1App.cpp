@@ -32,9 +32,9 @@ void D2D1App::loadSettings() {
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appDataPath)))
         return;
 
-    settingPath = std::wstring(appDataPath) + L"\\jarkViewer.db";
+    GlobalVar::settingPath = std::wstring(appDataPath) + L"\\jarkViewer.db";
 
-    auto f = _wfopen(settingPath.c_str(), L"rb");
+    auto f = _wfopen(GlobalVar::settingPath.c_str(), L"rb");
     if (!f)
         return;
 
@@ -42,39 +42,39 @@ void D2D1App::loadSettings() {
     auto readLen = fread(&tmp, 1, sizeof(SettingParameter), f);
     fclose(f);
 
-    if (readLen == sizeof(SettingParameter) && !memcmp(settingHeader.data(), tmp.header, settingHeader.length()))
-        memcpy(&settingPar, &tmp, sizeof(SettingParameter));
+    if (readLen == sizeof(SettingParameter) && !memcmp(GlobalVar::settingHeader.data(), tmp.header, GlobalVar::settingHeader.length()))
+        memcpy(&GlobalVar::settingParameter, &tmp, sizeof(SettingParameter));
 
-    if (settingPar.showCmd == SW_NORMAL) {
+    if (GlobalVar::settingParameter.showCmd == SW_NORMAL) {
         int screenWidth = (::GetSystemMetrics(SM_CXFULLSCREEN));
         int screenHeight = (::GetSystemMetrics(SM_CYFULLSCREEN));
 
-        if (settingPar.rect.left >= screenWidth || settingPar.rect.bottom >= screenHeight ||
-            (settingPar.rect.right - settingPar.rect.left) >= screenWidth ||
-            (settingPar.rect.bottom - settingPar.rect.top) >= screenHeight) {
-            settingPar.rect = { screenWidth / 4, screenHeight / 4, screenWidth * 3 / 4, 100 + screenHeight * 3 / 4 };
+        if (GlobalVar::settingParameter.rect.left >= screenWidth || GlobalVar::settingParameter.rect.bottom >= screenHeight ||
+            (GlobalVar::settingParameter.rect.right - GlobalVar::settingParameter.rect.left) >= screenWidth ||
+            (GlobalVar::settingParameter.rect.bottom - GlobalVar::settingParameter.rect.top) >= screenHeight) {
+            GlobalVar::settingParameter.rect = { screenWidth / 4, screenHeight / 4, screenWidth * 3 / 4, 100 + screenHeight * 3 / 4 };
         }
     }
 }
 
-void D2D1App::saveSettings() {
+void D2D1App::saveSettings() const {
     WINDOWPLACEMENT wp{ .length = sizeof(WINDOWPLACEMENT) };
 
     // 获取窗口的显示状态和位置信息
     if (GetWindowPlacement(m_hWnd, &wp) && wp.showCmd == SW_NORMAL) {
-        settingPar.showCmd = SW_NORMAL;
-        settingPar.rect = wp.rcNormalPosition;
+        GlobalVar::settingParameter.showCmd = SW_NORMAL;
+        GlobalVar::settingParameter.rect = wp.rcNormalPosition;
     }
     else {
-        settingPar.showCmd = SW_MAXIMIZE;
-        settingPar.rect = {};
+        GlobalVar::settingParameter.showCmd = SW_MAXIMIZE;
+        GlobalVar::settingParameter.rect = {};
     }
 
-    memcpy(settingPar.header, settingHeader.data(), settingHeader.length());
+    memcpy(GlobalVar::settingParameter.header, GlobalVar::settingHeader.data(), GlobalVar::settingHeader.length());
 
-    auto f = _wfopen(settingPath.c_str(), L"wb");
+    auto f = _wfopen(GlobalVar::settingPath.c_str(), L"wb");
     if (f) {
-        fwrite(&settingPar, 1, sizeof(SettingParameter), f);
+        fwrite(&GlobalVar::settingParameter, 1, sizeof(SettingParameter), f);
         fclose(f);
     }
 }
@@ -98,7 +98,7 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance)
     // 注册窗口
     RegisterClassExW(&wcex);
 
-    RECT window_rect = settingPar.showCmd == SW_NORMAL ? settingPar.rect : RECT{ 0, 0, 800, 600 };
+    RECT window_rect = GlobalVar::settingParameter.showCmd == SW_NORMAL ? GlobalVar::settingParameter.rect : RECT{ 0, 0, 800, 600 };
     DWORD window_style = WS_OVERLAPPEDWINDOW;
     m_hWnd = CreateWindowExW(0, L"D2D1WndClass", m_wndCaption.c_str(), window_style,
         window_rect.left, window_rect.top, window_rect.right - window_rect.left, window_rect.bottom - window_rect.top,
@@ -124,14 +124,14 @@ HRESULT D2D1App::Initialize(HINSTANCE hInstance)
             if (RegQueryValueEx(hKey, TEXT("AppsUseLightTheme"), NULL, NULL,
                 reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS)
             {
-                isDarkMode = (value == 0);
+                GlobalVar::isSystemDarkMode = (value == 0);
             }
             RegCloseKey(hKey);
         }
+        BOOL themeMode = GlobalVar::settingParameter.UI_Mode == 0 ? GlobalVar::isSystemDarkMode : (GlobalVar::settingParameter.UI_Mode == 1 ? 0 : 1);
+        DwmSetWindowAttribute(m_hWnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &themeMode, sizeof(BOOL));
 
-        DwmSetWindowAttribute(m_hWnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &isDarkMode, sizeof(BOOL));
-
-        ShowWindow(m_hWnd, settingPar.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
+        ShowWindow(m_hWnd, GlobalVar::settingParameter.showCmd == SW_NORMAL ? SW_NORMAL : SW_MAXIMIZE);
         UpdateWindow(m_hWnd);
     }
     return hr;

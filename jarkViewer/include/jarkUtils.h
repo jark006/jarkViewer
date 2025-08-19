@@ -82,6 +82,16 @@ using std::endl;
 #define TIME_COUNT_END_NS jarkUtils::log("{}(): {} ns", __FUNCTION__, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now() - start_clock).count())
 
 
+struct ThemeColor {
+    uint32_t BG_COLOR;
+    uint32_t BLACK_GRID_COLOR;
+    uint32_t WHITE_GRID_COLOR;
+};
+
+constexpr ThemeColor deepTheme{ 0x46, 0xFF282828, 0xFF3C3C3C };
+constexpr ThemeColor lightTheme{ 0xEE, 0xFFDDDDDD, 0xFFFFFFFF };
+
+
 struct SettingParameter {
     // 常见格式
     static inline std::string_view defaultExtList{ 
@@ -254,6 +264,44 @@ struct Action {
     };
 };
 
+
+class OperateQueue {
+private:
+    std::queue<Action> queue;
+    std::mutex mtx;
+
+public:
+    void push(Action action) {
+        std::unique_lock<std::mutex> lock(mtx);
+
+        if (!queue.empty() && action.action == ActionENUM::slide) {
+            Action& back = queue.back();
+
+            if (back.action == ActionENUM::slide) {
+                back.x += action.x;
+                back.y += action.y;
+            }
+            else {
+                queue.push(action);
+            }
+        }
+        else {
+            queue.push(action);
+        }
+    }
+
+    Action get() {
+        std::unique_lock<std::mutex> lock(mtx);
+
+        if (queue.empty())
+            return { ActionENUM::none };
+
+        Action res = queue.front();
+        queue.pop();
+        return res;
+    }
+};
+
 struct WinSize {
     int width = 600;
     int height = 400;
@@ -278,6 +326,17 @@ struct MatPack {
         matPtr = nullptr;
         titleStrPtr = nullptr;
     }
+};
+
+struct GlobalVar {
+    static inline bool isNeedUpdateTheme = false;
+
+    static inline BOOL isSystemDarkMode = 0;
+    static inline ThemeColor theme = deepTheme;
+
+    static inline wstring settingPath;
+    static inline string_view settingHeader{ "JarkViewerSetting" };
+    static inline SettingParameter settingParameter;
 };
 
 class jarkUtils {
