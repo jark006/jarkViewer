@@ -3,22 +3,16 @@
 #include "jarkUtils.h"
 
 
-class H264VideoDecoder {
+class VideoDecoder {
 private:
-    IMFSourceReader* m_pSourceReader = nullptr;
-    IMFMediaType* m_pDecoderOutputType = nullptr;
-    GUID m_outputFormat = GUID_NULL;
-    bool m_initialized = false;
-    UINT32 m_rotation = MFVideoRotationFormat_0;
+    static inline IMFSourceReader* m_pSourceReader = nullptr;
+    static inline IMFMediaType* m_pDecoderOutputType = nullptr;
+    static inline GUID m_outputFormat = GUID_NULL;
+    static inline bool m_initialized = false;
+    static inline UINT32 m_rotation = MFVideoRotationFormat_0;
 
-public:
-    H264VideoDecoder() = default;
 
-    ~H264VideoDecoder() {
-        Cleanup();
-    }
-
-    HRESULT Initialize(const uint8_t* videoBuffer, size_t size) {
+    static HRESULT Initialize(const uint8_t* videoBuffer, size_t size) {
         HRESULT hr = S_OK;
 
         // 初始化Media Foundation
@@ -85,7 +79,7 @@ public:
         return S_OK;
     }
 
-    HRESULT ConfigureDecoder() {
+    static HRESULT ConfigureDecoder() {
         HRESULT hr = S_OK;
 
         // 首先尝试获取原始媒体类型
@@ -99,8 +93,9 @@ public:
         // 输出原始格式信息用于调试
         GUID subtype;
         if (SUCCEEDED(pNativeType->GetGUID(MF_MT_SUBTYPE, &subtype))) {
-            jarkUtils::log("Native subtype: {}",
-                subtype == MFVideoFormat_H264 ? "H264" : "Other format");
+            char encodeStr[8] = { 0 };
+            *((long*)encodeStr) = subtype.Data1;
+            jarkUtils::log("Native subtype: [{}]", encodeStr);
         }
 
         pNativeType->Release();
@@ -116,24 +111,24 @@ public:
             return hr;
         }
 
-        // 首先尝试NV12格式
-        hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+        // 首先尝试YUY2格式
+        hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_YUY2);
         if (SUCCEEDED(hr)) {
             hr = m_pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                 nullptr, m_pDecoderOutputType);
         }
 
-        // 如果NV12失败，尝试YUY2
+        // 如果YUY2失败，尝试NV12
         if (FAILED(hr)) {
-            jarkUtils::log("NV12 failed, trying YUY2...");
-            hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_YUY2);
+            jarkUtils::log("YUY2 failed, trying NV12...");
+            hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
             if (SUCCEEDED(hr)) {
                 hr = m_pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                     nullptr, m_pDecoderOutputType);
             }
         }
 
-        // 如果YUY2也失败，尝试RGB32
+        //如果NV12也失败，尝试RGB32
         if (FAILED(hr)) {
             jarkUtils::log("YUY2 failed, trying RGB32...");
             hr = m_pDecoderOutputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
@@ -144,7 +139,7 @@ public:
         }
 
         if (FAILED(hr)) {
-            jarkUtils::log("Failed to set any supported output format, HRESULT: 0x{}", hr);
+            jarkUtils::log("Failed to set any supported output format, HRESULT: 0x{:x}", hr);
         }
         else {
             // 获取并确认最终设置的媒体类型
@@ -152,19 +147,20 @@ public:
             hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pCurrentType);
             if (SUCCEEDED(hr)) {
                 if (SUCCEEDED(pCurrentType->GetGUID(MF_MT_SUBTYPE, &m_outputFormat))) {
-                    jarkUtils::log("Successfully set output format: ");
-                    if (m_outputFormat == MFVideoFormat_NV12) {
-                        jarkUtils::log("NV12");
-                    }
-                    else if (m_outputFormat == MFVideoFormat_YUY2) {
-                        jarkUtils::log("YUY2");
-                    }
-                    else if (m_outputFormat == MFVideoFormat_RGB32) {
-                        jarkUtils::log("RGB32");
-                    }
-                    else {
-                        jarkUtils::log("Unknown format");
-                    }
+                    jarkUtils::log("Successfully set output format: {}", []()->const char* {
+                        if (m_outputFormat == MFVideoFormat_NV12) {
+                            return "NV12";
+                        }
+                        else if (m_outputFormat == MFVideoFormat_YUY2) {
+                            return "YUY2";
+                        }
+                        else if (m_outputFormat == MFVideoFormat_RGB32) {
+                            return "RGB32";
+                        }
+                        else {
+                            return "Unknown format";
+                        }
+                        });
                 }
                 pCurrentType->Release();
             }
@@ -173,7 +169,7 @@ public:
         return hr;
     }
 
-    std::vector<cv::Mat> DecodeAllFrames() {
+    static std::vector<cv::Mat> DecodeAllFrames() {
         std::vector<cv::Mat> frames;
 
         if (!m_initialized) {
@@ -239,7 +235,7 @@ public:
         return frames;
     }
 
-    cv::Mat ConvertSampleToMat(IMFSample* pSample, UINT32 width, UINT32 height) {
+    static cv::Mat ConvertSampleToMat(IMFSample* pSample, UINT32 width, UINT32 height) {
         HRESULT hr = S_OK;
         IMFMediaBuffer* pBuffer = nullptr;
 
@@ -299,7 +295,7 @@ public:
         return result;
     }
 
-    void Cleanup() {
+    static void Cleanup() {
         if (m_pDecoderOutputType) {
             m_pDecoderOutputType->Release();
             m_pDecoderOutputType = nullptr;
@@ -315,23 +311,19 @@ public:
             m_initialized = false;
         }
     }
-};
 
-
-class VideoDecoder {
 public:
-    static std::pair<std::vector<cv::Mat>, std::vector<int>> DecodeVideoFrames(const uint8_t* videoBuffer, size_t size) {
-        H264VideoDecoder decoder;
-
-        HRESULT hr = decoder.Initialize(videoBuffer, size);
+    static std::vector<cv::Mat> DecodeVideoFrames(const uint8_t* videoBuffer, size_t size) {
+        HRESULT hr = Initialize(videoBuffer, size);
         if (FAILED(hr)) {
             jarkUtils::log("Failed to initialize decoder, HRESULT: 0x{:x}", hr);
             return {};
         }
 
-        // TODO MFVideoFormat_NV12 的视频存在颜色帧和细节亮度帧对不上
-        auto frames = decoder.DecodeAllFrames();
-        std::vector<int> durations(frames.size(), 33);
-        return { frames, durations };
+        auto frames = DecodeAllFrames();
+
+        Cleanup();
+
+        return frames;
     }
 };

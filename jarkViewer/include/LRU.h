@@ -22,7 +22,6 @@ private:
     std::unordered_map<keyType, ListIterator> cache_map;
     std::list<std::pair<keyType, ValuePtr>> cache_list;
     size_t CAPACITY = 5;
-    keyType loadingKey;  // 预读取线程正在加载数据中的key
 
     // 预读取相关的成员
     std::thread preload_thread;
@@ -41,33 +40,31 @@ private:
 
             if (stop_preload) break;
 
-            loadingKey = preload_queue.front();
-            preload_queue.pop();
-            preload_pending.erase(loadingKey);
-            lock.unlock();
+            auto loadingKey = preload_queue.front();
 
-            // 检查是否已经在缓存中（使用读锁）
             {
                 std::shared_lock<std::shared_mutex> cache_lock(cache_mutex);
                 if (cache_map.contains(loadingKey)) {
-                    loadingKey = {};
+                    preload_queue.pop();
+                    preload_pending.erase(loadingKey);
                     continue;
                 }
             }
+            lock.unlock();
 
-            // 执行预读取
-            try {
-                valueType value = loader(loadingKey);
-                auto value_ptr = std::make_shared<valueType>(std::move(value));
 
-                // 将预读取的数据放入缓存（使用写锁）
+            valueType value = loader(loadingKey);
+            auto value_ptr = std::make_shared<valueType>(std::move(value));
+
+            {
                 std::unique_lock<std::shared_mutex> cache_lock(cache_mutex);
                 putInternal(loadingKey, value_ptr);
             }
-            catch (...) {
-                // 预读取失败，忽略错误继续处理下一个
-            }
-            loadingKey = {};
+
+            lock.lock();
+            preload_queue.pop();
+            preload_pending.erase(loadingKey);
+            lock.unlock();
         }
     }
 
@@ -107,51 +104,49 @@ public:
 
     virtual valueType loader(const keyType&) = 0;
 
-    // 安全的获取函数，返回shared_ptr
-    std::shared_ptr<valueType> getSafePtr(const keyType& key) {
+    std::shared_ptr<valueType> getDataPtr(const keyType& key) {
         int cnt_16ms = 0;
-        while (key == loadingKey) {
+        while (true) {
+            std::unique_lock<std::shared_mutex> lock(cache_mutex);
+            auto it = cache_map.find(key);
+            if (it != cache_map.end()) {
+                cache_list.splice(cache_list.begin(), cache_list, it->second);
+                return it->second->second;
+            }
+            lock.unlock();
+
             std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 因windows系统限制 实际最小 15.625ms
-            if (++cnt_16ms > 640) // 最多等10秒
+            if (++cnt_16ms > 3750) // 最多等60秒
                 break;
         }
-
-        std::unique_lock<std::shared_mutex> lock(cache_mutex);
-        auto it = cache_map.find(key);
-        if (it != cache_map.end()) {
-            cache_list.splice(cache_list.begin(), cache_list, it->second);
-            return it->second->second;
-        }
-
-        // 需要加载数据
-        lock.unlock();
-        valueType value = loader(key);
-        auto value_ptr = std::make_shared<valueType>(std::move(value));
-        lock.lock();
-
-        putInternal(key, value_ptr);
-        return cache_list.begin()->second;
+        return nullptr;
     }
 
-    // 带预读取的安全获取函数
+    std::shared_ptr<valueType> getSafePtr(const keyType& key) {
+        requestPreload(key);
+        return getDataPtr(key);
+    }
+
     std::shared_ptr<valueType> getSafePtr(const keyType& key, const keyType& nextKey) {
-        if(key != nextKey)
-            requestPreload(nextKey);
-        return getSafePtr(key);
+        if (key == nextKey)
+            requestPreload(key);
+        else
+            requestPreloadBatch({ key, nextKey });
+
+        return getDataPtr(key);
     }
 
     // 请求预读取指定的key
     void requestPreload(const keyType& key) {
         std::lock_guard<std::mutex> lock(preload_mutex);
 
-        if (preload_pending.find(key) != preload_pending.end()) {
+        if (preload_pending.contains(key))
             return;
-        }
 
         // 使用读锁检查缓存
         {
             std::shared_lock<std::shared_mutex> cache_lock(cache_mutex);
-            if (cache_map.find(key) != cache_map.end()) {
+            if (cache_map.contains(key)) {
                 return;
             }
         }
@@ -220,50 +215,5 @@ public:
             cache_map.erase(cache_list.back().first);
             cache_list.pop_back();
         }
-    }
-
-    bool contains(const keyType& key) const {
-        std::shared_lock<std::shared_mutex> lock(cache_mutex);
-        return cache_map.find(key) != cache_map.end();
-    }
-
-    // 获取预读取队列的大小
-    size_t getPreloadQueueSize() const {
-        std::lock_guard<std::mutex> lock(preload_mutex);
-        return preload_queue.size();
-    }
-
-    // 等待所有预读取任务完成
-    void waitForPreloadComplete() {
-        std::unique_lock<std::mutex> lock(preload_mutex);
-        while (!preload_queue.empty()) {
-            lock.unlock();
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            lock.lock();
-        }
-    }
-
-    // RAII包装器，用于安全地使用数据
-    class SafeDataAccess {
-    private:
-        std::shared_ptr<valueType> data_ptr;
-    public:
-        explicit SafeDataAccess(std::shared_ptr<valueType> ptr) : data_ptr(std::move(ptr)) {}
-
-        valueType& operator*() { return *data_ptr; }
-        valueType* operator->() { return data_ptr.get(); }
-        const valueType& operator*() const { return *data_ptr; }
-        const valueType* operator->() const { return data_ptr.get(); }
-        valueType* get() { return data_ptr.get(); }
-        const valueType* get() const { return data_ptr.get(); }
-    };
-
-    // 推荐的安全访问方式
-    SafeDataAccess access(const keyType& key) {
-        return SafeDataAccess(getSafePtr(key));
-    }
-
-    SafeDataAccess access(const keyType& key, const keyType& nextKey) {
-        return SafeDataAccess(getSafePtr(key, nextKey));
     }
 };

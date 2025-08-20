@@ -1684,13 +1684,13 @@ ImageAsset ImageDatabase::loadLivp(wstring_view path, const vector<uint8_t>& fil
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(videoFileData.data(), videoFileData.size());
+    auto frames = VideoDecoder::DecodeVideoFrames(videoFileData.data(), videoFileData.size());
 
     if (frames.empty()) {
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    return { ImageFormat::Animated, img, frames, durations,  exifInfo };
+    return { ImageFormat::Animated, img, frames, std::vector<int>(frames.size(), 33),  exifInfo };
 }
 
 // 从xmp获取视频数据大小  https://developer.android.com/media/platform/motion-photo-format?hl=zh-cn
@@ -1761,12 +1761,12 @@ ImageAsset ImageDatabase::loadMotionPhoto(wstring_view path, const vector<uint8_
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    auto [frames, durations] = VideoDecoder::DecodeVideoFrames(fileBuf.data() + fileBuf.size() - videoSize, videoSize);
+    auto frames = VideoDecoder::DecodeVideoFrames(fileBuf.data() + fileBuf.size() - videoSize, videoSize);
     if (frames.empty()) {
         return { ImageFormat::Still, img, {}, {}, exifInfo };
     }
 
-    return { ImageFormat::Animated, img, frames, durations,  exifInfo };
+    return { ImageFormat::Animated, img, frames, std::vector<int>(frames.size(), 33),  exifInfo };
 }
 
 ImageAsset ImageDatabase::loader(const wstring& path) {
