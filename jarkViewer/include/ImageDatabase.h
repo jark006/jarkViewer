@@ -153,25 +153,33 @@ public:
 
     ImageDatabase() = default;
 
-    cv::Mat errorTipsMat, homeMat;
+    cv::Mat errorTipsMatDeep, errorTipsMatLight, homeMatDeep, homeMatLight;
 
-    cv::Mat& getErrorTipsMat() {
-        if (errorTipsMat.empty()) {
+    cv::Mat getErrorTipsMat() {
+        if (errorTipsMatDeep.empty()) {
             auto rc = jarkUtils::GetResource(IDB_PNG_TIPS, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-            errorTipsMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+            auto errorTipsMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+            errorTipsMatLight = errorTipsMat({ 0, 0, 800, 600 }).clone();
+            errorTipsMatDeep = errorTipsMat({ 0, 600, 800, 600 }).clone();
         }
-        return errorTipsMat;
+        return GlobalVar::settingParameter.UI_Mode == 0 ?
+            (GlobalVar::isSystemDarkMode ? errorTipsMatDeep : errorTipsMatLight) :
+            (GlobalVar::settingParameter.UI_Mode == 1 ? errorTipsMatLight : errorTipsMatDeep);
     }
 
 
-    cv::Mat& getHomeMat() {
-        if (homeMat.empty()) {
+    cv::Mat getHomeMat() {
+        if (homeMatDeep.empty()) {
             auto rc = jarkUtils::GetResource(IDB_PNG_HOME, L"PNG");
             cv::Mat imgData(1, (int)rc.size, CV_8UC1, (uint8_t*)rc.ptr);
-            homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+            auto homeMat = cv::imdecode(imgData, cv::IMREAD_UNCHANGED);
+            homeMatLight = homeMat({ 0, 0, 800, 600 }).clone();
+            homeMatDeep = homeMat({ 0, 600, 800, 600 }).clone();
         }
-        return homeMat;
+        return GlobalVar::settingParameter.UI_Mode == 0 ?
+            (GlobalVar::isSystemDarkMode ? homeMatDeep : homeMatLight) :
+            (GlobalVar::settingParameter.UI_Mode == 1 ? homeMatLight : homeMatDeep);
     }
 
 

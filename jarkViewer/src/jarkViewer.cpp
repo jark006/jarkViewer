@@ -105,7 +105,9 @@ struct CurImageParameter {
             zoomCur = zoomTarget;
 
             zoomList = std::vector<int64_t>(ZOOM_LIST.begin(), ZOOM_LIST.end());
-            if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+            if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) || 
+                zoomFitWindow < ZOOM_LIST.front() || 
+                zoomFitWindow > ZOOM_LIST.back())
                 zoomList.push_back(zoomFitWindow);
             std::sort(zoomList.begin(), zoomList.end());
             auto it = std::find(zoomList.begin(), zoomList.end(), zoomTarget);
@@ -133,7 +135,9 @@ struct CurImageParameter {
             std::min(winWidth * ZOOM_BASE / height, winHeight * ZOOM_BASE / width);
 
         zoomList = std::vector<int64_t>(ZOOM_LIST.begin(), ZOOM_LIST.end());
-        if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) || zoomFitWindow < ZOOM_LIST.front() || zoomFitWindow > ZOOM_LIST.back())
+        if (!std::ranges::binary_search(ZOOM_LIST, zoomFitWindow) ||
+            zoomFitWindow < ZOOM_LIST.front() ||
+            zoomFitWindow > ZOOM_LIST.back())
             zoomList.push_back(zoomFitWindow);
         else {
             if (zoomIndex >= zoomList.size())
@@ -239,7 +243,9 @@ public:
 
         jarkUtils::setWindowIcon(m_hWnd, IDI_JARKVIEWER);
 
-        GlobalVar::theme = GlobalVar::settingParameter.UI_Mode == 0 ? (GlobalVar::isSystemDarkMode ? deepTheme : lightTheme) : (GlobalVar::settingParameter.UI_Mode == 1 ? lightTheme : deepTheme);
+        GlobalVar::theme = GlobalVar::settingParameter.UI_Mode == 0 ? 
+            (GlobalVar::isSystemDarkMode ? deepTheme : lightTheme) : 
+            (GlobalVar::settingParameter.UI_Mode == 1 ? lightTheme : deepTheme);
 
         return S_OK;
     }
@@ -664,7 +670,8 @@ public:
             }break;
 
             case 'W': {
-                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? 
+                    curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetY = curPar.slideTarget.y + ((winHeight + winWidth) / 16);
                 newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
                 curPar.slideTarget.y = newTargetY;
@@ -672,7 +679,8 @@ public:
             }break;
 
             case 'S': {
-                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+                const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? 
+                    curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetY = curPar.slideTarget.y - ((winHeight + winWidth) / 16);
                 newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
                 curPar.slideTarget.y = newTargetY;
@@ -680,7 +688,8 @@ public:
             }break;
 
             case 'A': {
-                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? 
+                    curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetX = curPar.slideTarget.x + ((winHeight + winWidth) / 16);
                 newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
                 curPar.slideTarget.x = newTargetX;
@@ -688,7 +697,8 @@ public:
             }break;
 
             case 'D': {
-                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+                const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? 
+                    curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
                 int newTargetX = curPar.slideTarget.x - ((winHeight + winWidth) / 16);
                 newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
                 curPar.slideTarget.x = newTargetX;
@@ -822,7 +832,8 @@ public:
 
         if (srcPx[3] == 255) return srcPx.u32;
 
-        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? GlobalVar::theme.BLACK_GRID_COLOR : GlobalVar::theme.WHITE_GRID_COLOR;
+        intUnion bgPx = ((mainX / BG_GRID_WIDTH + mainY / BG_GRID_WIDTH) & 1) ? 
+            GlobalVar::theme.BLACK_GRID_COLOR : GlobalVar::theme.WHITE_GRID_COLOR;
         if (srcPx[3] == 0) return bgPx.u32;
 
         const int alpha = srcPx[3];
@@ -886,11 +897,14 @@ public:
         // 使用 xxx.ptr() 需注意 xxx.step1() 必须等于 xxx.cols*4
         memset(canvas.ptr(), GlobalVar::theme.BG_COLOR, 4ULL * canvasH * canvasW);
 
-        if (((srcH == 600 and srcW == 800) or (srcH == 800 and srcW == 600)) and *((uint32_t*)srcImg.ptr()) == 0xFF464646) {
+        if (((srcH == 600 and srcW == 800) or (srcH == 800 and srcW == 600)) and 
+            (*((uint32_t*)srcImg.ptr()) == 0xFF464646) or(*((uint32_t*)srcImg.ptr()) == 0xFFEEEEEE)) {
             // 内置的用于提示的图像
         }
         else { // 普通图像  画边框
-            const uint32_t lineColor = GlobalVar::settingParameter.UI_Mode == 0 ? (GlobalVar::isSystemDarkMode ? 0xFF888888 : 0xFF000000) : (GlobalVar::settingParameter.UI_Mode == 1 ? 0xFF000000 : 0xFF888888);
+            const uint32_t lineColor = GlobalVar::settingParameter.UI_Mode == 0 ? 
+                (GlobalVar::isSystemDarkMode ? 0xFF888888 : 0xFF000000) : 
+                (GlobalVar::settingParameter.UI_Mode == 1 ? 0xFF000000 : 0xFF888888);
             if (0 < xStart and xStart < canvasW) {
                 const int yMax = std::min(yEnd + 1, canvasH);
                 for (int y = std::max(yStart - 1, 0); y < yMax; y++) {
@@ -1101,7 +1115,8 @@ public:
 
         cv::Mat rotatedImage;
         cv::warpAffine(image, rotatedImage, rotationMatrix, image.size(),
-            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, 
+            cv::Scalar(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         return rotatedImage;
     }
@@ -1114,7 +1129,8 @@ public:
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
-        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, 
+            cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         cv::Mat srcImg;
         if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
@@ -1145,7 +1161,8 @@ public:
         int maxEdge = (int)std::ceil(std::sqrt(winWidth * winWidth + winHeight * winHeight));
         if (maxEdge < 2)
             return;
-        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
+        auto tmpCanvas = cv::Mat(maxEdge, maxEdge, CV_8UC4, 
+            cv::Vec4b(GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR, GlobalVar::theme.BG_COLOR));
 
         cv::Mat srcImg;
         if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
@@ -1389,7 +1406,14 @@ public:
             const int padding = 10;
             const int areaWidth = (canvas.cols - 2 * padding) / 4;
             cv::Rect rect{ padding, padding, std::max(areaWidth, 400), canvas.rows - 2 * padding };
-            textDrawer.putAlignLeft(canvas, rect, curPar.imageAssetPtr->exifInfo.c_str(), { 255, 255, 255, 255 }); // 长文本 8ms
+
+            const cv::Vec4b colorBlack{ 0, 0, 0, 255 };
+            const cv::Vec4b colorWhite{ 255, 255, 255, 255 };
+            const cv::Vec4b color = GlobalVar::settingParameter.UI_Mode == 0 ? 
+                (GlobalVar::isSystemDarkMode ? colorWhite : colorBlack) :
+                (GlobalVar::settingParameter.UI_Mode == 1 ? colorBlack : colorWhite);
+
+            textDrawer.putAlignLeft(canvas, rect, curPar.imageAssetPtr->exifInfo.c_str(), color); // 长文本 8ms
         }
     }
 
@@ -1628,10 +1652,12 @@ public:
             int newTargetX = curPar.slideTarget.x + operateAction.x;
             int newTargetY = curPar.slideTarget.y + operateAction.y;
 
-            const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+            const int newTargetXMax = ((curPar.rotation == 0 || curPar.rotation == 2) ? 
+                curPar.width : curPar.height) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
             newTargetX = std::clamp(newTargetX, -newTargetXMax, newTargetXMax);
 
-            const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
+            const int newTargetYMax = ((curPar.rotation == 0 or curPar.rotation == 2) ? 
+                curPar.height : curPar.width) * curPar.zoomTarget / 2 / curPar.ZOOM_BASE;
             newTargetY = std::clamp(newTargetY, -newTargetYMax, newTargetYMax);
 
             curPar.slideTarget.x = newTargetX;
