@@ -568,10 +568,19 @@ public:
                 params.saveToFile = false;
 
                 std::thread saveImageThread([](cv::Mat image, PrintParams* params) {
-                    auto path = jarkUtils::saveImageDialog();
-                    if (path.length() > 2) {
-                        ApplyImageAdjustments(image, params->brightness, params->contrast, params->colorMode, params->invertColors);
-                        cv::imwrite(path.c_str(), image);
+                    auto [filePath, isJPG] = jarkUtils::saveImageDialogW(L"保存到图像文件");
+                    if (filePath.empty())
+                        return;
+
+                    ApplyImageAdjustments(image, params->brightness, params->contrast, params->colorMode, params->invertColors);
+
+                    std::vector<uchar> buffer;
+                    if (cv::imencode(isJPG ? ".jpg" : ".png", image, buffer)) {
+                        std::ofstream file(filePath, std::ios::binary);
+                        if (file.is_open()) {
+                            file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+                            file.close();
+                        }
                     }
                     }, image, &params);
                 saveImageThread.detach();

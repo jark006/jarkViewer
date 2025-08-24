@@ -522,38 +522,60 @@ std::wstring jarkUtils::SelectFile(HWND hWnd) {
     }
 }
 
-// 图像另存为 选取文件路径 ANSI/GBK
-std::string jarkUtils::saveImageDialog() {
-    OPENFILENAMEA ofn{};
-    CHAR szFile[260] = { 0 };
+// ext需要带点 ".png"
+static bool isExt(const std::wstring& path, const std::wstring& ext) {
+    if (ext.empty() || path.length() <= ext.length())
+        return false;
 
-    string strTitleAnsi = utf8ToAnsi("保存图像文件");
+    size_t dotPos = path.find_last_of(L'.');
+    if (dotPos == std::wstring::npos || dotPos != (path.length() - ext.length()))
+        return false;
+
+    std::wstring fileExt = path.substr(dotPos);
+    return std::equal(fileExt.begin(), fileExt.end(), ext.begin(),
+        [](wchar_t a, wchar_t b) {
+            return std::tolower(a) == b;
+        });
+}
+
+// 图像另存为 选取文件路径 bool: isJPG
+std::pair<std::wstring, bool> jarkUtils::saveImageDialogW(wstring_view title) {
+    OPENFILENAMEW ofn{};
+    wchar_t szFile[520] = { 0 };
 
     // 配置对话框参数
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = NULL;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = "PNG\0*.png\0JPEG\0*.jpg\0All\0*.*\0";
+    ofn.lpstrFilter = L"JPG图像\0*.jpg\0PNG图像\0*.png\0All\0*.*\0";
     ofn.nFilterIndex = 1;
-    ofn.lpstrTitle = strTitleAnsi.c_str();
+    ofn.lpstrTitle = title.data();
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
     // 显示保存对话框
-    if (!GetSaveFileNameA(&ofn)) {
-        return "";  // 用户取消操作
+    if (!GetSaveFileNameW(&ofn)) {
+        return { L"", false};  // 用户取消操作
     }
 
     // 确保文件扩展名正确
-    std::string filePath = szFile;
-    if (ofn.nFilterIndex == 1 && (!filePath.ends_with(".png") || !filePath.ends_with(".PNG"))) {
-        filePath += ".png";  // 默认添加.png扩展名
+    std::wstring filePath = szFile;
+    bool isJPG = true;
+
+    if (ofn.nFilterIndex == 1) {
+        if (!isExt(filePath, L".jpg") and !isExt(filePath, L".jpeg"))
+            filePath += L".jpg";
     }
-    else if (ofn.nFilterIndex == 2 && (!filePath.ends_with(".jpg") || !filePath.ends_with(".JPG") || !filePath.ends_with(".jpeg") || !filePath.ends_with(".JPEG"))) {
-        filePath += ".jpg";  // 默认添加.jpg扩展名
+    else if (ofn.nFilterIndex == 2) {
+        isJPG = false;
+        if(!isExt(filePath, L".png"))
+            filePath += L".png";
+    }
+    else {
+        filePath += L".jpg";  // 默认添加 .jpg 扩展名
     }
 
-    return filePath;
+    return { filePath, isJPG };
 }
 
 void jarkUtils::openUrl(const wchar_t* url) {

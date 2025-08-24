@@ -414,8 +414,8 @@ public:
     // 选取文件
     static std::wstring SelectFile(HWND hWnd);
 
-    // 图像另存为 选取文件路径 ANSI/GBK
-    static std::string saveImageDialog();
+    // 图像另存为 选取文件路径
+    static std::pair<std::wstring, bool> saveImageDialogW(wstring_view title);
 
     static void openUrl(const wchar_t* url);
 

@@ -21,7 +21,7 @@
 */
 
 std::wstring_view appName = L"JarkViewer";
-std::wstring_view appVersion = L"v1.28";
+std::wstring_view appVersion = L"v1.29Alpha";
 std::wstring_view jarkLink = L"https://github.com/jark006";
 std::wstring_view GithubLink = L"https://github.com/jark006/jarkViewer";
 std::wstring_view BaiduLink = L"https://pan.baidu.com/s/1ka7p__WVw2du3mnOfqWceQ?pwd=6666"; // 密码 6666
@@ -332,17 +332,24 @@ public:
                     operateQueue.push({ ActionENUM::normalFresh });
                 }break;
                 case 3: {
-                    auto path = jarkUtils::saveImageDialog();
-                    if (path.length() <= 2)
+                    auto [filePath, isJPG] = jarkUtils::saveImageDialogW(L"保存当前帧到图像文件");
+                    if (filePath.length() <= 2)
                         break;
 
-                    cv::Mat srcImg;
+                    cv::Mat img;
                     if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
-                        srcImg = curPar.imageAssetPtr->primaryFrame;
+                        img = curPar.imageAssetPtr->primaryFrame;
                     else
-                        srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+                        img = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
 
-                    cv::imwrite(path.c_str(), srcImg);
+                    std::vector<uchar> buffer;
+                    if (cv::imencode(isJPG ? ".jpg" : ".png", img, buffer)) {
+                        std::ofstream file(filePath, std::ios::binary);
+                        if (file.is_open()) {
+                            file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+                            file.close();
+                        }
+                    }
                 }break;
                 }
             }
@@ -600,7 +607,7 @@ public:
 
                 if (IDYES == MessageBoxW(
                     m_hWnd,
-                    L"是否要将此动图或实况图视频的每一帧都单独保存到png图片？",
+                    L"是否要将此动图或实况图视频的每一帧批量保存到png图片文件？",
                     L"保存每一帧到原图文件夹",
                     MB_YESNO | MB_ICONQUESTION
                 )) {
@@ -612,7 +619,7 @@ public:
 
                         for (int i = 0; i < frames.size(); i++) {
                             std::vector<uchar> buffer;
-                            if (cv::imencode(".png", frames[i], buffer, { cv::IMWRITE_PNG_COMPRESSION, 9 })) {
+                            if (cv::imencode(".png", frames[i], buffer)) {
                                 std::ofstream file(std::format(L"{}_{:04d}.png", filePath.substr(0, dotIdx), i + 1), std::ios::binary);
                                 if (file.is_open()) {
                                     file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
