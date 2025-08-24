@@ -147,20 +147,9 @@ private:
             hr = m_pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pCurrentType);
             if (SUCCEEDED(hr)) {
                 if (SUCCEEDED(pCurrentType->GetGUID(MF_MT_SUBTYPE, &m_outputFormat))) {
-                    jarkUtils::log("Successfully set output format: {}", []()->const char* {
-                        if (m_outputFormat == MFVideoFormat_NV12) {
-                            return "NV12";
-                        }
-                        else if (m_outputFormat == MFVideoFormat_YUY2) {
-                            return "YUY2";
-                        }
-                        else if (m_outputFormat == MFVideoFormat_RGB32) {
-                            return "RGB32";
-                        }
-                        else {
-                            return "Unknown format";
-                        }
-                        });
+                    char outputFormat[8] = { 0 };
+                    *((long*)outputFormat) = m_outputFormat.Data1;
+                    jarkUtils::log("Successfully set output format: [{}]", outputFormat);
                 }
                 pCurrentType->Release();
             }

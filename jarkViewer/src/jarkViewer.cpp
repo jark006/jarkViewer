@@ -590,20 +590,42 @@ public:
                     initOpenFile(filePath);
                     operateQueue.push({ ActionENUM::normalFresh });
                 }
+                ctrlIsPressing = false; // 上面弹出窗口导致收不到CTRL键释放的消息
             }break;
 
-            //case 'S': { // Ctrl + S  动图 批量保存每一帧
-            //    if (curPar.imageAssetPtr->format == ImageFormat::Animated) {
-            //        const auto& imgs = curPar.imageAssetPtr->imgList;
-            //        wstring& filePath = imgFileList[curFileIdx];
-            //        auto dotIdx = filePath.find_last_of(L".");
-            //        if (dotIdx == string::npos)
-            //            dotIdx = filePath.size();
-            //        for (int i = 0; i < imgs.size(); i++) {
-            //            cv::imwrite(jarkUtils::wstringToAnsi(std::format(L"{}_{:04}.png", filePath.substr(0, dotIdx), i + 1)), imgs[i].img);
-            //        }
-            //    }
-            //}break;
+            case 'S': { // Ctrl + S  动图或实况图视频 批量保存每一帧到png图片
+                auto& frames = curPar.imageAssetPtr->frames;
+                if (frames.empty())
+                    break;
+
+                if (IDYES == MessageBoxW(
+                    m_hWnd,
+                    L"是否要将此动图或实况图视频的每一帧都单独保存到png图片？",
+                    L"保存每一帧到原图文件夹",
+                    MB_YESNO | MB_ICONQUESTION
+                )) {
+                    std::thread saveThread([](std::wstring filePath, std::shared_ptr<ImageAsset> imageAssetPtr) {
+                        auto& frames = imageAssetPtr->frames;
+                        auto dotIdx = filePath.find_last_of(L".");
+                        if (dotIdx == string::npos)
+                            dotIdx = filePath.size();
+
+                        for (int i = 0; i < frames.size(); i++) {
+                            std::vector<uchar> buffer;
+                            if (cv::imencode(".png", frames[i], buffer, { cv::IMWRITE_PNG_COMPRESSION, 9 })) {
+                                std::ofstream file(std::format(L"{}_{:04d}.png", filePath.substr(0, dotIdx), i + 1), std::ios::binary);
+                                if (file.is_open()) {
+                                    file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+                                    file.close();
+                                }
+                            }
+                        }
+                        }, imgFileList[curFileIdx], curPar.imageAssetPtr);
+
+                    saveThread.detach();
+                }
+                ctrlIsPressing = false; // 上面弹出窗口导致收不到CTRL键释放的消息
+            }break;
 
             case 'C': { // Ctrl + C  复制到剪贴板
                 cv::Mat srcImg;
@@ -613,10 +635,17 @@ public:
                     srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
 
                 jarkUtils::copyImageToClipboard(srcImg);
+                ctrlIsPressing = false;
             }break;
 
             case 'P': { // Ctrl + P 打印
                 operateQueue.push({ ActionENUM::printImage });
+                ctrlIsPressing = false;
+            }break;
+
+            case 'W': { // Ctrl + W 退出
+                operateQueue.push({ ActionENUM::requestExit });
+                ctrlIsPressing = false;
             }break;
             }
         }
@@ -746,11 +775,11 @@ public:
                 operateQueue.push({ ActionENUM::requestExit });
             }break;
 
-            default: {
 #ifndef NDEBUG
+            default: {
                 cout << "OnKeyDown KeyValue: " << (int)keyValue << '\n';
-#endif // NDEBUG
             }break;
+#endif // NDEBUG
             }
         }
     }
