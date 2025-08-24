@@ -27,51 +27,29 @@ struct generalTabRadio {
     int* valuePtr = nullptr;
 };
 
-struct SettingParams {
-    const char* windowsName = nullptr;
-    bool isParamsChange = false;
-    bool reserve1 = false;
-    bool reserve2 = false;
-    bool reserve3 = false;
-
-    int curTabIdx = 0; // 0:常规  1:文件关联  2:帮助  3:关于
-    std::vector<string>* allSupportExt = nullptr;
-    std::set<string>* checkedExt = nullptr;
-    std::vector<generalTabCheckBox>* generalTabCheckBoxList;
-    std::vector<generalTabRadio>* generalTabRadioList;
-};
-
 class Setting {
 private:
     static const int winWidth = 1000;
     static const int winHeight = 800;
     static const int tabHeight = 50;
 
-    const string windowsNameAnsi = jarkUtils::utf8ToAnsi("设置");
-    const char* windowsName = windowsNameAnsi.c_str();
+    static inline string windowsNameAnsi;
+    static inline volatile bool requestExitFlag = false;
 
-    SettingParams params{};
+    static inline std::vector<string> allSupportExt;
+    static inline std::set<string> checkedExt;
+    static inline std::vector<generalTabCheckBox> generalTabCheckBoxList;
+    static inline std::vector<generalTabRadio> generalTabRadioList;
+    static inline std::vector<labelBox> labelList;
+
     TextDrawer textDrawer;
     cv::Mat winCanvas, settingRes, tabTitleMat, helpPage, aboutPage;
 
-    static inline volatile bool requestExitFlag = false;
-    std::vector<string> allSupportExt;
-    std::set<string> checkedExt;
-
-    std::vector<generalTabCheckBox> generalTabCheckBoxList;
-    std::vector<generalTabRadio> generalTabRadioList;
-    std::vector<labelBox> labelList;
-
-    void Init() {
+    void Init(int tabIdx = 0) {
         textDrawer.setSize(24);
+        windowsNameAnsi = jarkUtils::utf8ToAnsi("设置");
         winCanvas = cv::Mat(winHeight, winWidth, CV_8UC4, cv::Scalar(240, 240, 240, 240));
-
-        params.windowsName = windowsNameAnsi.c_str();
-        params.allSupportExt = &allSupportExt;
-        params.checkedExt = &checkedExt;
-        params.generalTabCheckBoxList = &generalTabCheckBoxList;
-        params.generalTabRadioList = &generalTabRadioList;
-
+        curTabIdx = tabIdx;
 
         rcFileInfo rc;
         rc = jarkUtils::GetResource(IDB_PNG_SETTING_RES, L"PNG");
@@ -82,22 +60,28 @@ private:
         aboutPage = settingRes({ 0, 850, 1000, 750 });
 
         // GeneralTab
-        generalTabCheckBoxList = {
-            { {50, 100, 180, 50}, "旋转动画", &GlobalVar::settingParameter.isAllowRotateAnimation },
-            { {50, 150, 180, 50}, "缩放动画", &GlobalVar::settingParameter.isAllowZoomAnimation },
-            { {50, 200, 760, 50}, "平移图像加速 (拖动图像时优化渲染速度，图像会微微失真)", &GlobalVar::settingParameter.isOptimizeSlide },
-        };
-        generalTabRadioList = {
-            {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &GlobalVar::settingParameter.switchImageAnimationMode },
-            {{50, 360, 600, 50}, {"界面主题", "跟随系统", "浅色", "深色"}, &GlobalVar::settingParameter.UI_Mode },
-        };
+        if (generalTabCheckBoxList.empty()) {
+            generalTabCheckBoxList = {
+                { {50, 100, 180, 50}, "旋转动画", &GlobalVar::settingParameter.isAllowRotateAnimation },
+                { {50, 150, 180, 50}, "缩放动画", &GlobalVar::settingParameter.isAllowZoomAnimation },
+                { {50, 200, 760, 50}, "平移图像加速 (拖动图像时优化渲染速度，图像会微微失真)", &GlobalVar::settingParameter.isOptimizeSlide },
+            };
+        }
+        if (generalTabRadioList.empty()) {
+            generalTabRadioList = {
+                {{50, 300, 600, 50}, {"切图动画", "无动画", "上下滑动", "左右滑动"}, &GlobalVar::settingParameter.switchImageAnimationMode },
+                {{50, 360, 600, 50}, {"界面主题", "跟随系统", "浅色", "深色"}, &GlobalVar::settingParameter.UI_Mode },
+            };
+        }
 
         // AssociateTab
-        std::set<wstring> allSupportExtW;
-        allSupportExtW.insert(ImageDatabase::supportExt.begin(), ImageDatabase::supportExt.end());
-        allSupportExtW.insert(ImageDatabase::supportRaw.begin(), ImageDatabase::supportRaw.end());
-        for (const auto& ext : allSupportExtW)
-            allSupportExt.push_back(jarkUtils::wstringToUtf8(ext));
+        if (allSupportExt.empty()) {
+            std::set<wstring> allSupportExtW;
+            allSupportExtW.insert(ImageDatabase::supportExt.begin(), ImageDatabase::supportExt.end());
+            allSupportExtW.insert(ImageDatabase::supportRaw.begin(), ImageDatabase::supportRaw.end());
+            for (const auto& ext : allSupportExtW)
+                allSupportExt.push_back(jarkUtils::wstringToUtf8(ext));
+        }
 
         auto checkedExtVec = jarkUtils::splitString(GlobalVar::settingParameter.extCheckedListStr, ",");
         auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
@@ -107,14 +91,16 @@ private:
     }
 
 public:
-    static inline volatile bool isWorking = false;
     static inline volatile HWND hwnd = nullptr;
+    static inline volatile int curTabIdx = 0; // 0:常规  1:文件关联  2:帮助  3:关于
+    static inline volatile bool isWorking = false;
+    static inline volatile bool isNeedRefreshUI = false;
 
-    Setting() {
+    Setting(int tabIdx = 0) {
         requestExitFlag = false;
         isWorking = true;
 
-        Init();
+        Init(tabIdx);
         windowsMainLoop();
 
         requestExitFlag = false;
@@ -225,44 +211,42 @@ public:
     void refreshAboutTab() {
         jarkUtils::overlayImg(winCanvas, aboutPage, 0, 50);
         textDrawer.putAlignCenter(winCanvas, { 0, 580, 400, 40 }, jarkUtils::wstringToUtf8(appVersion).c_str(), { 186, 38, 60, 255 });
-        textDrawer.putAlignCenter(winCanvas, { 0, 670, 400, 40 }, "[Build time]", {186, 38, 60, 255});
+        textDrawer.putAlignCenter(winCanvas, { 0, 670, 400, 40 }, "[Build time]", { 186, 38, 60, 255 });
         textDrawer.putAlignCenter(winCanvas, { 0, 700, 400, 40 }, jarkUtils::COMPILE_DATE_TIME, { 186, 38, 60, 255 });
     }
 
     void refreshUI() {
         // 绘制标签栏
         cv::rectangle(winCanvas, { 0, 0, winWidth, tabHeight }, cv::Scalar(200, 200, 200, 255), -1);
-        cv::rectangle(winCanvas, { params.curTabIdx * 100, 0, 100, tabHeight }, cv::Scalar(240, 240, 240, 255), -1);
+        cv::rectangle(winCanvas, { curTabIdx * 100, 0, 100, tabHeight }, cv::Scalar(240, 240, 240, 255), -1);
         jarkUtils::overlayImg(winCanvas, tabTitleMat, 0, 0);
 
-        switch (params.curTabIdx) {
+        switch (curTabIdx) {
         case 0:refreshGeneralTab(); break;
         case 1:refreshAssociateTab(); break;
         case 2:refreshHelpTab(); break;
         default:refreshAboutTab(); break;
         }
 
-        cv::imshow(windowsName, winCanvas);
+        cv::imshow(windowsNameAnsi.c_str(), winCanvas);
     }
 
-    static void handleGeneralTab(int event, int x, int y, int flags, void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
-
+    static void handleGeneralTab(int event, int x, int y, int flags) {
         if (event == cv::EVENT_LBUTTONUP) {
-            for (auto& cbox : *params->generalTabCheckBoxList) {
+            for (auto& cbox : generalTabCheckBoxList) {
                 if (isInside(x, y, cbox.rect)) {
                     *cbox.valuePtr = !(*cbox.valuePtr);
-                    params->isParamsChange = true;
+                    isNeedRefreshUI = true;
                 }
             }
 
-            for (auto& radio : *params->generalTabRadioList) {
+            for (auto& radio : generalTabRadioList) {
                 if (isInside(x, y, radio.rect)) {
                     int itemWidth = radio.rect.width / radio.text.size();
                     int clickIdx = (x - radio.rect.x) / itemWidth - 1;
                     if (0 <= clickIdx && clickIdx < radio.text.size() - 1) {
                         *radio.valuePtr = clickIdx;
-                        params->isParamsChange = true;
+                        isNeedRefreshUI = true;
 
                         if (radio.text.front() == "界面主题") {
                             GlobalVar::isNeedUpdateTheme = true;
@@ -273,9 +257,7 @@ public:
         }
     }
 
-    static void finishGeneralTab(void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
-
+    static void finishGeneralTab() {
 
     }
 
@@ -312,8 +294,7 @@ public:
         return manager.ManageFileAssociations(extChecked, extUnchecked);
     }
 
-    static void handleAssociateTab(int event, int x, int y, int flags, void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
+    static void handleAssociateTab(int event, int x, int y, int flags) {
 
         // 需和 refreshAssociateTab 参数保持一致
         const int xOffset = 20, yOffset = 70;
@@ -327,44 +308,44 @@ public:
         };
 
         if (event == cv::EVENT_LBUTTONUP) {
-            int gridIdx = getGridIndex(x, y, xOffset, yOffset, gridWidth, gridHeight, gridNumPerLine, params->allSupportExt->size());
+            int gridIdx = getGridIndex(x, y, xOffset, yOffset, gridWidth, gridHeight, gridNumPerLine, allSupportExt.size());
             if (gridIdx >= 0) {
-                const auto& targetExt = (*params->allSupportExt)[gridIdx];
-                toggle(*(params->checkedExt), targetExt);
-                params->isParamsChange = true;
+                const auto& targetExt = (allSupportExt)[gridIdx];
+                toggle(checkedExt, targetExt);
+                isNeedRefreshUI = true;
             }
             else if (isInside(x, y, btnRectList[0])) { // 恢复默认勾选
-                memcpy(GlobalVar::settingParameter.extCheckedListStr, 
-                    SettingParameter::defaultExtList.data(), 
+                memcpy(GlobalVar::settingParameter.extCheckedListStr,
+                    SettingParameter::defaultExtList.data(),
                     SettingParameter::defaultExtList.length() + 1);
 
                 auto checkedExtVec = jarkUtils::splitString(GlobalVar::settingParameter.extCheckedListStr, ",");
                 auto filtered = checkedExtVec | std::views::filter([](const std::string& s) { return !s.empty(); });
-                params->checkedExt->clear();
+                checkedExt.clear();
                 if (!filtered.empty())
-                    params->checkedExt->insert(filtered.begin(), filtered.end());
+                    checkedExt.insert(filtered.begin(), filtered.end());
 
-                params->isParamsChange = true;
+                isNeedRefreshUI = true;
             }
             else if (isInside(x, y, btnRectList[1])) { // 全选
-                params->checkedExt->insert(params->allSupportExt->begin(), params->allSupportExt->end());
-                params->isParamsChange = true;
+                checkedExt.insert(allSupportExt.begin(), allSupportExt.end());
+                isNeedRefreshUI = true;
             }
             else if (isInside(x, y, btnRectList[2])) { // 全不选
-                params->checkedExt->clear();
-                params->isParamsChange = true;
+                checkedExt.clear();
+                isNeedRefreshUI = true;
             }
             else if (isInside(x, y, btnRectList[3])) { // 立即关联
                 std::vector<std::wstring> checkedExtW, unCheckedExtW;
-                checkedExtW.reserve(params->checkedExt->size());
-                for (const auto& ext : *(params->checkedExt)) {
+                checkedExtW.reserve(checkedExt.size());
+                for (const auto& ext : checkedExt) {
                     checkedExtW.push_back(jarkUtils::utf8ToWstring(ext));
                 }
 
                 std::vector<std::string> uncheckedExt;
-                uncheckedExt.reserve(params->allSupportExt->size() - params->checkedExt->size());
-                for (const auto& ext : *(params->allSupportExt)) {
-                    if (!params->checkedExt->contains(ext))
+                uncheckedExt.reserve(allSupportExt.size() - checkedExt.size());
+                for (const auto& ext : allSupportExt) {
+                    if (!checkedExt.contains(ext))
                         uncheckedExt.push_back(ext);
                 }
 
@@ -384,11 +365,9 @@ public:
 
     }
 
-    static void finishAssociateTab(void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
-
+    static void finishAssociateTab() {
         std::string checkedList;
-        for (const auto& ext : *(params->checkedExt)) {
+        for (const auto& ext : checkedExt) {
             checkedList += ext;
             checkedList += ',';
         }
@@ -404,9 +383,7 @@ public:
         return rect.x < x && x < (rect.x + rect.width) && rect.y < y && y < (rect.y + rect.height);
     }
 
-    static void handleAboutTab(int event, int x, int y, int flags, void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
-
+    static void handleAboutTab(int event, int x, int y, int flags) {
         if (event == cv::EVENT_LBUTTONUP) {
             if (isInside(x, y, { 440, 100, 300, 120 })) {
                 jarkUtils::openUrl(jarkLink.data());
@@ -423,18 +400,16 @@ public:
         }
     }
 
-    static void mouseCallback(int event, int x, int y, int flags, void* userdata) {
-        SettingParams* params = static_cast<SettingParams*>(userdata);
-
+    static void mouseCallback(int event, int x, int y, int flags, void* userData) {
         if (event == cv::EVENT_LBUTTONUP && y < 50) {
             int newTabIdx = x / 100;
-            if (newTabIdx <= 3 && newTabIdx != params->curTabIdx) {
-                params->isParamsChange = true;
-                switch (params->curTabIdx) {
-                case 0: finishGeneralTab(userdata); break;
-                case 1: finishAssociateTab(userdata); break;
+            if (newTabIdx <= 3 && newTabIdx != curTabIdx) {
+                isNeedRefreshUI = true;
+                switch (curTabIdx) {
+                case 0: finishGeneralTab(); break;
+                case 1: finishAssociateTab(); break;
                 }
-                params->curTabIdx = newTabIdx;
+                curTabIdx = newTabIdx;
             }
         }
 
@@ -443,21 +418,21 @@ public:
             return;
         }
 
-        switch (params->curTabIdx) {
-        case 0:handleGeneralTab(event, x, y, flags, userdata); break;
-        case 1:handleAssociateTab(event, x, y, flags, userdata); break;
-        case 3:handleAboutTab(event, x, y, flags, userdata); break;
+        switch (curTabIdx) {
+        case 0:handleGeneralTab(event, x, y, flags); break;
+        case 1:handleAssociateTab(event, x, y, flags); break;
+        case 3:handleAboutTab(event, x, y, flags); break;
         }
     }
 
     void windowsMainLoop() {
-        cv::namedWindow(windowsName, cv::WINDOW_AUTOSIZE);
-        cv::resizeWindow(windowsName, winWidth, winHeight);
-        cv::setMouseCallback(windowsName, mouseCallback, &params);
+        cv::namedWindow(windowsNameAnsi, cv::WINDOW_AUTOSIZE);
+        cv::resizeWindow(windowsNameAnsi, winWidth, winHeight);
+        cv::setMouseCallback(windowsNameAnsi, mouseCallback, nullptr);
 
         refreshUI();
 
-        hwnd = FindWindowA(NULL, windowsName);
+        hwnd = FindWindowA(NULL, windowsNameAnsi.c_str());
         if (hwnd) {
             jarkUtils::disableWindowResize(hwnd);
 
@@ -470,23 +445,23 @@ public:
             DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE, &themeMode, sizeof(BOOL));
         }
 
-        while (cv::getWindowProperty(windowsName, cv::WND_PROP_VISIBLE) > 0) {
-            if (params.isParamsChange) {
-                params.isParamsChange = false;
+        while (cv::getWindowProperty(windowsNameAnsi, cv::WND_PROP_VISIBLE) > 0) {
+            if (isNeedRefreshUI) {
+                isNeedRefreshUI = false;
                 refreshUI();
             }
 
             if (cv::waitKey(10) == 27) // ESC
                 requestExit();
             if (requestExitFlag) {
-                cv::destroyWindow(params.windowsName);
+                cv::destroyWindow(windowsNameAnsi);
                 break;
             }
         }
 
-        switch (params.curTabIdx) {
-        case 0: finishGeneralTab(&params); break;
-        case 1: finishAssociateTab(&params); break;
+        switch (curTabIdx) {
+        case 0: finishGeneralTab(); break;
+        case 1: finishAssociateTab(); break;
         }
     }
 };
