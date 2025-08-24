@@ -240,7 +240,7 @@ struct ImageAsset {
 };
 
 enum class ActionENUM:int64_t {
-    none = 0, newSize, slide, preImg, nextImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requestExit, normalFresh,
+    none = 0, newSize, slide, preImg, nextImg, firstImg, finalImg, zoomIn, zoomOut, toggleExif, toggleFullScreen, requestExit, normalFresh,
     rotateLeft, rotateRight, printImage, setting,
 };
 
@@ -257,10 +257,12 @@ struct Action {
     union {
         int x;
         int width;
+        int value1;
     };
     union {
         int y;
         int height;
+        int value2;
     };
 };
 

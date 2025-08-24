@@ -384,7 +384,7 @@ public:
             else if (cursorPos == CursorPos::leftDown)
                 operateQueue.push({ ActionENUM::printImage });
             else if (cursorPos == CursorPos::rightDown)
-                operateQueue.push({ ActionENUM::setting });
+                operateQueue.push({ ActionENUM::setting, 0 });
             else if (cursorPos == CursorPos::centerTop) {
                 handleAnimationControl(x, y);
             }
@@ -686,6 +686,7 @@ public:
                 jarkUtils::copyToClipboard(jarkUtils::utf8ToWstring(curPar.imageAssetPtr->exifInfo));
             }break;
 
+            case 'F':
             case VK_F11: {
                 jarkUtils::ToggleFullScreen(m_hWnd);
             }break;
@@ -747,6 +748,19 @@ public:
                 operateQueue.push({ ActionENUM::preImg });
             }break;
 
+            case VK_NEXT:
+            case VK_RIGHT: {
+                operateQueue.push({ ActionENUM::nextImg });
+            }break;
+
+            case VK_HOME: {
+                operateQueue.push({ ActionENUM::firstImg });
+            }break;
+
+            case VK_END: {
+                operateQueue.push({ ActionENUM::finalImg });
+            }break;
+
             case VK_SPACE: {
                 if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
                     curPar.imageAssetPtr->format = ImageFormat::Animated;
@@ -762,13 +776,17 @@ public:
                 }
             }break;
 
-            case VK_NEXT:
-            case VK_RIGHT: {
-                operateQueue.push({ ActionENUM::nextImg });
-            }break;
-
+            case VK_TAB:
             case 'I': {
                 operateQueue.push({ ActionENUM::toggleExif });
+            }break;
+
+            case VK_F1: {
+                operateQueue.push({ ActionENUM::setting, 2 });
+            }break;
+
+            case VK_F12: {
+                operateQueue.push({ ActionENUM::setting, 0 });
             }break;
 
             case VK_ESCAPE: { // ESC
@@ -1557,13 +1575,15 @@ public:
 
         if (operateAction.action == ActionENUM::setting) {
             if (Setting::isWorking) {
+                Setting::curTabIdx = operateAction.value1;
+                Setting::isNeedRefreshUI = true;
                 jarkUtils::activateWindow(Setting::hwnd);
             }
             else {
                 Printer::requestExit(); // OpenCV窗口暂时不能同时共存
-                std::thread settingThread([]() {
-                    Setting setting;
-                    });
+                std::thread settingThread([](int tabIdx) {
+                    Setting setting(tabIdx);
+                    }, operateAction.value1);
                 settingThread.detach();
             }
             return;
@@ -1653,6 +1673,72 @@ public:
 
             if (++curFileIdx >= (int)imgFileList.size())
                 curFileIdx = 0;
+            curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
+            curPar.Init(winWidth, winHeight);
+
+            if (GlobalVar::settingParameter.switchImageAnimationMode == 1)
+                mainCanvasSlideToNextAnimationVertical();   // 竖直滑动
+            else if (GlobalVar::settingParameter.switchImageAnimationMode == 2)
+                mainCanvasSlideToNextAnimationHorizontal(); // 水平滑动
+
+            lastTimestamp = std::chrono::steady_clock::now();
+            delayRemain = 0;
+        } break;
+
+        case ActionENUM::firstImg: {
+            if (imgFileList.size() == 1 or curFileIdx == 0)
+                break;
+
+            if (GlobalVar::settingParameter.switchImageAnimationMode) {// 开动画时才需要
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
+                drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+                drawExifInfo(mainCanvas);
+            }
+
+            // 播放过的实况图，状态会变成静态图，切走前恢复一下
+            if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
+                curPar.imageAssetPtr->format = ImageFormat::Animated;
+            }
+
+            curFileIdx = 0;
+            curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + imgFileList.size() - 1) % imgFileList.size()]);
+            curPar.Init(winWidth, winHeight);
+
+            if (GlobalVar::settingParameter.switchImageAnimationMode == 1)
+                mainCanvasSlideToPreAnimationVertical();      // 竖直滑动
+            else if (GlobalVar::settingParameter.switchImageAnimationMode == 2)
+                mainCanvasSlideToPreAnimationHorizontal();    // 水平滑动
+
+            lastTimestamp = std::chrono::steady_clock::now();
+            delayRemain = 0;
+        } break;
+
+        case ActionENUM::finalImg: {
+            if (imgFileList.size() == 1 or curFileIdx == ((int)imgFileList.size() - 1))
+                break;
+
+            if (GlobalVar::settingParameter.switchImageAnimationMode) {// 开动画时才需要
+                cv::Mat srcImg;
+                if (curPar.imageAssetPtr->format == ImageFormat::None || curPar.imageAssetPtr->format == ImageFormat::Still)
+                    srcImg = curPar.imageAssetPtr->primaryFrame;
+                else
+                    srcImg = curPar.imageAssetPtr->frames[curPar.curFrameIdx];
+
+                drawCanvas(srcImg, mainCanvas); //先更新无额外按钮UI的原图
+                drawExifInfo(mainCanvas);
+            }
+
+            // 播放过的实况图，状态会变成静态图，切走前恢复一下
+            if (curPar.imageAssetPtr->format == ImageFormat::Still && !curPar.imageAssetPtr->frames.empty()) {
+                curPar.imageAssetPtr->format = ImageFormat::Animated;
+            }
+
+            curFileIdx = (int)imgFileList.size() - 1;
             curPar.imageAssetPtr = imgDB.getSafePtr(imgFileList[curFileIdx], imgFileList[(curFileIdx + 1) % imgFileList.size()]);
             curPar.Init(winWidth, winHeight);
 
