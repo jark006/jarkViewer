@@ -370,7 +370,8 @@ private:
 
         ImGui::SetNextItemWidth(120.0f * scale);
         int start = options_.renameStart;
-        if (ImGui::InputInt(ui(kStrStart), &start))
+        // 标签尾巴带 "##renameStart"：ID 与显示文本解耦，换语言时也不会与别的控件撞 ID
+        if (ImGui::InputInt((std::string(ui(kStrStartNumber)) + "##renameStart").c_str(), &start))
             options_.renameStart = (std::max)(0, start);
 
         ImGui::SameLine();
@@ -557,6 +558,11 @@ private:
     static constexpr uint32_t kStrPreview = 146;      // 预览
     static constexpr uint32_t kStrLoading = 147;      // 读取中...
     static constexpr uint32_t kStrUnreadableImage = 148; // 无法读取该图像
+
+    // 重命名任务（窄表新增条目，追加在表尾）
+    // 序号起点**不能**借用 kStrStart（70 =「开始处理」）：ImGui 的控件 ID 由标签文本派生，
+    // 两者同标签就同 ID，输入框与「开始处理」按钮会互相抢焦点/命中。
+    static constexpr uint32_t kStrStartNumber = 194;  // 起始序号
 
     bool visible_ = false;
     bool focusRequested_ = false;
