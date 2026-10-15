@@ -16,6 +16,7 @@
 #        （漏收录的文件在 VS 里根本看不到，重命名的旧条目会指向不存在的文件）
 #   12.  所有 .ps1 带 UTF-8 BOM 且含 PowerShell 7 守卫（无 BOM 时 5.1 会在跑到守卫前就语法报错）
 #   13.  两个工程的每个配置都开了多处理器编译 /MP（丢了它全量重编退回单核，且不会有任何报错）
+#   14.  视频解码是"先试硬解（D3D11VA）、不行再回退软解"（硬解段被删掉只是静默变慢，不报错）
 #
 # 只支持 PowerShell 7（pwsh）：下面的守卫会拒绝 Windows PowerShell 5.1，并提示怎么装 pwsh。
 # 本文件必须保留 UTF-8 BOM——5.1 会把无 BOM 的 .ps1 按 ANSI 解码，脚本在跑到守卫之前就已经
@@ -320,6 +321,23 @@ foreach ($project in @("JarkViewer/JarkViewer.vcxproj", "JarkThumbnailProvider/J
 }
 Report ($mpMissing.Count -eq 0) "两个工程的每个配置都开了多处理器编译 /MP"
 $mpMissing | ForEach-Object { Write-Host "    $_" }
+
+# 14. MediaDecoder 的视频解码必须是"先试硬解（D3D11VA）、不行再回退软解"。
+#     硬解那一段被删掉、被绕过、或者顺序反过来（先软解就 return 了），运行时不会有任何报错，
+#     只是 CPU 占用悄悄涨回去、4K/HEVC 又开始卡——跟第 13 项的 /MP 同一类失效方式，所以钉住：
+#     三件套（挑硬解档 / 建设备 / 挂到解码上下文上）+ 运行期回退 + 软解兜底都在，且硬解排在前面。
+$decoderCpp = Read-Source "JarkViewer/src/MediaDecoder.cpp"
+$hwConfigAnchor = $decoderCpp.IndexOf("AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX")
+$hwDeviceAnchor = $decoderCpp.IndexOf("av_hwdevice_ctx_create")
+$hwAttachAnchor = $decoderCpp.IndexOf("context->hw_device_ctx = av_buffer_ref")
+$hwFormatAnchor = $decoderCpp.IndexOf("context->get_format = &")
+$hwFallbackAnchor = $decoderCpp.IndexOf("switchVideoToSoftwareDecode")
+$softOpenAnchor = $decoderCpp.IndexOf("context->thread_count = 8")
+Report (($hwConfigAnchor -ge 0) -and ($hwDeviceAnchor -ge 0) -and ($hwAttachAnchor -ge 0) -and
+        ($hwFormatAnchor -ge 0) -and ($hwFallbackAnchor -ge 0) -and ($softOpenAnchor -ge 0)) `
+    "视频解码保留硬解三件套 + 运行期回退 + 软解兜底"
+Report (($hwAttachAnchor -ge 0) -and ($softOpenAnchor -ge 0) -and ($hwAttachAnchor -lt $softOpenAnchor)) `
+    "硬解排在软解之前（软解是回退，不是主路）"
 
 Write-Host ""
 if ($script:failed) {

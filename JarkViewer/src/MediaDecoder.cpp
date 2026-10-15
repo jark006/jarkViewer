@@ -20,6 +20,7 @@ extern "C" {
 #include <libavutil/error.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
+#include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
@@ -30,6 +31,11 @@ namespace {
     constexpr int kIoBufferSize = 4096;
     constexpr size_t kMaxVideoFrameBytes = 1ull << 30;   // 单帧 1GiB 上限
     constexpr int kMaxAudioSamplesPerChunk = 1 << 18;    // 单批样本上限（约 5 秒 48kHz 立体声）
+
+    // 视频硬件解码只用 D3D11VA：Win10/11 的标准接口，NVIDIA/AMD/Intel 通用，静态库里
+    // h264/hevc/av1/vp9/mpeg2/vc1/wmv3 都有对应的硬解器；DXVA2/NVDEC/QSV/AMF 各有各的坑，
+    // 且对本工程（解码后还要回读成 cv::Mat）没有额外收益，不做多后端优先级链。
+    constexpr AVHWDeviceType kHwDeviceType = AV_HWDEVICE_TYPE_D3D11VA;
 
     void initFfmpegOnce() {
         static std::once_flag flag;
@@ -99,11 +105,85 @@ namespace {
         }
     };
 
+    struct HwDeviceDeleter {
+        void operator()(AVBufferRef* ref) const {
+            if (ref)
+                av_buffer_unref(&ref);
+        }
+    };
+
     using FormatContextPtr = std::unique_ptr<AVFormatContext, FormatContextDeleter>;
     using CodecContextPtr = std::unique_ptr<AVCodecContext, CodecContextDeleter>;
     using FramePtr = std::unique_ptr<AVFrame, FrameDeleter>;
     using PacketPtr = std::unique_ptr<AVPacket, PacketDeleter>;
     using AvioContextPtr = std::unique_ptr<AVIOContext, AvioContextDeleter>;
+    using HwDevicePtr = std::unique_ptr<AVBufferRef, HwDeviceDeleter>;
+
+    // 进程内共享的 D3D11VA 设备：一个进程里同时可能有多个 MediaDecoder（播放器的视频/音频两路、
+    // 预读线程、缩略图后台解码线程），每开一个就 D3D11CreateDevice 一次既慢又白占显存。
+    // 设备本身带锁（AVD3D11VADeviceContext 的 lock/unlock 由 ffmpeg 内部设成互斥量，保护的正是
+    // device_context 与它内部那张回读用的暂存纹理），多个解码线程共用一个设备是它支持的用法。
+    AVBufferRef* acquireSharedHwDevice() {
+        static std::mutex mutex;
+        static AVBufferRef* shared = nullptr;
+        static bool failureLogged = false;
+
+        const std::lock_guard<std::mutex> lock(mutex);
+        if (shared)
+            return av_buffer_ref(shared);
+
+        // 只缓存成功、不缓存失败：远程桌面重连、驱动复位之后还能自己恢复
+        // （每开一个视频多试一次 D3D11CreateDevice，没有显卡的机器上是几毫秒的事）
+        const int result = av_hwdevice_ctx_create(&shared, kHwDeviceType, nullptr, nullptr, 0);
+        if (result < 0) {
+            shared = nullptr;
+            if (!failureLogged) {   // 日志只打一次，免得批量开视频时刷屏
+                failureLogged = true;
+                JARK_LOG("D3D11VA 设备不可用（{}），视频一律软件解码", ffmpegError(result));
+            }
+            return nullptr;
+        }
+        // 分发的是引用：调用方各持自己的一份、析构时各自 unref；
+        // 共享器里那一份故意不释放，随进程退出一起回收（少一处静态析构顺序的坑）
+        return av_buffer_ref(shared);
+    }
+
+    // 设置页的「视频硬件解码」是取反存储的：旧设置文件里这一字节是 0，默认就是优先硬解
+    bool hardwareDecodeAllowed(const MediaDecoder::VideoDecodeMode mode) {
+        if (mode == MediaDecoder::VideoDecodeMode::SoftwareOnly)
+            return false;
+        return !GlobalVar::settingParameter.disableVideoHardwareDecode;
+    }
+
+    // "J 格式"（yuvj*）的语义就是全范围（JPEG/PC range）：libswscale 自己也是这么认的
+    // （swscale 内部的 handle_jpeg()）。硬解回读出来的帧是 NV12/P010，这个语义在回读时
+    // 丢掉了（实测 cpuFrame 的 color_range 变成 UNSPECIFIED），必须手工补，
+    // 否则全范围片源会被按有限范围解释、整幅发灰（iPhone 拍的 yuvj420p 实测平均差 10 个色阶）。
+    bool isFullRangeFormat(AVPixelFormat format) {
+        switch (format) {
+        case AV_PIX_FMT_YUVJ420P:
+        case AV_PIX_FMT_YUVJ422P:
+        case AV_PIX_FMT_YUVJ440P:
+        case AV_PIX_FMT_YUVJ444P:
+        case AV_PIX_FMT_YUVJ411P:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // 该解码器有没有 D3D11VA 的 HW_DEVICE_CTX 档。只认这一种挂法：HW_FRAMES_CTX 要自己建帧池，
+    // 对"解完还得回读成 cv::Mat"的用法没有意义。没有的（vp8/mpeg4…）就该老老实实软解。
+    const AVCodecHWConfig* findD3D11VAConfig(const AVCodec* codec) {
+        for (int index = 0;; ++index) {
+            const AVCodecHWConfig* config = avcodec_get_hw_config(codec, index);
+            if (!config)
+                return nullptr;
+            if (config->device_type == kHwDeviceType &&
+                (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX))
+                return config;
+        }
+    }
 
     // 自定义 AVIO：直接在内存缓冲区上读取
     struct BufferContext {
@@ -184,7 +264,19 @@ struct MediaDecoder::Impl {
     int videoStreamIndex = -1;
     int audioStreamIndex = -1;
 
+    // —— 视频硬件解码（D3D11VA）状态，见 openStream() / switchVideoToSoftwareDecode() ——
+    HwDevicePtr hwDevice;                            // 进程内共享设备的本实例引用
+    AVPixelFormat hwPixelFormat = AV_PIX_FMT_NONE;   // 本次打开要挑的硬解像素格式（get_format 用）
+    bool hardwareSupported = false;                  // 该编码器声明了 D3D11VA 的 HW_DEVICE_CTX 配置
+    bool hardwareRequested = false;                  // 挂上设备并打开了，运行期回退只做一次就是靠它
+    bool hardwareDeclined = false;                   // 挂上了设备，但解码器为这一档内容放弃了硬解
+    bool hardwareDecoding = false;                   // 真的解出过硬解帧
+    bool hardwareFallback = false;                   // 试过硬解但运行期回退到了软解
+    int64_t decodedVideoFrames = 0;                  // 收到过的视频帧数（含被丢掉的，用于判断"一帧都没有"）
+    bool deliveredVideoFrame = false;                // 已对外交出过视频帧：之后不许再回退重来
+
     FramePtr decodeFrame{ av_frame_alloc() };
+    FramePtr cpuFrame{ av_frame_alloc() };           // 硬解帧回读到内存后的落脚处
     FramePtr rgbFrame{ av_frame_alloc() };
     PacketPtr packet{ av_packet_alloc() };
 
@@ -194,6 +286,7 @@ struct MediaDecoder::Impl {
     int swsDstWidth = 0;
     int swsDstHeight = 0;
     int swsSrcFormat = -1;
+    bool swsSrcFullRange = false;   // 源是全范围（J 格式）：要在 sws 上下文上手工声明
 
     std::unique_ptr<SwrContext, SwrContextDeleter> swrContext;
     int swrInputRate = 0;
@@ -205,15 +298,177 @@ struct MediaDecoder::Impl {
     bool demuxEof = false;
     bool videoFlushSent = false;
     bool audioFlushSent = false;
-    int64_t skipBeforeMs = -1;   // 精确落点：早于它的视频帧不转换、直接丢
+    int64_t skipBeforeMs = -1;   // 精确落点：早于它的视频帧不回读、不转换、直接丢
     std::optional<int64_t> lastAudioPtsMs;
+
+    // 打开一路解码器：视频那一路按需优先挂 D3D11VA 硬解，其余一律软解
+    CodecContextPtr openStream(int streamIndex, bool enableHardware);
+
+    // 运行期回退：硬解一帧都解不出来时，把视频这一路换成软件解码重开
+    bool switchVideoToSoftwareDecode();
+
+    // avcodec 的 get_format 回调（挑硬解像素格式），context->opaque 指回本对象
+    static AVPixelFormat selectHardwareFormat(AVCodecContext* context, const enum AVPixelFormat* formats);
 };
 
 MediaDecoder::MediaDecoder() : impl_(std::make_unique<Impl>()) {}
 
 MediaDecoder::~MediaDecoder() = default;
 
-std::unique_ptr<MediaDecoder> MediaDecoder::open(std::span<const uint8_t> data, StreamFilter filter) {
+// avcodec 的 get_format 回调。挑硬解格式；挑不中就在这个上下文里继续软解
+// （挑不中的两种情况：解码器判断这一档内容不支持硬解，比如 H.264 4:4:4；或者硬解格式
+// 初始化失败后回调被重新调用）。
+//
+// 回调契约只允许返回 formats 里的某个格式或 AV_PIX_FMT_NONE，**别顺手返回 formats[0]**：
+// 清单里硬件格式排在前面、软件格式排在最后（libavcodec 就是这么摆的——avctx->sw_pix_fmt
+// 取的就是最后那个），返回第一个等于让它去初始化一个我们没配过的硬解档（DXVA2_VLD、
+// VULKAN…），只会换来一串错误日志再被剔掉重试。照 ffmpeg 自己那份 get_format 的做法：
+// 往后走，遇到第一个**没有 HWACCEL 标志**的格式就用它。
+AVPixelFormat MediaDecoder::Impl::selectHardwareFormat(AVCodecContext* context, const enum AVPixelFormat* formats) {
+    auto* self = static_cast<Impl*>(context->opaque);
+    if (self) {
+        for (const AVPixelFormat* format = formats; *format != AV_PIX_FMT_NONE; ++format) {
+            if (*format == self->hwPixelFormat)
+                return *format;
+        }
+        // 走到这儿是"编码器有硬解档、但这一档内容它不肯用硬解"。只有上下文里**真挂着设备**
+        // 才算——没挂上设备（将来有人把挂设备那一步改坏了）不算"解码器回绝"，
+        // 得让自检（--probe --hw-test）把它当异常报出来
+        if (context->hw_device_ctx)
+            self->hardwareDeclined = true;
+    }
+
+    for (const AVPixelFormat* format = formats; *format != AV_PIX_FMT_NONE; ++format) {
+        const AVPixFmtDescriptor* descriptor = av_pix_fmt_desc_get(*format);
+        if (descriptor && !(descriptor->flags & AV_PIX_FMT_FLAG_HWACCEL))
+            return *format;
+    }
+    return AV_PIX_FMT_NONE;   // 一个软件格式都没有：只能失败（调用方据此回退软解重开）
+}
+
+// 打开一路解码器：视频那一路 enableHardware 为真时**先试硬解**（D3D11VA），
+// 设备不可用 / 编码器没声明 D3D11VA（vp8、mpeg4…）/ 挂上设备后打不开，都退回同一编码器的软解。
+// 两条路解出来的是同一套 YUV 帧，后面的缩放与旋转完全一致（`--probe --hw-test` 盯着这件事）。
+CodecContextPtr MediaDecoder::Impl::openStream(int streamIndex, bool enableHardware) {
+    if (streamIndex < 0)
+        return nullptr;
+
+    AVStream* stream = formatContext->streams[streamIndex];
+    const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    if (!codec) {
+        JARK_LOG("no decoder for codec id {}", static_cast<int>(stream->codecpar->codec_id));
+        return nullptr;
+    }
+
+    const auto fillParameters = [&](AVCodecContext* context) {
+        const int copied = avcodec_parameters_to_context(context, stream->codecpar);
+        if (copied < 0)
+            JARK_LOG("avcodec_parameters_to_context failed: {}", ffmpegError(copied));
+        return copied >= 0;
+    };
+
+    // 1) 硬件优先。"这个编码器有没有 D3D11VA 档"与"这回要不要用"是两件事，一律先问清楚——
+    //    自检要靠它区分"本来就没这个能力"与"有能力却没挂上"。音频那一路没有硬解档，不查。
+    const bool isVideoStream = streamIndex == videoStreamIndex;
+    const AVCodecHWConfig* hwConfig = isVideoStream ? findD3D11VAConfig(codec) : nullptr;
+    const bool useHardware = enableHardware && hwConfig && hwDevice;
+    if (isVideoStream) {
+        hardwareSupported = hwConfig != nullptr;
+        hardwareRequested = useHardware;
+        hardwareDecoding = false;
+    }
+
+    if (useHardware) {
+        CodecContextPtr context(avcodec_alloc_context3(codec));
+        if (context && fillParameters(context.get())) {
+            context->opaque = this;
+            context->get_format = &Impl::selectHardwareFormat;
+            context->hw_device_ctx = av_buffer_ref(hwDevice.get());
+            hwPixelFormat = hwConfig->pix_fmt;
+            // 硬解这一段必须单线程，**别**沿用下面软解的 8（更别留给"自动"，那会按 CPU 核数
+            // 开出十几条帧线程）。FFmpeg 允许帧线程与 hwaccel 并存，但 d3d11va 的 hwaccel
+            // 没有 HWACCEL_CAP_THREAD_SAFE，所有帧线程要抢同一把锁串行跑；而每条线程各有一份
+            // 子上下文、各自建一个硬解帧池（池大小还随线程数线性上涨），4K 上能吃掉好几 GB 显存，
+            // 还会引入"每线程多一帧"的解码延迟——和精确 seek 落点、拖动预览只交一帧的语义直接打架。
+            // 硬解本来就是 GPU 内部流水，单线程喂它不会掉吞吐
+            context->thread_count = 1;
+            const int opened = avcodec_open2(context.get(), codec, nullptr);
+            if (opened >= 0)
+                return context;
+
+            // 硬解这一趟没成：运行期回退也没意义了（没有硬解可退），直接落到下面那条路
+            hardwareRequested = false;
+            JARK_LOG("D3D11VA 硬解打不开，改用软件解码: {} {}", codec->name, ffmpegError(opened));
+        }
+        hwPixelFormat = AV_PIX_FMT_NONE;   // 别让后面那一趟还惦记着硬解格式
+    }
+
+    // 2) 软件解码（原本这条路，一行没改）
+    CodecContextPtr context(avcodec_alloc_context3(codec));
+    if (!context)
+        return nullptr;
+
+    if (!fillParameters(context.get()))
+        return nullptr;
+
+    context->thread_count = 8;
+    if (const int opened = avcodec_open2(context.get(), codec, nullptr); opened < 0) {
+        // 别在这里静默失败：帧线程上下文初始化出错时 avcodec_open2 会返回错误，
+        // 少了这行日志就只能看到"没有可用的解码器"，看不出原因
+        JARK_LOG("avcodec_open2({}) failed: {}", codec->name, ffmpegError(opened));
+        return nullptr;
+    }
+
+    return context;
+}
+
+// 运行期回退：硬解挂上了、却一帧都解不出来。驱动不支持这一档 profile/分辨率时就是这种表现——
+// avcodec_open2 照样成功，之后每一帧的 DecoderBeginFrame 都失败。把视频这一路换成软解重开。
+// 只允许在**还没对外交出过视频帧**时做：已经送出去的帧收不回来，半路重来会让播放端拿到重复的
+// 时间戳（那比一次回退失败更糟）。音频不算在内：见下。
+bool MediaDecoder::Impl::switchVideoToSoftwareDecode() {
+    // （"只挡视频帧"是有意的：真正播给用户听的都是各自独立的 VideoOnly / AudioOnly 实例，
+    //   视频那一路本来就不会产出音频；会同时拿到声画的是取实况首帧、预解帧、--probe 这类
+    //   Both 实例，它们只要视频帧，回退时重复吐一小段音频没有任何影响。）
+    if (!hardwareRequested || !hwDevice || videoStreamIndex < 0 || deliveredVideoFrame)
+        return false;
+
+    // 先落标记：软解也打不开时不再反复重试（一次回退不成就一路软解跑到底）
+    hardwareRequested = false;
+    hardwareFallback = true;
+    hardwareDecoding = false;
+
+    CodecContextPtr software = openStream(videoStreamIndex, false);
+    if (!software) {
+        JARK_LOG("硬解解不出画面，软件解码器也打不开，视频这一路放弃");
+        return false;
+    }
+
+    videoCodec = std::move(software);
+    // sws 缓存按像素格式判等（硬解回读是 nv12/p010、软解是 yuv420p），格式一变它自己会重建；
+    // 这里只要把上一帧回读的落脚处清掉，别让它继续持有一块没人用的内存
+    if (cpuFrame)
+        av_frame_unref(cpuFrame.get());
+
+    JARK_LOG("硬解解不出画面，视频解码已回退软件解码");
+    return true;
+}
+
+// 硬解解不出来时换成软件解码、解复用器与两个解码器一起退回落点重来。
+// 退到 **skipBeforeMs**（精确落点那条线）而不是 0：之前若有过精确 seek，播放端还在
+// 等着落在那个位置，回到 0 一路丢上去也能对，但要白解一大段。skipBeforeMs 为 -1
+// （没在等落点，就是普通开播/拖动预览）才退回文件开头。
+// 必须由持有本解码器的那一个线程调用（与 seek 同一份约束）。
+bool MediaDecoder::fallbackToSoftwareDecode() {
+    if (!impl_->switchVideoToSoftwareDecode())
+        return false;
+
+    const int64_t rewindMs = impl_->skipBeforeMs >= 0 ? impl_->skipBeforeMs : 0;
+    return seek(rewindMs);
+}
+
+std::unique_ptr<MediaDecoder> MediaDecoder::open(std::span<const uint8_t> data, StreamFilter filter,
+    VideoDecodeMode videoDecode) {
     if (data.empty() || data.size() > static_cast<size_t>((std::numeric_limits<int64_t>::max)()))
         return nullptr;
 
@@ -266,39 +521,13 @@ std::unique_ptr<MediaDecoder> MediaDecoder::open(std::span<const uint8_t> data, 
     else if (filter == StreamFilter::AudioOnly)
         impl.videoStreamIndex = -1;
 
-    const auto openCodec = [&](int streamIndex) -> CodecContextPtr {
-        if (streamIndex < 0)
-            return nullptr;
+    // 视频这一路按需取一份共享的硬解设备（音频没有 D3D11VA 这一档，永远软解；
+    // 纯音频文件连设备都不该去要——那是几十 MB 驱动内存加一次初始化，白花的）
+    if (impl.videoStreamIndex >= 0 && hardwareDecodeAllowed(videoDecode))
+        impl.hwDevice.reset(acquireSharedHwDevice());
 
-        AVStream* stream = impl.formatContext->streams[streamIndex];
-        const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
-        if (!codec) {
-            JARK_LOG("no decoder for codec id {}", static_cast<int>(stream->codecpar->codec_id));
-            return nullptr;
-        }
-
-        CodecContextPtr context(avcodec_alloc_context3(codec));
-        if (!context)
-            return nullptr;
-
-        if (const int copied = avcodec_parameters_to_context(context.get(), stream->codecpar); copied < 0) {
-            JARK_LOG("avcodec_parameters_to_context failed: {}", ffmpegError(copied));
-            return nullptr;
-        }
-
-        context->thread_count = 8;
-        if (const int opened = avcodec_open2(context.get(), codec, nullptr); opened < 0) {
-            // 别在这里静默失败：帧线程上下文初始化出错时 avcodec_open2 会返回错误，
-            // 少了这行日志就只能看到"没有可用的解码器"，看不出原因
-            JARK_LOG("avcodec_open2({}) failed: {}", codec->name, ffmpegError(opened));
-            return nullptr;
-        }
-
-        return context;
-    };
-
-    impl.videoCodec = openCodec(impl.videoStreamIndex);
-    impl.audioCodec = openCodec(impl.audioStreamIndex);
+    impl.videoCodec = impl.openStream(impl.videoStreamIndex, impl.hwDevice != nullptr);
+    impl.audioCodec = impl.openStream(impl.audioStreamIndex, false);
 
     if (impl.videoStreamIndex >= 0 && !impl.videoCodec) {
         JARK_LOG("no usable video decoder, ignoring video stream");
@@ -347,9 +576,14 @@ std::unique_ptr<MediaDecoder> MediaDecoder::open(std::span<const uint8_t> data, 
     if (impl.formatContext->duration != AV_NOPTS_VALUE)
         info.durationMs = impl.formatContext->duration * 1000 / AV_TIME_BASE;
 
-    JARK_LOG("media opened: video={} 编码 {}x{} 显示 {}x{} rot={} fps={:.2f} | audio={} {}Hz {}ch | duration={}ms",
+    // 日志里的解码方式以"设备真的挂上了"为准：真硬解还要等 readNext 出帧才算数
+    // （挂上设备后 get_format 仍可能退回软件格式），这里给的是打开这一步的结果
+    const char* const videoDecodeName = impl.videoCodec && impl.videoCodec->hw_device_ctx
+        ? "硬解(d3d11va)" : "软件";
+
+    JARK_LOG("media opened: video={} 编码 {}x{} 显示 {}x{} rot={} fps={:.2f} 解码={} | audio={} {}Hz {}ch | duration={}ms",
         info.hasVideo, info.width, info.height, info.displayWidth(), info.displayHeight(),
-        info.rotationDegrees, info.frameRate,
+        info.rotationDegrees, info.frameRate, videoDecodeName,
         info.hasAudio, info.audioSampleRate, info.audioChannels, info.durationMs);
 
     return decoder;
@@ -363,16 +597,17 @@ bool MediaDecoder::readNext(Chunk& chunk) {
         if (impl.videoCodec) {
             const int result = avcodec_receive_frame(impl.videoCodec.get(), impl.decodeFrame.get());
             if (result == 0) {
+                ++impl.decodedVideoFrames;
                 const AVFrame* frame = impl.decodeFrame.get();
 
-                const int srcWidth = frame->width > 0 ? frame->width : info_.width;
-                const int srcHeight = frame->height > 0 ? frame->height : info_.height;
-                if (srcWidth <= 0 || srcHeight <= 0) {
+                // 丢帧的几条路都要把两个帧松掉：decodeFrame 是解码器交出来的，
+                // cpuFrame 是硬解帧回读的落脚处（软解那一路它一直是空的）
+                const auto dropFrame = [&impl] {
                     av_frame_unref(impl.decodeFrame.get());
-                    continue;
-                }
+                    av_frame_unref(impl.cpuFrame.get());
+                };
 
-                // 时间戳要在转换之前算：早于目标的帧连缩放/拷贝都不做（见 setSkipBeforeMs）
+                // 时间戳要在转换之前算：早于目标的帧连回读/缩放/拷贝都不做（见 setSkipBeforeMs）
                 const AVRational videoTimeBase = impl.formatContext->streams[impl.videoStreamIndex]->time_base;
                 const int64_t framePts = frame->best_effort_timestamp != AV_NOPTS_VALUE
                     ? frame->best_effort_timestamp : frame->pts;
@@ -380,7 +615,38 @@ bool MediaDecoder::readNext(Chunk& chunk) {
                     : av_rescale_q(framePts, videoTimeBase, AVRational{ 1, 1000 });
 
                 if (impl.skipBeforeMs >= 0 && framePtsMs < impl.skipBeforeMs) {
-                    av_frame_unref(impl.decodeFrame.get());
+                    dropFrame();
+                    continue;
+                }
+
+                // 这一路实际喂给 sws 的像素格式是不是全范围（J 格式）。硬解回读出来的是
+                // NV12/P010，范围内涵在回读时丢了，只能问 avctx->sw_pix_fmt——那是"软解会用"
+                // 的那个格式，也正是 sws 判断范围的依据，两条路的范围解释由此保持一致
+                const bool sourceFullRange = isFullRangeFormat(frame->hw_frames_ctx
+                    ? impl.videoCodec->sw_pix_fmt
+                    : static_cast<AVPixelFormat>(frame->format));
+
+                // 硬解帧先回读到内存（NV12/P010），之后的缩放、旋转、clone 与软解那条路完全一致。
+                // 回读排在丢帧判定之后：精确 seek 要从关键帧向前解上百帧，那些帧不值得白花一次拷贝
+                if (frame->hw_frames_ctx) {
+                    av_frame_unref(impl.cpuFrame.get());
+                    const int transferResult = av_hwframe_transfer_data(impl.cpuFrame.get(), frame, 0);
+                    if (transferResult < 0) {
+                        JARK_LOG("硬解帧回读到内存失败: {}", ffmpegError(transferResult));
+                        dropFrame();
+                        // "驱动解不了这个流"的另一种表现。还没交出过数据的话就换软解从起点
+                        // 重来；已经交出过数据的话这次回退不会生效，这一帧只能丢掉
+                        fallbackToSoftwareDecode();
+                        continue;
+                    }
+                    impl.hardwareDecoding = true;
+                    frame = impl.cpuFrame.get();
+                }
+
+                const int srcWidth = frame->width > 0 ? frame->width : info_.width;
+                const int srcHeight = frame->height > 0 ? frame->height : info_.height;
+                if (srcWidth <= 0 || srcHeight <= 0) {
+                    dropFrame();
                     continue;
                 }
 
@@ -396,12 +662,26 @@ bool MediaDecoder::readNext(Chunk& chunk) {
                 const bool needNewContext = !impl.swsContext ||
                     impl.swsSrcWidth != srcWidth || impl.swsSrcHeight != srcHeight ||
                     impl.swsDstWidth != dstWidth || impl.swsDstHeight != dstHeight ||
-                    impl.swsSrcFormat != frame->format;
+                    impl.swsSrcFormat != frame->format || impl.swsSrcFullRange != sourceFullRange;
 
                 if (needNewContext) {
                     impl.swsContext.reset(sws_getContext(srcWidth, srcHeight,
                         static_cast<AVPixelFormat>(frame->format), dstWidth, dstHeight, AV_PIX_FMT_BGR24,
                         SWS_BILINEAR, nullptr, nullptr, nullptr));
+
+                    // 全范围片源要手工声明：sws_getContext 是按"有限范围"起头的，
+                    // 只有输入格式本身是 J 格式（软解那条路）它才自己认得出来。
+                    // 这里只改 srcRange 一项，其余（系数表/目标范围/亮度对比度饱和度）原样保留
+                    if (impl.swsContext && sourceFullRange) {
+                        int* inverseTable = nullptr;
+                        int* table = nullptr;
+                        int srcRange = 0, dstRange = 0, brightness = 0, contrast = 0, saturation = 0;
+                        if (sws_getColorspaceDetails(impl.swsContext.get(), &inverseTable, &srcRange,
+                                &table, &dstRange, &brightness, &contrast, &saturation) >= 0) {
+                            sws_setColorspaceDetails(impl.swsContext.get(), inverseTable, 1,
+                                table, dstRange, brightness, contrast, saturation);
+                        }
+                    }
 
                     const int bytes = av_image_get_buffer_size(AV_PIX_FMT_BGR24, dstWidth, dstHeight, 1);
                     if (bytes > 0 && static_cast<size_t>(bytes) <= kMaxVideoFrameBytes)
@@ -414,6 +694,7 @@ bool MediaDecoder::readNext(Chunk& chunk) {
                     impl.swsDstWidth = dstWidth;
                     impl.swsDstHeight = dstHeight;
                     impl.swsSrcFormat = frame->format;
+                    impl.swsSrcFullRange = sourceFullRange;
                 }
 
                 if (impl.swsContext && impl.videoBuffer &&
@@ -435,16 +716,25 @@ bool MediaDecoder::readNext(Chunk& chunk) {
                         else if (info_.rotationDegrees == 270)
                             cv::rotate(chunk.video, chunk.video, cv::ROTATE_90_COUNTERCLOCKWISE);
 
-                        av_frame_unref(impl.decodeFrame.get());
+                        dropFrame();
+                        impl.deliveredVideoFrame = true;
                         return true;
                     }
                 }
 
-                av_frame_unref(impl.decodeFrame.get());
+                // 以前这里是无声 continue：硬解接上之后，"转换这一环失败导致一帧都不出"
+                // 会和"这个文件本来就没有帧"在日志上完全分不开，得说一声
+                JARK_LOG("视频帧转换失败（{}x{} 像素格式 {}）：{}", srcWidth, srcHeight, frame->format,
+                    impl.swsContext ? "目标缓冲分配失败" : "sws 上下文建立失败");
+                dropFrame();
                 continue;
             }
-            if (result != AVERROR(EAGAIN) && result != AVERROR_EOF)
+            if (result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
                 JARK_LOG("video decode error: {}", ffmpegError(result));
+                // 硬解解不出画面（驱动不支持这一档 profile/分辨率）时换成软解重来；
+                // 只在还没交出过任何数据时生效，见 fallbackToSoftwareDecode
+                fallbackToSoftwareDecode();
+            }
         }
 
         // 2) 再取出音频帧
@@ -573,10 +863,38 @@ bool MediaDecoder::readNext(Chunk& chunk) {
             continue;
         }
 
+        // 硬解一路连一帧都没解出来：有些驱动对不支持的档位既不报错也不出帧，到这儿才发现。
+        // 换成软解从起点再来一遍，别让用户看到"打得开、画面却一直没有"
+        if (impl.decodedVideoFrames == 0 && fallbackToSoftwareDecode())
+            continue;
+
         chunk = Chunk{};
         chunk.type = Chunk::Type::End;
         return false;
     }
+}
+
+// —— 视频解码方式（日志与自检用）——
+
+bool MediaDecoder::hardwareDecodeAvailable() {
+    const HwDevicePtr device(acquireSharedHwDevice());
+    return device != nullptr;
+}
+
+bool MediaDecoder::hardwareDecodeSupported() const noexcept {
+    return impl_->hardwareSupported;
+}
+
+bool MediaDecoder::hardwareDecoding() const noexcept {
+    return impl_->hardwareDecoding;
+}
+
+bool MediaDecoder::hardwareDecodeFallback() const noexcept {
+    return impl_->hardwareFallback;
+}
+
+bool MediaDecoder::hardwareDecodeDeclined() const noexcept {
+    return impl_->hardwareDeclined;
 }
 
 void MediaDecoder::setSkipBeforeMs(int64_t ms) noexcept {

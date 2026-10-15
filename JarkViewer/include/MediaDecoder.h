@@ -51,11 +51,28 @@ public:
     // 见 MediaPlayer 为什么要拆成两个线程：视频要按播放进度背压，音频必须永远跑在前面。
     enum class StreamFilter { Both, VideoOnly, AudioOnly };
 
+    // 视频解码方式。Auto（默认）优先硬件加速（D3D11VA）：本机设备可用、且这一路的编码器
+    // 声明了 D3D11VA 时才挂硬解，其它情况（vp8/mpeg4 这类没有硬解的编码、没有显卡、
+    // 驱动解不出来）一律回退同一编码器的软件解码；关掉它的开关在设置页（见
+    // SettingParameter::disableVideoHardwareDecode）。SoftwareOnly 强制软解，
+    // 供自检做"两种解码方式必须解出同一段画面"的对照。
+    enum class VideoDecodeMode { Auto, SoftwareOnly };
+
     // 打开内存中的媒体数据；失败返回 nullptr
     static std::unique_ptr<MediaDecoder> open(std::span<const uint8_t> data,
-        StreamFilter filter = StreamFilter::Both);
+        StreamFilter filter = StreamFilter::Both,
+        VideoDecodeMode videoDecode = VideoDecodeMode::Auto);
 
     const MediaInfo& info() const noexcept { return info_; }
+
+    // —— 视频这一路的解码方式（日志与自检用；媒体信息面板不显示它，那里只放语言无关的流参数）——
+    // 分层记录："挂上了设备"不等于"真在硬解"：硬解格式初始化不了时 get_format 会被重新调用、
+    // 退回软件格式，而 avcodec_open2 这时照样返回成功。所以只看硬解帧有没有真的出来。
+    static bool hardwareDecodeAvailable();                // 本机有可用的 D3D11VA 设备（结果进程内缓存）
+    bool hardwareDecodeSupported() const noexcept;        // 该编码器声明了 D3D11VA 的 HW_DEVICE_CTX 配置
+    bool hardwareDecoding() const noexcept;               // 真的解出过硬解帧（回退后为 false）
+    bool hardwareDecodeFallback() const noexcept;         // 试过硬解但运行期回退到了软解
+    bool hardwareDecodeDeclined() const noexcept;         // 挂上了设备，但解码器为这一档内容放弃了硬解
 
     struct Chunk {
         enum class Type { Video, Audio, End };
@@ -93,6 +110,9 @@ public:
 
 private:
     MediaDecoder();
+
+    // 硬解解不出画面时换成软件解码、并退回起点重来；只在还没对外交出过数据时生效
+    bool fallbackToSoftwareDecode();
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

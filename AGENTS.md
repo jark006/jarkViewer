@@ -44,6 +44,10 @@ pwsh ./buildRelease.ps1
 # 音频链路（音量 0 提交音频，只看播放时钟是否按采样率推进，不发声）
 ./x64/Release/JarkViewer.exe --probe --audio-test <音频> --out 报告.txt
 
+# 视频硬件解码（同一个文件分别用"硬解优先"与"强制软解"各解一遍逐帧对照：帧数/PTS/尺寸
+# 必须逐帧一致、像素平均绝对差在容差内；设备可用且编码器有 D3D11VA 档时必须真的走了硬解）
+./x64/Release/JarkViewer.exe --probe --hw-test <视频...> --out 报告.txt
+
 # Release 下临时打开日志（写入 %TEMP%\JarkViewer.log；Debug 默认开启控制台日志）
 $env:JARKVIEWER_LOG=1; ./x64/Release/JarkViewer.exe --log "D:/path/to/image.png"
 
@@ -161,7 +165,7 @@ pwsh tools/verify_source_invariant_checks.ps1
 | SVG 与预处理 | `--probe --svg-test` |
 | 文件列表 / 排序 / 重命名 | `--probe --sort-test` |
 | 缩略图链路 | `--probe --thumbnail-test`、`--probe --shell-thumbnail` |
-| `MediaPlayer` / `MediaDecoder` / `VideoPlayback` | `--probe --video-test`（含纯音频语料）、`--probe --playback-test`、`--probe --audio-test` |
+| `MediaPlayer` / `MediaDecoder` / `VideoPlayback` | `--probe --video-test`（含纯音频语料）、`--probe --playback-test`、`--probe --audio-test`、`--probe --hw-test` |
 | 频谱分析 | `--probe --spectrum-test` |
 | 播放器画面 / 条带 / 音频画面 | `tools/test_player_resize.ps1`、`tools/test_player_scaling.ps1` |
 | 窗口几何与保存 | `tools/test_placement_memory.ps1` |
@@ -192,6 +196,7 @@ pwsh tools/verify_source_invariant_checks.ps1
 - **崩溃**：必崩的用 `tools/catch_crash.ps1`（cdb 附着后落 dump）；**时序竞态不能挂调试器**（attach 会把窗口关掉，实测 1/5 的频率一挂就基本不复现），改用 `JARKVIEWER_CRASH_DUMP=<文件>` 让进程自己落盘，再看 `cdb.exe -z <dump> -c ".ecxr;r;kb 16;q"`（`.ecxr` 必需，默认线程不是出事的那个）。想更快撞上就几路并行跑。
 - **界面**：`tools/capture_window.ps1` 截图，配 `-Keys` 注入按键、`-DragHold` 看"拖动中"才有的画面（马赛克/裁剪框）。
 - **媒体卡顿**：`--probe --playback-test` 把"卡不卡"变成交付率、时钟倍速与最大停滞。
+- **视频花屏/闪屏/一卡一卡**：先看 `--log` 里 `media opened` 那一行的 `解码=`——`硬解(d3d11va)` 还是 `软件`；硬解解不出来会另打一行"硬解解不出画面，视频解码已回退软件解码"。怀疑某块显卡驱动解出来不对，让用户在「设置 → 常规」取消「视频硬件解码」（`SettingParameter::disableVideoHardwareDecode`，取反存储）即可全程软解；开发期要复现"硬解出错"可以 `--probe --hw-test` 对着语料核（它把硬解与逐帧软解逐像素对照）。
 - **翻页慢 / 内存占用**：按 `TAB` 或中键打开 EXIF 面板，顶部两行就是缓存状况（条数/字节/上限、解码次数、淘汰、预取跳过）。用户报"翻页慢"时先看它：`解码`次数远超翻过的张数＝缓存一直在被淘汰后重解码；`预取跳过`在涨＝当前图太大、按设计不预读下一张（那种图的等待是解码本身）。要细一点就开 `--log`，淘汰/放弃回收/跳过预取都会打行，`--probe --cache-test` 还能在无界面下量一遍预算逻辑。
 
 ### 环境与工具坑
@@ -252,7 +257,8 @@ pwsh tools/verify_source_invariant_checks.ps1
   minizip 1.3.2 的静态库改叫 **`minizips.lib`**（两个工程都已改）。另外工程里那批只有 pragma、源码零引用的
   库（`FreeImage`/`FreeImagePlus`/`pixman-1`/`freeglut`/`yasm` 与孤儿文件 `thorvg-0.lib`）已清掉，
   验证方式是删掉后仍能链接。
-- **FFmpeg 静态库是「只解不编」的构建**：在 vcpkg 那套配置上只多一条 `--disable-encoders`，解码器（531）、解复用器（363）、解析器、外挂库一个没少，exe 里省下约 9.7 MiB。**`opus` 与 `adpcm_g722` 这两个编码器必须保留**——它们的 x86 asm 对象在 FFmpeg 源码里挂在 `CONFIG_*_ENCODER` 下，而解码路径用的是同一份：`opus/pvq.c` 调 `ff_celt_pvq_init_x86`（`x86/celt_pvq_init.o`）、`g722dsp.c` 调 `ff_g722dsp_init_x86`（`x86/g722dsp*.o`），全关掉会让 Opus / G.722 解码器各差几十个符号链接不上。重建时的环境与坑（都是实测踩出来的）：
+- **FFmpeg 静态库是「只解不编」的构建**：在 vcpkg 那套配置上只多一条 `--disable-encoders`，解码器（531）、解复用器（363）、解析器、外挂库一个没少，exe 里省下约 9.7 MiB。
+  **硬件解码（D3D11VA）依赖构建时带上它**（vcpkg 的 ffmpeg 默认开）：掉了不会有任何报错，视频只是全走软解（省下的只有 CPU）。核对办法是从库文件里找硬解器符号与看头文件齐不齐：`grep -a -o -E "[a-z0-9]+_d3d11va" JarkViewer/libffmpeg/avcodec.lib | sort -u` 应当列出 `h264/hevc/av1/vp9/mpeg2/vc1/wmv3` 一批，`JarkViewer/include/ffmpeg/libavutil/hwcontext_d3d11va.h` 也要在；再用 `--probe --hw-test <视频>` 确认这台机器上真的走了硬解。**`opus` 与 `adpcm_g722` 这两个编码器必须保留**——它们的 x86 asm 对象在 FFmpeg 源码里挂在 `CONFIG_*_ENCODER` 下，而解码路径用的是同一份：`opus/pvq.c` 调 `ff_celt_pvq_init_x86`（`x86/celt_pvq_init.o`）、`g722dsp.c` 调 `ff_g722dsp_init_x86`（`x86/g722dsp*.o`），全关掉会让 Opus / G.722 解码器各差几十个符号链接不上。重建时的环境与坑（都是实测踩出来的）：
   - 工具链取 vcpkg 自带的：MSYS2 的 bash+make 在 `D:\vcpkg\downloads\tools\msys2\<hash>\usr\bin`，nasm 在 `D:\vcpkg\downloads\tools\nasm\*`，`ar-lib` 在 `D:\vcpkg\installed\x64-windows\share\vcpkg-make\wrappers`（不放进 PATH 会报 `ar-lib: command not found`），pkg-config 用 `<msys2 根>\mingw64\bin\pkg-config.exe` 并设 `PKG_CONFIG_PATH=<vcpkg 的 installed 目录>\lib\pkgconfig`。
   - MSVC 的 bin 必须排在 `/usr/bin` **前面**：msys2 的 coreutils 里也有个 `link.exe`，会被先找到，然后 configure 的链接测试全挂。
   - **不要设 `MSYS2_ARG_CONV_EXCL=*`**：它关掉 msys2 的路径转换，`cl.exe` 拿到 `/d/vcpkg/.../x.c` 会把开头当成 `/D` 选项，报 D8043 未知选项。
@@ -304,7 +310,7 @@ pwsh tools/verify_source_invariant_checks.ps1
   **2 列**表格排版：列数不能再多，单元格宽度按窗口默认宽度算，3 列以上"窗口左右边缘：上一张 /
   下一张"这类长条目会被裁掉；关于页顶部的软件图标是 `IDB_PNG_ABOUT_ICON`
   （`file/aboutIcon.png`，从旧版设置页贴图 `settingRes.png` 里抠出来的透明底图标，纹理槽 4），
-  深浅主题通用，不需要两套图。常规页最上面的勾选项按 **2 列**排布（现在 9 项，末行只有左列一项。
+  深浅主题通用，不需要两套图。常规页最上面的勾选项按 **2 列**排布（现在 11 项，末行只有左列一项。
   ImGui 没有等宽列：第二列起点 = 第一列（偶数下标项）最长文本的实际文本宽 + 勾选框宽 + 列间距，
   随语言自适应；增减勾选项时记得同步这个列宽推导）。「到最后一张时停住」「全屏时使用纯黑背景」
   都在这组里。
@@ -469,6 +475,7 @@ pwsh tools/verify_source_invariant_checks.ps1
 - `JarkViewer/include/MediaDecoder.h` / `MediaPlayer.h` / `AudioOutput.h` / `AudioSpectrumAnalyzer.h`（对应 `src/*.cpp`）组成媒体播放链路（最后一个只服务于纯音频画面上的实时频谱）：`MediaDecoder` 在内存数据上做解复用+解码，按出现顺序产出视频帧或音频批（音频统一重采样为 48kHz 立体声 16 位）；`AudioOutput` 用 XAudio2 输出并提供已播放样本数作为主时钟；`MediaPlayer` 以音频时钟驱动视频帧、一次播完。
   **视频与音频必须各占一个解码器实例 + 一个线程**（`MediaPlayer` 里因此有两个 `MediaDecoder`，`MediaDecoder::StreamFilter` 让每个实例只解自己那一路，另一路只解复用不解码）。起因是一个会自锁的恶性循环：视频队列只有 6 帧（一帧几 MB，必须有上限）要靠"播放端取帧"背压，音频却必须永远跑在播放位置之前。两条路抢同一个线程时，视频队列一满，整个循环就卡在等取帧上，音频提交被迫一起停下——视频队满 → 音频提交掉到 1 倍速以下 → 声卡饿死、播放时钟停住 → 播放端按时钟判"还没到点"不再取帧 → 队列永远满，卡顿就此锁死（实测 3 秒的视频播了 9 秒、中间冻 1.15 秒）。拆开后视频线程只受队列上限约束、音频线程只受声卡队列约束，互不牵连。**别再把它们合回一个线程**，那怕只是为了"省一个解码器"。
   **音频提交有三个硬约束**：① XAudio2 对单个 source voice 最多排 64 个缓冲区（`XAUDIO2_MAX_QUEUED_BUFFERS`），超了 `SubmitSourceBuffer` 直接失败——按样本数限流拦不住（21ms 的批 × 64 就到顶），必须按**缓冲区个数**限流（`AudioOutput::kMaxQueuedBuffers`），并且**提交失败要重试、不能丢**（丢一批就是声音里一个 20ms 空洞 = "一卡一卡"）；② 音轨比视频短时（实况照片常见）要**补静音到媒体总时长**，否则音频队列一空时钟就停，视频最后几帧永远等不到"到点"、`hasFinished()` 永远为假（画面停在末尾、实况照片回不到静态图、播放状态卡死）；③ **提交出去的那块内存只有 `OnBufferEnd` 到过（或引擎整个销毁）才能释放**——XAudio2 是照着 `pAudioData` 直接取样的，不拷贝。`Stop(0)` + `FlushSourceBuffers()` **不能**当作"用完了"：正在播的那一块不会被冲掉，它的数据此刻仍在被读，这时释放就崩在音频线程里（`ucrtbase!memcpy ← CSWVoice::Process`、`MatrixMixFromInt16DiagonalAvx`）。所以 `flush()/stop()` 只把缓冲区挪进 `retiredBuffers`（不再计入队列长度，但内存留着），`releaseAllBuffers()` 放在 `IXAudio2::Release()` 之后当兜底。seek 会走 flush，所以"带音轨 + 有 seek"才会撞上，`--playback-test` 从不 seek 就一次都不复现（这处 2026-10-10 修过一次，回归口径：`--video-test` 带音轨语料 4 路并行 48 次零崩溃、无音轨语料 40 次零崩溃）。
+  **视频解码优先硬件加速**（D3D11VA），不支持或失败才回退软件解码——回退是静默的，所以有三条要记住：① **只做 D3D11VA 一个后端**（`Impl::openStream` 里用 `avcodec_get_hw_config` 找 `AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX` + `AV_HWDEVICE_TYPE_D3D11VA`）：Win10/11 通用，静态库里 h264/hevc/av1/vp9/mpeg2/vc1/wmv3 都有档位；没有档位的编码器（vp8、mpeg4）、没显卡、驱动解不出来这三种情况都落回同一编码器的软解（`thread_count = 8` 那条路一行没改）。**AV1 走的是 libdav1d**（`avcodec_find_decoder` 先命中它），所以 AV1 实际上一直是软解。② **硬解那一路必须 `thread_count = 1`**：帧级线程与 hwaccel 并存时 d3d11va 的所有帧线程要抢同一把锁串行跑，还各自建一份硬解帧池（池大小随线程数上涨，4K 上能吃掉好几 GB 显存），并给每一帧多带一线程的解码延迟——和精确 seek 落点、拖动预览"一下只交一帧"直接打架。③ **硬解帧要回读成 CPU 帧**（`av_hwframe_transfer_data`，NV12/P010）之后才走原来的 `sws_scale`/旋转/`clone`；丢帧判定（`setSkipBeforeMs`）排在回读之前，不然精确 seek 会白拷上百帧。回读有一个坑：**全范围片源（yuvj420p / PC range）的"全范围"语义在回读时丢了**（格式从 yuvj420p 变成 NV12，`color_range` 变 UNSPECIFIED），sws 会按有限范围解释、整幅发灰（实测 iPhone 拍的片源平均差 10 个色阶），所以 `readNext` 里按 `avctx->sw_pix_fmt` 是不是 J 格式给 sws 补一次 `sws_setColorspaceDetails(srcRange=1)`（软解那条路 sws 自己按像素格式就认得，这一步对它是空操作）。运行期回退（开局就解不出画面时换软解重开 + 把解复用器退回落点）只在**还没交出过视频帧**时做——已经送出去的帧收不回来，半路重来会让播放端拿到重复时间戳；`--probe --hw-test` 把"硬解与软解解出来的是同一段画面"钉成断言（帧数/PTS/尺寸逐帧一致 + 像素平均绝对差容差），设置页「常规 → 视频硬件解码」是给驱动出问题的用户关掉它的开关。
   **视频尺寸分两种，别用错**：`MediaInfo::width/height` 是**编码尺寸**（容器/码流里的原始尺寸，未旋转），`displayWidth()/displayHeight()` 是**帧实际交出去时的尺寸**（按 `rotationDegrees` 换过轴）。解码器会按 display matrix 把帧旋转（手机竖拍视频的编码尺寸是横的），所以**给播放端的尺寸必须用 display\***——`MediaPlayer::getVideoSize()` 就是栽在这里：它原先返回编码尺寸，实况照片播放时主窗口拿它当名义尺寸（`applyViewForSize`），竖帧被塞进横框里拉伸。另外帧的长边超过 `kMaxVideoEdge` 时会**降采样**（4K 实况视频只出 1920×1080 的帧），所以"帧尺寸 == 名义尺寸"**不是**不变式，**宽高比一致**才是；`--probe --full` 对每个视频/实况照片都会打印 `显示 WxH (编码 WxH) rot=R` 与 `首帧 WxH … 宽高比一致`，不一致时会显式报 `!! 宽高比不一致`。实况照片（livp / MotionPhoto）与视频文件都走这条路：静态图/首帧作 `ImageAsset::primaryFrame`，视频字节放在 `ImageAsset::videoSource`，由主窗口自动播放一次后回到静态图（不再预解码成帧序列，避免上百 MB 内存）。空格键在实况照片上是播放开关：播放中切回静态图（并把 `playedAsset` 标记为已播放，防自动续播）、静态图时从头播放（主动操作，出声）。
 - **简易播放器**（`VideoPlayerApp` + `VideoPlayback` + `MappedFileReader`）是**独立于看图的一个顶层窗口**，视频与音频共用它（音频没有视频帧，界面改画音频画面）：`wWinMain` 按入参在「看图窗口」与它之间**二选一构造**，另一个对象根本不构造，所以播放器里不可能出现"按 P 进幻灯片""按 Q 旋转图片"这类串味；它不经过 `ImageDatabase`/缩略图/导航浮层/EXIF/设置窗口，只复用 `CanvasRenderer` 画帧、`UiHost` 画条带。
   - **判定与入口**：**`jark::isPlayerFile()`（= `isVideoFile() || isAudioFile()`，`FormatSniffer` 的扩展名表）是唯一判定**，命令行/拖放/Ctrl+O 三处都走它——视频归视频端、音频也归播放器，**各写一半就会同一个文件在不同入口下进不同窗口**。`webm` 归视频端；视频与音频都**不在** `supportExt` 里（否则看图列表里会出现"点开却跳到播放器"的项，规则就不唯一了）。`videoExt`（`ImageDatabase`）与视频那张表必须一致、README 的「视频」「音频」两行也必须与表一致，`tools/check_source_invariants.ps1` 第 6/6b 项盯着（音频是两处：表 == README，且音频扩展名不得混进 `supportExt`/`videoExt`）；中文那份 README 由 4/5/6/6b 查，英文那份的四张清单由 6c 查（英文 README 曾落后中文一整轮——加了播放器却没同步）。运行中"按内容换窗口"由 `wWinMain` 的接力循环实现：当前窗口退出时留下 `takeHandoffPath()`，循环据此构造另一个窗口。ESC / Ctrl+W 退出程序（单向门，没有"切回看图"的路）。

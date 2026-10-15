@@ -171,6 +171,16 @@ Test-Break "工程关了多处理器编译 /MP" @{
         '<MultiProcessorCompilation>false</MultiProcessorCompilation>')
 }
 
+Test-Break "视频硬解段被删（只把 hw config 那一步拆掉）" @{
+    "JarkViewer/src/MediaDecoder.cpp" = @("AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX",
+        "AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX")
+}
+
+Test-Break "软解排到硬解前面（硬解段被挪到软解之后）" @{
+    "JarkViewer/src/MediaDecoder.cpp" = @("    // 1) 硬件优先。",
+        "    context->thread_count = 8;`r`n    // 1) 硬件优先。")
+}
+
 Write-Host ""
 # 全部还原后再跑一遍完整检查，确认真文件恢复了
 & pwsh -NoProfile -File $checkScript *> $null

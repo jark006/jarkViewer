@@ -143,15 +143,20 @@ try {
     Save-Shot '08-settings'
     if($CheckSettings) {
         # 此分支只在临时目录的独立程序副本运行，坐标基于简体中文常规页。
+        # 这两个 y 是照着当前布局的设置页截图实测出来的：常规页勾选项每多一行，下面的整块
+        # 就跟着下移一行（实测一个勾选行约 45 逻辑像素）。加「视频硬件解码」那一行时重新量过
+        # ——原先的 550/270 在这套布局下会分别落空与点到「全屏时使用纯黑背景」上。
         $sx=($w-680*$s)/2; $sy=($h-640*$s)/2
-        Click-At ($sx+220*$s) ($sy+550*$s)
+        Click-At ($sx+220*$s) ($sy+563*$s)
         Save-Shot '09-cache-cleared'
         # 清理在缓存线程异步完成：空索引 = 64 字节文件头 + 1000*64 字节索引槽
         $cache=Join-Path (Split-Path $Exe) 'JarkViewer.thumbnail'
         $cacheDeadline=[DateTime]::UtcNow.AddSeconds(5)
         while((Get-Item $cache).Length -ne 64064 -and [DateTime]::UtcNow -lt $cacheDeadline){ Start-Sleep -Milliseconds 200 }
         if((Get-Item $cache).Length -ne 64064){ throw "Cache clear did not leave an empty index: $((Get-Item $cache).Length)" }
-        Click-At ($sx+28*$s) ($sy+270*$s)
+        # 取消勾选「显示鸟瞰图」：它在右列第三行（左列同排是「优先1:1显示」），
+        # 坐标按设置页截图实测——原先的 28,270 会点偏到左列第五行「全屏时使用纯黑背景」上。
+        Click-At ($sx+178*$s) ($sy+173*$s)
     }
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
     Start-Sleep -Milliseconds 300

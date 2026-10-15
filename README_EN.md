@@ -77,6 +77,7 @@ Pick a video or audio file from the command line, drag-and-drop, or the Open dia
 
 - **Audio files have no picture**: the window shows the file name and path plus a column of **spectrum bars that dance in real time with the sound**, and the progress bar stays visible.
 - **Playback stops on the last frame**; press `Space` to play again from the start. Drag the progress bar wherever you like — it lands exactly there.
+- **Video prefers hardware decoding** (the GPU does the decoding), and falls back to software decoding automatically when the GPU does not support the format or cannot decode it — either way it is seamless. If you see corruption or flicker that looks like a graphics driver issue, clear the "Hardware video decoding" checkbox in Settings → General.
 
 ## 🖨 Print / edit
 

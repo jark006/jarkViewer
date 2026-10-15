@@ -179,6 +179,10 @@ struct SettingParameter {
     // 取反命名：旧设置文件里这一字节是 0，默认就是开启平滑；勾选框显示 !disableZoomSmoothing。
     // 占的是 blackFullscreenBackground 之后、reserve 对齐填充里的字节，结构体布局不变。
     bool disableZoomSmoothing = false;
+    // 关掉视频硬件解码（D3D11VA），同样取反命名：旧设置文件里这一字节是 0，默认就是优先硬解，
+    // 取消勾选才强制软解——给"某块显卡驱动解出来花屏/闪屏"的用户一个逃生开关。
+    // 占的是 disableZoomSmoothing 与 reserve 之间的对齐填充字节，reserve 与总布局不变。
+    bool disableVideoHardwareDecode = false;
 
     uint32_t reserve[521]; // 原 800，依次划给 monitorDevice(64) + livePhotoAutoPlaySound(4) + 两个路径(2×520) + 排序与浏览开关(8)
 
@@ -272,6 +276,7 @@ static_assert(offsetof(SettingParameter, sortMode) == 1204);
 static_assert(offsetof(SettingParameter, stopAtListEnd) == 1208);
 static_assert(offsetof(SettingParameter, blackFullscreenBackground) == 1209);
 static_assert(offsetof(SettingParameter, disableZoomSmoothing) == 1210); // 占原对齐填充，reserve 位置不变
+static_assert(offsetof(SettingParameter, disableVideoHardwareDecode) == 1211); // 同上，也是对齐填充
 static_assert(offsetof(SettingParameter, reserve) == 1212);
 static_assert(offsetof(SettingParameter, extCheckedListStr) == 3296);
 

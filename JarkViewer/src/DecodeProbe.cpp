@@ -126,6 +126,16 @@ namespace {
         return line;
     }
 
+    // 视频这一路的解码方式（自检报告用）。"硬解"以真的解出了硬解帧为准——
+    // 挂上设备不等于在硬解，get_format 可能已经悄悄退回软件格式了
+    std::string videoDecodeName(const MediaDecoder& decoder) {
+        if (decoder.hardwareDecoding())
+            return "硬解(d3d11va)";
+        if (decoder.hardwareDecodeFallback())
+            return "软件(硬解回退)";
+        return "软件";
+    }
+
     // 视频/音频自检：打开 MediaDecoder 并统计能解出的视频帧与音频样本。
     // decodeAll=false 只报头部信息（实况照片里的视频用它：尺寸/旋转一眼可见，
     // 又不至于把整段视频解一遍拖慢自检）
@@ -175,6 +185,8 @@ namespace {
         report += std::format(
             "\n            | decoded: {} frames (last {}ms), {} audio samples in {} chunks (last {}ms, {:.0f}ms)",
             videoFrames, lastVideoPts, audioSamples, audioChunks, lastAudioPts, elapsedMs);
+        if (info.hasVideo)
+            report += std::format(" | 解码={}", videoDecodeName(*decoder));
 
         // 不变式：帧与对外报的显示尺寸必须是**同一个宽高比**。帧可能被缩到长边上限以内
         // （那是采样密度，不影响尺寸），但宽高比不一致就说明名义尺寸与帧的方向/形状对不上，
@@ -973,6 +985,153 @@ namespace {
         }
 
         report += std::format("---- playback: {} ok, {} failed, {} skipped ----\n", passed, failed, skipped);
+        return report;
+    }
+
+    // 硬件解码自检：同一个文件分别用"硬解优先"与"强制软解"各解一遍，逐帧对照。
+    // 硬解解得对不对没法靠眼睛验（花屏、绿屏、上下错位往往只在某几块驱动上出现，
+    // 开发机上一切正常），所以把"两条路必须是同一段画面"写成断言：
+    // 帧数、每帧时间戳、每帧尺寸逐帧一致，像素平均绝对差在容差内——
+    // 硬解与软解都是按规范解出来的，差别只来自 IDCT/去块滤波的舍入（1~2 LSB），
+    // 真出问题（整块颜色错位那种）时这个数字是几十起步，不会漏。
+    std::string runHardwareTest(const std::vector<std::wstring>& targets) {
+        std::string report;
+        int passed = 0, failed = 0, skipped = 0;
+        const auto check = [&](bool ok, const std::string& name) {
+            ok ? ++passed : ++failed;
+            report += std::format("[{}] {}\n", ok ? "ok" : "FAIL", name);
+        };
+
+        // 逐帧比对的像素平均差上限。留 4 是给 10bit→8bit 回读与色度上采样留的余量，
+        // 实测正常片源在 1 以内；容差写死在这里，改判据就要重跑一遍语料
+        constexpr double kMeanTolerance = 4.0;
+        constexpr int kMaxFrames = 120;   // 长片只比前一小段：逐帧对比本来就不是性能测试
+
+        const bool deviceAvailable = MediaDecoder::hardwareDecodeAvailable();
+        report += std::format("D3D11VA 设备: {}\n", deviceAvailable ? "可用" : "不可用（硬解断言一律跳过）");
+
+        // 一路解到下一个视频帧（音频批直接跳过）
+        const auto nextVideoFrame = [](MediaDecoder& decoder, cv::Mat& frame, int64_t& ptsMs) {
+            MediaDecoder::Chunk chunk;
+            while (decoder.readNext(chunk)) {
+                if (chunk.type == MediaDecoder::Chunk::Type::Video && !chunk.video.empty()) {
+                    frame = std::move(chunk.video);
+                    ptsMs = chunk.ptsMs;
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        for (const auto& path : targets) {
+            const std::string name = utf8(std::filesystem::path(path).filename().wstring());
+            report += std::format("---- {} ----\n", name);
+
+            std::vector<uint8_t> data;
+            {
+                std::ifstream file(path, std::ios::binary | std::ios::ate);
+                if (!file.is_open()) {
+                    report += "无法读取该文件\n";
+                    ++failed;
+                    continue;
+                }
+                const auto size = static_cast<size_t>(file.tellg());
+                file.seekg(0);
+                data.resize(size);
+                file.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
+            }
+
+            // 两侧都只要视频那一路：这里比的是视频帧，顺带让"硬解解不出来就回退"这条路径
+            // 不受音频进度干扰（Both 实例里音频先出来过的话，回退会为了不重复出声而放弃）
+            auto hardware = MediaDecoder::open(data, MediaDecoder::StreamFilter::VideoOnly,
+                MediaDecoder::VideoDecodeMode::Auto);
+            auto software = MediaDecoder::open(data, MediaDecoder::StreamFilter::VideoOnly,
+                MediaDecoder::VideoDecodeMode::SoftwareOnly);
+            if (!hardware || !software) {
+                report += "打不开：没有可播放的媒体流\n";
+                ++skipped;
+                continue;
+            }
+            if (!hardware->info().hasVideo) {
+                report += "没有视频轨，跳过（硬解只作用于视频）\n";
+                ++skipped;
+                continue;
+            }
+
+            int compared = 0;
+            bool countEqual = true;
+            bool ptsEqual = true;
+            bool sizeEqual = true;
+            double maxMeanDiff = 0.0;
+            int maxPixelDiff = 0;
+            int64_t ptsDelta = 0;
+
+            for (int index = 0; index < kMaxFrames; ++index) {
+                cv::Mat hardwareFrame, softwareFrame;
+                int64_t hardwarePts = 0, softwarePts = 0;
+                const bool hasHardware = nextVideoFrame(*hardware, hardwareFrame, hardwarePts);
+                const bool hasSoftware = nextVideoFrame(*software, softwareFrame, softwarePts);
+                if (!hasHardware || !hasSoftware) {
+                    // 一方先结束就是帧数不一致（两边都结束才是正常收尾）
+                    countEqual = hasHardware == hasSoftware;
+                    break;
+                }
+
+                ++compared;
+                if (hardwarePts != softwarePts) {
+                    ptsEqual = false;
+                    ptsDelta = hardwarePts - softwarePts;
+                }
+                if (hardwareFrame.size() != softwareFrame.size() || hardwareFrame.type() != softwareFrame.type()) {
+                    sizeEqual = false;
+                    continue;
+                }
+                if (hardwareFrame.empty())
+                    continue;
+
+                const double meanDiff = cv::norm(hardwareFrame, softwareFrame, cv::NORM_L1) /
+                    (hardwareFrame.total() * hardwareFrame.channels());
+                maxMeanDiff = (std::max)(maxMeanDiff, meanDiff);
+                maxPixelDiff = (std::max)(maxPixelDiff,
+                    static_cast<int>(std::lround(cv::norm(hardwareFrame, softwareFrame, cv::NORM_INF))));
+            }
+
+            const char* const encoding = hardware->info().videoCodec.c_str();
+            report += std::format("编码={} 尺寸={}x{} 帧数={} 解码={} 回退={}\n",
+                encoding, hardware->info().displayWidth(), hardware->info().displayHeight(), compared,
+                videoDecodeName(*hardware), hardware->hardwareDecodeFallback() ? "是" : "否");
+
+            check(compared > 0, std::format("{}：解出了可比对的视频帧", name));
+            if (compared > 0) {
+                check(countEqual, std::format("{}：硬解与软解的帧数一致（都比到第 {} 帧）", name, compared));
+                check(ptsEqual, std::format("{}：逐帧时间戳一致（不一致的话差 {}ms）", name, ptsDelta));
+                check(sizeEqual, std::format("{}：逐帧尺寸一致", name));
+                check(maxMeanDiff <= kMeanTolerance,
+                    std::format("{}：逐帧像素平均差 ≤ {}（实测最大 {:.3f}，最大像素差 {}）",
+                        name, kMeanTolerance, maxMeanDiff, maxPixelDiff));
+            }
+
+            // "该走硬解就得走"只在四个前提都成立时才断言：本机有设备、编码器有 D3D11VA 档、
+            // 解码器没为这一档内容放弃硬解（4:4:4 这类）、也没发生运行期回退。
+            // 任何一种不成立都是正常结果（没显卡 / 编码器本来就没硬解 / 驱动解不出来），
+            // 报告里写明原因即可，不算失败
+            if (hardware->hardwareDecodeFallback()) {
+                report += std::format("  （本机硬解解不出来，已回退软件解码；{} 这一档驱动不支持就属正常）\n", encoding);
+            }
+            else if (!deviceAvailable || !hardware->hardwareDecodeSupported()) {
+                report += std::format("  跳过硬解断言：{}\n",
+                    deviceAvailable ? std::format("{} 没有 D3D11VA 档位", encoding) : "本机没有 D3D11VA 设备");
+            }
+            else if (hardware->hardwareDecodeDeclined()) {
+                report += std::format("  跳过硬解断言：{} 有 D3D11VA 档，但这一档内容解码器不让硬解（正常回退）\n", encoding);
+            }
+            else {
+                check(hardware->hardwareDecoding(),
+                    std::format("{}：设备可用且 {} 支持 D3D11VA（没被解码器回绝），确实解出了硬解帧", name, encoding));
+            }
+        }
+
+        report += std::format("---- hardware: {} ok, {} failed, {} skipped ----\n", passed, failed, skipped);
         return report;
     }
 
@@ -2787,6 +2946,7 @@ int runDecodeProbe(const std::vector<std::wstring>& argv) {
     bool fullExif = false;
     bool audioTest = false;
     bool playbackTest = false;
+    bool hardwareTest = false;
     bool videoTest = false;
     bool languageTest = false;
     bool batchTest = false;
@@ -2819,6 +2979,10 @@ int runDecodeProbe(const std::vector<std::wstring>& argv) {
         }
         if (argv[i] == L"--playback-test") {
             playbackTest = true;
+            continue;
+        }
+        if (argv[i] == L"--hw-test") {
+            hardwareTest = true;
             continue;
         }
         if (argv[i] == L"--video-test") {
@@ -3089,6 +3253,12 @@ int runDecodeProbe(const std::vector<std::wstring>& argv) {
 
     if (playbackTest) {
         const auto text = runPlaybackTest(targets);
+        emit(text);
+        return text.find("FAIL") == std::string::npos ? 0 : 1;
+    }
+
+    if (hardwareTest) {
+        const auto text = runHardwareTest(targets);
         emit(text);
         return text.find("FAIL") == std::string::npos ? 0 : 1;
     }
